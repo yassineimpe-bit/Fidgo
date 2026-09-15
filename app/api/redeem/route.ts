@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canScan, isValidIdempotencyKey, parseCardToken } from "@/lib/loyalty";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canScan(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  const limited = await enforceRateLimit(req, `redeem:${session.staffId}`, 120, 60);
+  if (limited) return limited;
   const body = await req.json();
   const token = parseCardToken(body.token);
   const idempotencyKey = body.idempotencyKey;

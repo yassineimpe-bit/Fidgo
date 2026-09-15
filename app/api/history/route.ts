@@ -20,5 +20,5 @@ export async function GET(req: Request) {
     order by t.created_at desc
     limit ${limit}
   `;
-  return Response.json(rows);
+  return Response.json(rows, { headers: { "cache-control": "no-store" } });
 }
