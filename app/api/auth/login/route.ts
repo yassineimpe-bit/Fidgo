@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 400 });
   }
 
-  const users = await sql`select id, establishment_id, email, password_hash, role, active from staff_users where lower(email)=${email} limit 1`;
+  const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
   const user = users[0];
   const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
   const passwordOk = await bcrypt.compare(password, hash);
@@ -43,7 +43,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
   }
 
-  const token = await signSession({ staffId: user.id, establishmentId: user.establishment_id, role: user.role, email: user.email });
+  const token = await signSession({
+    staffId: String(user.id),
+    establishmentId: String(user.establishment_id),
+    role: String(user.role) as "OWNER" | "MANAGER" | "EMPLOYEE" | "VIEWER",
+    email: String(user.email),
+    tokenVersion: Number(user.token_version),
+  });
   const response = NextResponse.json({ ok: true, role: user.role }, { headers: { "cache-control": "no-store" } });
   response.cookies.set(sessionCookie(token));
   return response;
