@@ -2,7 +2,41 @@
   "name": "fidgo",
   "version": "0.1.0",
   "private": true,
-  "scripts": {"dev":"next dev","build":"next build","start":"next start","lint":"eslint .","typecheck":"tsc --noEmit","test":"vitest run","check":"npm run typecheck && npm run lint && npm run test && npm run build","env:check":"node scripts/validate-env.mjs","db:setup":"node scripts/db-setup.mjs"},
-  "dependencies": {"bcryptjs":"2.4.3","google-auth-library":"11.0.2","jose":"5.9.6","next":"15.5.24","passkit-generator":"3.6.0","postgres":"3.4.5","qrcode":"1.5.4","qr-scanner":"1.4.2","react":"19.1.1","react-dom":"19.1.1"},
-  "devDependencies": {"@eslint/eslintrc":"3.2.0","@types/bcryptjs":"2.4.6","@types/node":"22.10.2","@types/qrcode":"1.5.5","@types/react":"19.0.6","@types/react-dom":"19.0.3","eslint":"9.17.0","eslint-config-next":"15.5.24","typescript":"5.7.2","vitest":"3.2.4"}
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "env:check": "node scripts/validate-env.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:seed:demo": "node scripts/seed-demo.mjs",
+    "bootstrap:demo": "npm run db:setup && npm run db:seed:demo"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3",
+    "google-auth-library": "11.0.2",
+    "jose": "5.9.6",
+    "next": "15.5.24",
+    "passkit-generator": "3.6.0",
+    "postgres": "3.4.5",
+    "qrcode": "1.5.4",
+    "qr-scanner": "1.4.2",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "3.2.0",
+    "@types/bcryptjs": "2.4.6",
+    "@types/node": "22.10.2",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "19.0.6",
+    "@types/react-dom": "19.0.3",
+    "eslint": "9.17.0",
+    "eslint-config-next": "15.5.24",
+    "typescript": "5.7.2",
+    "vitest": "3.2.4"
+  }
 }
