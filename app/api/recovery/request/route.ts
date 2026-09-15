@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { createCardRecoveryToken } from "@/lib/card-recovery";
+import { cardRecoveryEnabled, createCardRecoveryToken } from "@/lib/card-recovery";
 import { sql } from "@/lib/db";
 import { sendCardRecoveryEmail } from "@/lib/email";
 import { isEmail } from "@/lib/input";
@@ -21,6 +21,12 @@ export async function POST(req: Request) {
   const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
   if (!slug || !isEmail(email)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400, headers: PRIVATE_HEADERS });
+  }
+
+  // Main can safely contain the recovery code before the migration/email provider
+  // are live. The public behavior remains opaque until the runtime flag is enabled.
+  if (!cardRecoveryEnabled()) {
+    return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
   }
 
   const byIp = await consumeRateLimit(`recovery-ip:${requestIp(req)}:${slug}`, 10, 60 * 60);
