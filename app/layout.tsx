@@ -3,6 +3,10 @@ import "./globals.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { ClientObservability } from "@/components/client-observability";
 
+// Les nonces CSP sont générés à chaque requête. Le rendu dynamique garantit
+// que chaque balise script reçoit le nonce correspondant à son en-tête HTTP.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: { default: "Fidgo", template: "%s · Fidgo" },
   description: "Fidélité digitale pour restaurants et commerces alimentaires",

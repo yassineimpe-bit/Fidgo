@@ -100,16 +100,16 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
 
   return <form className="form" onSubmit={submit}>
     <div className="field">
-      <label>Prénom <span className="muted">(facultatif)</span></label>
-      <input className="input" name="firstName" autoComplete="given-name"/>
+      <label htmlFor="join-first-name">Prénom <span className="muted">(facultatif)</span></label>
+      <input className="input" id="join-first-name" name="firstName" autoComplete="given-name"/>
     </div>
     <div className="field">
-      <label>Email <span className="muted">(facultatif, utile pour retrouver la carte)</span></label>
-      <input className="input" name="email" type="email" autoComplete="email"/>
+      <label htmlFor="join-email">Email <span className="muted">(facultatif, utile pour retrouver la carte)</span></label>
+      <input className="input" id="join-email" name="email" type="email" autoComplete="email"/>
     </div>
     <div className="field">
-      <label>Téléphone <span className="muted">(facultatif)</span></label>
-      <input className="input" name="phone" type="tel" autoComplete="tel"/>
+      <label htmlFor="join-phone">Téléphone <span className="muted">(facultatif)</span></label>
+      <input className="input" id="join-phone" name="phone" type="tel" autoComplete="tel"/>
     </div>
     <label style={{display:"flex",gap:10,alignItems:"flex-start"}}>
       <input type="checkbox" name="consent" style={{marginTop:4}}/>

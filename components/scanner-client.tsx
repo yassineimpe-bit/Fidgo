@@ -327,8 +327,8 @@ export function ScannerClient() {
           {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
         </div>}
         {error?.code === "COOLDOWN" && card.canOverrideCooldown && <div className="field">
-          <label>Motif obligatoire pour créditer quand même</label>
-          <input className="input" value={overrideReason} maxLength={240} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Ex. second achat distinct" />
+          <label htmlFor="cooldown-override-reason">Motif obligatoire pour créditer quand même</label>
+          <input className="input" id="cooldown-override-reason" value={overrideReason} maxLength={240} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Ex. second achat distinct" />
           <button className="btn btn-danger" disabled={!overrideReason.trim() || Boolean(action)} onClick={() => perform("credit", overrideReason.trim())}>Créditer quand même</button>
         </div>}
         <div className="scan-actions">

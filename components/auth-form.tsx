@@ -20,9 +20,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   }
   return (
     <form className="form" onSubmit={submit}>
-      {mode === "signup" && <div className="field"><label>Nom du commerce</label><input className="input" name="restaurantName" required maxLength={120} /></div>}
-      <div className="field"><label>Email</label><input className="input" name="email" type="email" required autoComplete="email" /></div>
-      <div className="field"><label>Mot de passe</label><input className="input" name="password" type="password" minLength={8} required autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div>
+      {mode === "signup" && <div className="field"><label htmlFor="restaurantName">Nom du commerce</label><input className="input" id="restaurantName" name="restaurantName" required maxLength={120} /></div>}
+      <div className="field"><label htmlFor={`${mode}-email`}>Email</label><input className="input" id={`${mode}-email`} name="email" type="email" required autoComplete="email" /></div>
+      <div className="field"><label htmlFor={`${mode}-password`}>Mot de passe</label><input className="input" id={`${mode}-password`} name="password" type="password" minLength={8} required autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div>
       {error && <div className="notice error">{error}</div>}
       <button className="btn btn-primary" disabled={loading}>{loading ? "Chargement…" : mode === "signup" ? "Créer mon espace" : "Se connecter"}</button>
     </form>
