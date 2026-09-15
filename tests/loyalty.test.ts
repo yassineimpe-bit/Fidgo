@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken } from "@/lib/loyalty";
+import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken } from "../lib/loyalty";
 
 describe("loyalty core", () => {
   it("extracts secure LOY1 tokens", () => { const token = "abcdefghijklmnopqrstuv"; expect(parseCardToken(`LOY1:${token}`)).toBe(token); expect(parseCardToken("https://example.com")).toBeNull(); });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundedInt, boundedNumber, normalizeEmail } from "@/lib/input";
+import { boundedInt, boundedNumber, normalizeEmail } from "../lib/input";
 
 describe("input guards", () => {
   it("normalizes valid emails and rejects malformed ones", () => {
