@@ -14,10 +14,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          URL="https://fidgo-kf4f4htcyk-6112.vercel.app/api/health"
+          URL="https://fidgo-live-5ww45g76m-kf4f4htcyk-6112.vercel.app/api/health"
           echo "Probing $URL"
-          status="$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "$URL" || true)"
+          status="$(curl -sS -D /tmp/headers.txt -o /tmp/health.json -w '%{http_code}' --max-time 30 "$URL" || true)"
           echo "HTTP $status"
+          cat /tmp/headers.txt 2>/dev/null || true
+          echo '--- body ---'
           cat /tmp/health.json 2>/dev/null || true
           echo
           if [ "$status" != "200" ]; then
