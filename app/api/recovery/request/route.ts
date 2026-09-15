@@ -67,10 +67,10 @@ export async function POST(req: Request) {
     const code = typeof error === "object" && error && "code" in error
       ? String((error as { code?: unknown }).code)
       : "";
-    // Deployment may precede the DB migration. Fail closed without leaking card
-    // existence and without turning enrollment itself into a 500.
+    // A deployment can briefly precede its migration. Returning the exact same
+    // 202 avoids turning migration state into a card-existence oracle.
     if (code === "42P01") {
-      return Response.json({ error: "RECOVERY_UNAVAILABLE" }, { status: 503, headers: PRIVATE_HEADERS });
+      return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
     }
     throw error;
   }
