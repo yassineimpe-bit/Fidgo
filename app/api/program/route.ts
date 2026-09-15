@@ -26,7 +26,7 @@ export async function PATCH(req: Request) {
   const pointsPerPurchase = boundedInt(b.pointsPerPurchase, { min: 1, max: 100_000 });
   const pointsPerEuro = boundedNumber(b.pointsPerEuro, { min: 0.01, max: 10_000 });
   const dailyEarnLimit = boundedInt(b.dailyEarnLimit, { min: 0, max: 1_000_000, fallback: 0 });
-  const cooldownSeconds = boundedInt(b.cooldownSeconds, { min: 0, max: 86_400, fallback: 60 });
+  const cooldownSeconds = boundedInt(b.cooldownSeconds, { min: 0, max: 86_400, fallback: 120 });
   const expiresAfterDays = b.expiresAfterDays === null || b.expiresAfterDays === "" ? null : boundedInt(b.expiresAfterDays, { min: 1, max: 3650 });
 
   if (!mode || !pointsRule || threshold === null || stampsPerVisit === null || pointsPerPurchase === null || pointsPerEuro === null || dailyEarnLimit === null || cooldownSeconds === null || (b.expiresAfterDays !== null && b.expiresAfterDays !== "" && expiresAfterDays === null)) {

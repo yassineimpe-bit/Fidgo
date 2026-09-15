@@ -9,13 +9,13 @@ Un seul déploiement Next.js App Router contient les pages publiques, le dashboa
 - `/` : landing minimale.
 - `/signup` et `/login` : création/connexion owner.
 - `/j/[slug]` : inscription client.
-- `/c/[token]` : carte fidélité web mobile.
+- `/c/[token]` : carte fidélité web mobile, avec polling visible toutes les trois secondes puis arrêt après cinq minutes d'inactivité.
 - `/s` : scanner caisse, optimisé rush.
 - `/s/stats` : p50/p95 local de la latence.
 - `/dashboard` : KPI simples.
 - `/dashboard/program` : configuration points/tampons.
 - `/dashboard/transactions` : ledger + annulation par écriture inverse.
-- `/dashboard/clients` : recherche, export et effacement RGPD.
+- `/dashboard/clients` : recherche, ajustement audité, export et effacement RGPD.
 - `/dashboard/employees` : accès caisse et lecture seule.
 - `/dashboard/settings` : identité du commerce.
 - `/dashboard/poster` : affiche A4 imprimable/PDF.
@@ -29,6 +29,8 @@ Chaque entité métier porte `establishment_id` directement ou via une FK. Toute
 `cards.balance` est un cache de lecture rapide. `transactions` est le ledger append-only et la source d'audit. Une annulation crée une transaction `reversal`; elle ne supprime pas la transaction originale.
 
 Le crédit : vérifie session/rôle, idempotence, verrouille la carte `FOR UPDATE`, applique cooldown/expiration/limite quotidienne, calcule le delta serveur, écrit le ledger puis le cache de solde et l'audit log.
+
+Le cooldown par défaut est de 120 secondes. Seuls OWNER et MANAGER peuvent le dépasser ; le motif obligatoire est conservé dans la transaction et dans l'audit `CARD_ADJUSTED`.
 
 ## Points et tampons
 

@@ -32,7 +32,9 @@ Le seed est idempotent et vérifie l'intégrité du ledger de la carte de démon
 
 Importer **exactement** `yassineimpe-bit/Fidgo` dans le projet Vercel et utiliser `main` comme Production Branch.
 
-Le projet `fidgo-env-probe` est désormais connecté au dépôt GitHub `yassineimpe-bit/Fidgo`. Chaque nouveau push sur `main` doit créer automatiquement un déploiement Vercel de production.
+Connecter le dépôt GitHub `yassineimpe-bit/Fidgo` au projet Vercel de production. Chaque nouveau push sur `main` doit créer automatiquement un déploiement de production.
+
+Ne jamais imprimer ni communiquer un QR fondé sur `fidgo-env-probe.vercel.app`. Configurer d'abord le domaine définitif et l'utiliser dans `NEXT_PUBLIC_APP_URL`.
 
 Région imposée par `vercel.json` : `fra1`.
 
@@ -42,7 +44,7 @@ Variables runtime minimales :
 
 - `DATABASE_URL`
 - `AUTH_SECRET` (au moins 32 caractères aléatoires, stocké comme variable sensible)
-- `NEXT_PUBLIC_APP_URL` est recommandé pour fixer le domaine canonique ; sur Vercel, Fidgo sait aussi utiliser les URL système Vercel comme fallback
+- `NEXT_PUBLIC_APP_URL` doit contenir le domaine HTTPS définitif avant tout pilote
 - `APPLE_WALLET_ENABLED=false` tant que les certificats Apple ne sont pas installés
 - `GOOGLE_WALLET_ENABLED=false` tant que l'Issuer Google n'est pas configuré
 
@@ -99,13 +101,14 @@ Ne pas considérer Fidgo `PILOT READY` avant :
 - `/api/health` vert sur HTTPS ;
 - inscription réelle client ;
 - carte web réelle ;
-- ajout Google Wallet réel sur Android ;
-- ajout Apple Wallet réel sur iPhone ;
-- mise à jour du solde reflétée dans les deux Wallets ;
+- auto-rafraîchissement de la carte web vérifié ;
+- récupération sécurisée par email vérifiée ;
 - 30 scans terrain ;
 - p95 QR détecté → action validée < 2,5 s ;
 - aucun double crédit ;
 - test de coupure réseau / retry ;
 - validation isolation multi-tenant.
+
+Apple Wallet et Google Wallet peuvent rester désactivés pour le premier pilote.
 
 Les certificats, clés privées, mots de passe, connection strings et JSON de service account ne doivent jamais être commités dans GitHub.

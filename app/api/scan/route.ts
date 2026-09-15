@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canScan, parseCardToken } from "@/lib/loyalty";
+import { canManageProgram, canScan, parseCardToken } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
@@ -51,6 +51,7 @@ export async function POST(req: Request) {
     defaultEarn: card.mode === "STAMPS" ? Number(card.stamps_per_visit) : Number(card.points_per_purchase),
     pointsPerEuro: Number(card.points_per_euro),
     rewardAvailable: Number(card.balance) >= Number(card.reward_threshold),
+    canOverrideCooldown: canManageProgram(session.role),
     serverMs: Date.now() - started,
   }, { headers: { "cache-control": "no-store" } });
 }

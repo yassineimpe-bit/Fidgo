@@ -29,7 +29,7 @@ create table if not exists loyalty_programs (
   points_per_euro numeric(10,2) not null default 0 check (points_per_euro >= 0),
   points_per_purchase int not null default 10 check (points_per_purchase >= 0),
   daily_earn_limit int not null default 0 check (daily_earn_limit >= 0),
-  cooldown_seconds int not null default 60 check (cooldown_seconds >= 0),
+  cooldown_seconds int not null default 120 check (cooldown_seconds >= 0),
   expires_after_days int,
   card_message text,
   active boolean not null default true,

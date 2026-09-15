@@ -1,7 +1,8 @@
 import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken, type LoyaltyMode, type PointsRule } from "@/lib/loyalty";
+import { boundedText } from "@/lib/input";
+import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken, type LoyaltyMode, type PointsRule } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
@@ -18,10 +19,13 @@ export async function POST(req: Request) {
   const limited = await enforceRateLimit(req, `credit:${session.staffId}`, 120, 60);
   if (limited) return limited;
 
-  const body = await req.json();
+  const body = await req.json().catch(() => ({}));
   const token = parseCardToken(body.token);
   const idempotencyKey = body.idempotencyKey;
+  const overrideReason = boundedText(body.overrideReason, 240);
   if (!token || !isValidIdempotencyKey(idempotencyKey)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (body.overrideReason !== undefined && !overrideReason) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (overrideReason && !canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
   const purchaseAmountCents = Number(body.purchaseAmountCents);
   if (body.purchaseAmountCents !== undefined && (!Number.isInteger(purchaseAmountCents) || purchaseAmountCents <= 0 || purchaseAmountCents > 10_000_000)) return Response.json({ error: "INVALID_AMOUNT" }, { status: 400 });
 
@@ -47,7 +51,13 @@ export async function POST(req: Request) {
 
       if (!card.active || !card.program_active) throw new Error("CARD_NOT_FOUND");
       if (card.expires_at && new Date(card.expires_at) < new Date()) throw new Error("CARD_EXPIRED");
-      if (card.last_earn_at && Date.now() - new Date(card.last_earn_at).getTime() < Number(card.cooldown_seconds) * 1000) throw new Error("COOLDOWN");
+      const cooldownRemainingMs = card.last_earn_at
+        ? Number(card.cooldown_seconds) * 1000 - (Date.now() - new Date(card.last_earn_at).getTime())
+        : 0;
+      const overrodeCooldown = cooldownRemainingMs > 0 && Boolean(overrideReason);
+      if (cooldownRemainingMs > 0 && !overrideReason) {
+        throw new Error(`COOLDOWN:${Math.max(1, Math.ceil(cooldownRemainingMs / 1000))}`);
+      }
 
       const delta = computeEarnDelta({ mode: card.mode as LoyaltyMode, pointsRule: card.points_rule as PointsRule, stampsPerVisit:Number(card.stamps_per_visit), pointsPerEuro:Number(card.points_per_euro), pointsPerPurchase:Number(card.points_per_purchase), rewardThreshold:Number(card.reward_threshold) }, { purchaseAmountCents: body.purchaseAmountCents === undefined ? undefined : purchaseAmountCents });
       if (delta <= 0) throw new Error("INVALID_AMOUNT");
@@ -59,9 +69,12 @@ export async function POST(req: Request) {
 
       const balance = Number(card.balance) + delta;
       const unit = card.mode === "STAMPS" ? "STAMP" : "POINT";
-      await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key,metadata) values(${session.establishmentId},${card.id},${session.staffId},'earn',${delta},${balance},${unit},${idempotencyKey},${tx.json({purchaseAmountCents:body.purchaseAmountCents??null,pointsRule:card.points_rule})})`;
+      await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key,metadata) values(${session.establishmentId},${card.id},${session.staffId},'earn',${delta},${balance},${unit},${idempotencyKey},${tx.json({purchaseAmountCents:body.purchaseAmountCents??null,pointsRule:card.points_rule,overrideReason:overrodeCooldown?overrideReason:null})})`;
       await tx`update cards set balance=${balance},last_earn_at=now(),updated_at=now() where id=${card.id}`;
       await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'LOYALTY_EARN','card',${String(card.id)},${tx.json({delta,balance})})`;
+      if (overrodeCooldown) {
+        await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'CARD_ADJUSTED','card',${String(card.id)},${tx.json({oldBalance:Number(card.balance),newBalance:balance,delta,reason:overrideReason,source:'cooldown_override'})})`;
+      }
       return { cardId: String(card.id), balance, delta, duplicate:false, rewardAvailable: balance >= Number(card.reward_threshold), threshold:Number(card.reward_threshold), rewardLabel:card.reward_label, firstName:card.first_name, mode:card.mode };
     });
     const { cardId, ...payload } = result;
@@ -69,7 +82,9 @@ export async function POST(req: Request) {
     return Response.json({ ...payload, serverMs: Date.now() - started }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";
-    const status = message === "COOLDOWN" || message === "DAILY_LIMIT" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : message === "INVALID_AMOUNT" ? 400 : 500;
-    return Response.json({ error: message, serverMs: Date.now() - started }, { status });
+    const cooldown = message.startsWith("COOLDOWN:");
+    const errorCode = cooldown ? "COOLDOWN" : message;
+    const status = cooldown || message === "DAILY_LIMIT" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : message === "INVALID_AMOUNT" ? 400 : 500;
+    return Response.json({ error: errorCode, remainingSeconds: cooldown ? Number(message.split(":")[1]) : undefined, serverMs: Date.now() - started }, { status });
   }
 }

@@ -12,8 +12,10 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - points fixes par achat **ou** points calculés par euro ;
 - inscription client avec données facultatives et consentement marketing séparé ;
 - carte web mobile + QR sécurisé `LOY1:<token>` ;
+- mise à jour automatique du solde quand la carte reste visible ;
 - scanner caisse caméra toujours ouverte ;
 - crédit transactionnel, idempotence, cooldown et limite quotidienne ;
+- override du cooldown et ajustement manuel réservés aux responsables, avec motif et audit ;
 - redeem de récompense ;
 - ledger append-only + annulation par écriture inverse ;
 - dashboard, clients et historique ;
@@ -21,6 +23,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - personnalisation commerce ;
 - affiche QR A4 ;
 - PWA minimale et instrumentation p50/p95 QR → validation ;
+- récupération de carte par email avec jeton à usage unique ;
 - schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
 - anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
 
@@ -50,4 +53,4 @@ npm run dev
 
 Puis ouvrir `/signup`.
 
-Documentation : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/WALLETS.md`, `docs/PILOT.md`.
+Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/WALLETS.md`, `docs/PILOT.md`.
