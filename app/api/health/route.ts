@@ -6,17 +6,19 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const started = Date.now();
   const wallet = getWalletRuntimeStatus();
+  const authConfigured = Boolean(process.env.AUTH_SECRET?.trim());
   const walletState = {
     https: wallet.appUrlConfigured && wallet.appUrlHttps,
     apple: wallet.apple.configured,
     google: wallet.google.configured,
   };
 
-  if (!databaseConfigured) {
+  if (!databaseConfigured || !authConfigured) {
     return Response.json({
       ok: false,
       service: "fidgo",
-      database: "down",
+      database: databaseConfigured ? "unknown" : "down",
+      auth: authConfigured ? "up" : "down",
       wallet: walletState,
       serverMs: Date.now() - started,
     }, { status: 503, headers: { "cache-control": "no-store" } });
@@ -28,6 +30,7 @@ export async function GET() {
       ok: true,
       service: "fidgo",
       database: "up",
+      auth: "up",
       wallet: walletState,
       serverMs: Date.now() - started,
     }, { headers: { "cache-control": "no-store" } });
@@ -36,6 +39,7 @@ export async function GET() {
       ok: false,
       service: "fidgo",
       database: "down",
+      auth: "up",
       wallet: walletState,
       serverMs: Date.now() - started,
     }, { status: 503, headers: { "cache-control": "no-store" } });

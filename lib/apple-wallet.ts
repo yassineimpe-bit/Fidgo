@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { connect } from "node:http2";
 import { PKPass } from "passkit-generator";
+import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import type { WalletCard } from "@/lib/wallet-data";
 
@@ -42,9 +43,9 @@ function rgb(hex: string) {
 }
 
 async function walletImage() {
-  const base = process.env.NEXT_PUBLIC_APP_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_APP_URL is required");
-  const response = await fetch(`${base.replace(/\/$/, "")}/wallet-logo.png`, { cache: "force-cache" });
+  const base = getAppUrl();
+  if (!base) throw new Error("APP_URL is required");
+  const response = await fetch(`${base}/wallet-logo.png`, { cache: "force-cache" });
   if (!response.ok) throw new Error("APPLE_WALLET_LOGO_UNAVAILABLE");
   return Buffer.from(await response.arrayBuffer());
 }
@@ -53,7 +54,7 @@ export async function buildApplePass(card: WalletCard) {
   const cfg = config();
   const image = await walletImage();
   const authToken = appleAuthenticationToken(card.token);
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const appUrl = getAppUrl();
 
   const pass = new PKPass(
     { "icon.png": image, "icon@2x.png": image, "icon@3x.png": image, "logo.png": image, "logo@2x.png": image, "logo@3x.png": image },

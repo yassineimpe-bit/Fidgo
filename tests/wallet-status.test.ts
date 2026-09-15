@@ -11,6 +11,12 @@ describe("wallet runtime status", () => {
     expect(status.google.configured).toBe(false);
   });
 
+  it("uses Vercel production URL when no explicit app URL is set", () => {
+    const status = getWalletRuntimeStatus({ VERCEL_PROJECT_PRODUCTION_URL: "fidgo.vercel.app" });
+    expect(status.appUrlConfigured).toBe(true);
+    expect(status.appUrlHttps).toBe(true);
+  });
+
   it("reports Google configured only when enabled and complete", () => {
     const status = getWalletRuntimeStatus({
       NEXT_PUBLIC_APP_URL: "https://fidgo.test",
@@ -22,7 +28,7 @@ describe("wallet runtime status", () => {
     expect(status.google.missing).toEqual([]);
   });
 
-  it("requires every Apple signing input", () => {
+  it("requires every Apple signing input and auth secret", () => {
     const status = getWalletRuntimeStatus({
       NEXT_PUBLIC_APP_URL: "http://localhost:3000",
       APPLE_WALLET_ENABLED: "true",
@@ -33,5 +39,6 @@ describe("wallet runtime status", () => {
     expect(status.apple.configured).toBe(false);
     expect(status.apple.missing).toContain("APPLE_SIGNER_CERT_BASE64");
     expect(status.apple.missing).toContain("APPLE_SIGNER_KEY_BASE64");
+    expect(status.apple.missing).toContain("AUTH_SECRET");
   });
 });

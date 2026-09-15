@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
+import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,10 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
 
   const qr = await QRCode.toDataURL(`LOY1:${card.token}`, { width: 420, margin: 1, errorCorrectionLevel: "M" });
   const percent = Math.min(100, Math.round((Number(card.balance) / Number(card.reward_threshold)) * 100));
-  const appleEnabled = process.env.APPLE_WALLET_ENABLED === "true";
-  const googleEnabled = process.env.GOOGLE_WALLET_ENABLED === "true";
+  const wallet = getWalletRuntimeStatus();
+  const walletHttps = wallet.appUrlConfigured && wallet.appUrlHttps;
+  const appleEnabled = walletHttps && wallet.apple.configured;
+  const googleEnabled = walletHttps && wallet.google.configured;
 
   return <main className="auth-wrap"><section style={{width:"min(480px,100%)"}}>
     <div className="loyalty-card" style={{background:card.primary_color||"#111111"}}>
@@ -36,6 +39,6 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
     <div className="card" style={{marginTop:14}}><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
       {appleEnabled ? <a className="btn btn-primary" href={`/api/wallet/apple/${card.token}`}>Ajouter à Apple Wallet</a> : <button className="btn" disabled>Apple Wallet</button>}
       {googleEnabled ? <a className="btn btn-primary" href={`/api/wallet/google/${card.token}`}>Ajouter à Google Wallet</a> : <button className="btn" disabled>Google Wallet</button>}
-    </div>{(!appleEnabled||!googleEnabled)&&<p className="muted" style={{fontSize:13,marginTop:12}}>Les boutons s’activent dès que les identifiants émetteur correspondants sont configurés.</p>}</div>
+    </div>{(!appleEnabled||!googleEnabled)&&<p className="muted" style={{fontSize:13,marginTop:12}}>Les boutons s’activent uniquement quand HTTPS et les identifiants émetteur correspondants sont réellement prêts.</p>}</div>
   </section></main>;
 }

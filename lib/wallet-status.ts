@@ -1,3 +1,5 @@
+import { getAppUrl, type AppUrlEnv } from "@/lib/app-url";
+
 export type WalletProviderStatus = {
   enabled: boolean;
   configured: boolean;
@@ -11,7 +13,7 @@ export type WalletRuntimeStatus = {
   google: WalletProviderStatus;
 };
 
-type EnvLike = Record<string, string | undefined>;
+type EnvLike = AppUrlEnv;
 
 function providerStatus(enabledKey: string, required: string[], env: EnvLike): WalletProviderStatus {
   const enabled = env[enabledKey] === "true";
@@ -20,7 +22,7 @@ function providerStatus(enabledKey: string, required: string[], env: EnvLike): W
 }
 
 export function getWalletRuntimeStatus(env: EnvLike = process.env): WalletRuntimeStatus {
-  const appUrl = env.NEXT_PUBLIC_APP_URL || "";
+  const appUrl = getAppUrl(env);
   let appUrlHttps = false;
   try {
     appUrlHttps = new URL(appUrl).protocol === "https:";
@@ -36,6 +38,7 @@ export function getWalletRuntimeStatus(env: EnvLike = process.env): WalletRuntim
       "APPLE_WWDR_CERT_BASE64",
       "APPLE_SIGNER_CERT_BASE64",
       "APPLE_SIGNER_KEY_BASE64",
+      "AUTH_SECRET",
     ], env),
     google: providerStatus("GOOGLE_WALLET_ENABLED", [
       "GOOGLE_WALLET_ISSUER_ID",

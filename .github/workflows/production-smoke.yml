@@ -33,7 +33,7 @@ jobs:
             echo "Attempt $attempt/20"
             if body=$(curl --silent --show-error --fail --max-time 15 "$HEALTH_URL"); then
               echo "$body" | jq .
-              if echo "$body" | jq -e '.ok == true and .service == "fidgo" and .database == "up" and .wallet.https == true' >/dev/null; then
+              if echo "$body" | jq -e '.ok == true and .service == "fidgo" and .database == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
                 echo "Fidgo production health is green."
                 exit 0
               fi

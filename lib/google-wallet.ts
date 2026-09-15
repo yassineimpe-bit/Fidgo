@@ -1,5 +1,6 @@
 import { JWT } from "google-auth-library";
 import { importPKCS8, SignJWT } from "jose";
+import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import type { WalletCard } from "@/lib/wallet-data";
 
@@ -57,9 +58,9 @@ async function walletFetch(path: string, init: RequestInit = {}) {
 }
 
 function logoUri() {
-  const base = process.env.NEXT_PUBLIC_APP_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_APP_URL is required");
-  return `${base.replace(/\/$/, "")}/wallet-logo.png`;
+  const base = getAppUrl();
+  if (!base) throw new Error("APP_URL is required");
+  return `${base}/wallet-logo.png`;
 }
 
 function classBody(card: WalletCard) {
@@ -81,7 +82,7 @@ function classBody(card: WalletCard) {
 
 function objectBody(card: WalletCard) {
   const { classId, objectId } = ids(card);
-  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "";
+  const base = getAppUrl();
   return {
     id: objectId,
     classId,
@@ -130,7 +131,9 @@ export async function googleWalletSaveLink(card: WalletCard) {
   const { objectId, classId } = await ensureGoogleWalletObject(card);
   const { serviceAccount } = config();
   const privateKey = await importPKCS8(serviceAccount.private_key, "RS256");
-  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://fidgo.example.com").origin;
+  const appUrl = getAppUrl();
+  if (!appUrl) throw new Error("APP_URL is required");
+  const origin = new URL(appUrl).origin;
   const jwt = await new SignJWT({
     typ: "savetowallet",
     origins: [origin],
