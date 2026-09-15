@@ -35,10 +35,10 @@
     "@types/qrcode": "1.5.5",
     "@types/react": "19.0.6",
     "@types/react-dom": "19.0.3",
-    "eslint": "9.17.0",
+    "eslint": "9.39.5",
     "eslint-config-next": "15.5.24",
     "typescript": "5.7.2",
-    "vitest": "3.2.4"
+    "vitest": "3.2.7"
   },
   "overrides": {
     "joi": "17.13.6",
