@@ -32,6 +32,8 @@ Le script affiche ensuite l'URL publique d'inscription et l'URL de la carte de d
 
 Importer `yassineimpe-bit/Fidgo` dans Vercel.
 
+Projet Vercel actuellement raccordé au dépôt GitHub : `fidgo-env-probe`.
+
 Région imposée par `vercel.json` : `fra1`.
 
 Variables minimales :
