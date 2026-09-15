@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function JoinForm({ slug }: { slug: string }) {
+export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; recoveryEnabled?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -43,10 +43,14 @@ export function JoinForm({ slug }: { slug: string }) {
 
       if (!response.ok) {
         if (data.error === "CARD_ALREADY_EXISTS") {
-          setRecoveryEmail(email);
-          setError(email
-            ? "Une carte existe déjà pour ces coordonnées. Tu peux recevoir un lien sécurisé pour la retrouver."
-            : "Une carte existe déjà pour ces coordonnées. Saisis l’email utilisé sur la carte pour la récupérer, ou demande-la en caisse.");
+          if (recoveryEnabled && email) {
+            setRecoveryEmail(email);
+            setError("Une carte existe déjà pour ces coordonnées. Tu peux recevoir un lien sécurisé pour la retrouver.");
+          } else if (recoveryEnabled) {
+            setError("Une carte existe déjà pour ces coordonnées. Saisis l’email utilisé sur la carte pour la récupérer, ou demande-la en caisse.");
+          } else {
+            setError("Une carte existe déjà pour ces coordonnées. Demande-la en caisse avec ton code court ou ton email.");
+          }
           return;
         }
         if (data.error === "RATE_LIMITED") {
@@ -67,7 +71,7 @@ export function JoinForm({ slug }: { slug: string }) {
   }
 
   async function requestRecovery() {
-    if (!recoveryEmail || recoveryLoading) return;
+    if (!recoveryEnabled || !recoveryEmail || recoveryLoading) return;
     setRecoveryLoading(true);
     setRecoveryMessage("");
     try {
@@ -77,15 +81,11 @@ export function JoinForm({ slug }: { slug: string }) {
         body: JSON.stringify({ slug, email: recoveryEmail }),
       });
       const data = await response.json().catch(() => ({}));
-      if (response.status === 503 && data.error === "RECOVERY_UNAVAILABLE") {
-        setRecoveryMessage("La récupération par email est en cours d’activation. Demande ta carte en caisse pour le moment.");
-        return;
-      }
       if (!response.ok) {
         setRecoveryMessage("Impossible d’envoyer le lien pour le moment. Réessaie plus tard.");
         return;
       }
-      setRecoveryMessage("Si une carte correspond à cette adresse, un lien valable 15 minutes va être envoyé.");
+      setRecoveryMessage(data.message || "Si une carte correspond à cette adresse, un lien valable 15 minutes va être envoyé.");
     } catch {
       setRecoveryMessage("Connexion impossible. Réessaie quand le réseau est revenu.");
     } finally {
@@ -111,7 +111,7 @@ export function JoinForm({ slug }: { slug: string }) {
       <span>J’accepte de recevoir les offres et actualités de ce commerce. Je peux me désinscrire à tout moment.</span>
     </label>
     {error ? <div className="notice error">{error}</div> : null}
-    {recoveryEmail ? <button className="btn" type="button" onClick={requestRecovery} disabled={recoveryLoading}>
+    {recoveryEnabled && recoveryEmail ? <button className="btn" type="button" onClick={requestRecovery} disabled={recoveryLoading}>
       {recoveryLoading ? "Envoi…" : "M’envoyer un lien de récupération"}
     </button> : null}
     {recoveryMessage ? <div className="notice">{recoveryMessage}</div> : null}
