@@ -47,6 +47,7 @@ function feedback(kind: "success" | "reward" | "error") {
       gain.gain.value = 0.08;
       oscillator.connect(gain);
       gain.connect(context.destination);
+      oscillator.onended = () => { void context.close(); };
       oscillator.start();
       oscillator.stop(context.currentTime + (kind === "reward" ? 0.18 : 0.08));
     }

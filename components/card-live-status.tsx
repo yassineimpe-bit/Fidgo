@@ -33,10 +33,15 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
 
   const refresh = useCallback(async () => {
     if (document.visibilityState !== "visible") return;
-    const response = await fetch(`/api/card/${encodeURIComponent(token)}/status`, { cache: "no-store" });
-    if (!response.ok) return;
-    const next = await response.json() as CardStatus;
-    setStatus(next);
+    try {
+      const response = await fetch(`/api/card/${encodeURIComponent(token)}/status`, { cache: "no-store" });
+      if (!response.ok) return;
+      const next = await response.json() as CardStatus;
+      setStatus(next);
+    } catch {
+      // La carte conserve le dernier solde connu quand le téléphone passe
+      // brièvement hors ligne. Le prochain tick visible retentera la lecture.
+    }
   }, [token]);
 
   const resume = useCallback(() => {
