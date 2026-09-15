@@ -13,7 +13,8 @@
     "env:check": "node scripts/validate-env.mjs",
     "db:setup": "node scripts/db-setup.mjs",
     "db:seed:demo": "node scripts/seed-demo.mjs",
-    "bootstrap:demo": "npm run db:setup && npm run db:seed:demo"
+    "db:verify": "node scripts/verify-db-integrity.mjs",
+    "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify"
   },
   "dependencies": {
     "bcryptjs": "2.4.3",
