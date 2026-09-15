@@ -27,9 +27,7 @@ export async function PATCH(req: Request) {
   const pointsPerEuro = boundedNumber(b.pointsPerEuro, { min: 0.01, max: 10_000 });
   const dailyEarnLimit = boundedInt(b.dailyEarnLimit, { min: 0, max: 1_000_000, fallback: 0 });
   const cooldownSeconds = boundedInt(b.cooldownSeconds, { min: 0, max: 86_400, fallback: 60 });
-  const expiresAfterDays = b.expiresAfterDays === null || b.expiresAfterDays === ""
-    ? null
-    : boundedInt(b.expiresAfterDays, { min: 1, max: 3650 });
+  const expiresAfterDays = b.expiresAfterDays === null || b.expiresAfterDays === "" ? null : boundedInt(b.expiresAfterDays, { min: 1, max: 3650 });
 
   if (!mode || !pointsRule || threshold === null || stampsPerVisit === null || pointsPerPurchase === null || pointsPerEuro === null || dailyEarnLimit === null || cooldownSeconds === null || (b.expiresAfterDays !== null && b.expiresAfterDays !== "" && expiresAfterDays === null)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
@@ -39,30 +37,19 @@ export async function PATCH(req: Request) {
   const rewardLabel = boundedText(b.rewardLabel, 180, "Récompense offerte") || "Récompense offerte";
   const cardMessage = boundedText(b.cardMessage, 240) || null;
 
-  const [program] = await sql.begin(async (tx) => {
+  const program = await sql.begin(async (tx) => {
     const [updated] = await tx`
       update loyalty_programs set
-        program_name = ${programName},
-        mode = ${mode},
-        points_rule = ${pointsRule},
-        reward_threshold = ${threshold},
-        reward_label = ${rewardLabel},
-        stamps_per_visit = ${stampsPerVisit},
-        points_per_purchase = ${pointsPerPurchase},
-        points_per_euro = ${pointsPerEuro},
-        daily_earn_limit = ${dailyEarnLimit},
-        cooldown_seconds = ${cooldownSeconds},
-        expires_after_days = ${expiresAfterDays},
-        card_message = ${cardMessage},
-        updated_at = now()
+        program_name = ${programName}, mode = ${mode}, points_rule = ${pointsRule},
+        reward_threshold = ${threshold}, reward_label = ${rewardLabel}, stamps_per_visit = ${stampsPerVisit},
+        points_per_purchase = ${pointsPerPurchase}, points_per_euro = ${pointsPerEuro},
+        daily_earn_limit = ${dailyEarnLimit}, cooldown_seconds = ${cooldownSeconds},
+        expires_after_days = ${expiresAfterDays}, card_message = ${cardMessage}, updated_at = now()
       where establishment_id = ${session.establishmentId}
       returning *
     `;
     if (!updated) throw new Error("PROGRAM_NOT_FOUND");
-    await tx`
-      insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id)
-      values (${session.establishmentId}, ${session.staffId}, 'PROGRAM_UPDATE', 'loyalty_program', ${updated.id})
-    `;
+    await tx`insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id) values (${session.establishmentId}, ${session.staffId}, 'PROGRAM_UPDATE', 'loyalty_program', ${updated.id})`;
     return updated;
   });
   return Response.json(program, { headers: { "cache-control": "no-store" } });
