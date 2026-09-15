@@ -1,4 +1,121 @@
 "use client";
+
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-export function JoinForm({slug}:{slug:string}){const router=useRouter();const [error,setError]=useState("");useEffect(()=>{const t=localStorage.getItem(`loyalty:${slug}`);if(t)router.replace(`/c/${t}`)},[slug,router]);async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const r=await fetch("/api/enroll",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({slug,firstName:f.get("firstName")||null,email:f.get("email")||null,phone:f.get("phone")||null,marketingConsent:f.get("consent")==="on"})});const d=await r.json().catch(()=>({}));if(!r.ok){setError(d.error==="CARD_ALREADY_EXISTS"?"Une carte existe deja pour ces coordonnees. Demandez-la en caisse, elle sera retrouvee avec votre code ou votre email.":d.error==="RATE_LIMITED"?"Trop de tentatives, reessayez plus tard.":d.error||"Erreur");return;}localStorage.setItem(`loyalty:${slug}`,d.token);router.push(`/c/${d.token}`)}return <form className="form" onSubmit={submit}><div className="field"><label>Prénom <span className="muted">(facultatif)</span></label><input className="input" name="firstName" autoComplete="given-name"/></div><div className="field"><label>Email <span className="muted">(facultatif, utile pour retrouver la carte)</span></label><input className="input" name="email" type="email" autoComplete="email"/></div><div className="field"><label>Téléphone <span className="muted">(facultatif)</span></label><input className="input" name="phone" type="tel" autoComplete="tel"/></div><label style={{display:"flex",gap:10,alignItems:"flex-start"}}><input type="checkbox" name="consent" style={{marginTop:4}}/><span>J’accepte de recevoir les offres et actualités de ce commerce. Je peux me désinscrire à tout moment.</span></label>{error&&<div className="notice error">{error}</div>}<button className="btn btn-primary">Créer ma carte</button><p className="muted" style={{fontSize:13}}>Les informations de contact sont facultatives. Le consentement marketing est séparé de la création de la carte.</p></form>}
+
+export function JoinForm({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem(`loyalty:${slug}`);
+    if (token) router.replace(`/c/${token}`);
+  }, [slug, router]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    setRecoveryEmail("");
+    setRecoveryMessage("");
+
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") || "").trim().toLowerCase();
+
+    try {
+      const response = await fetch("/api/enroll", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          firstName: form.get("firstName") || null,
+          email: email || null,
+          phone: form.get("phone") || null,
+          marketingConsent: form.get("consent") === "on",
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        if (data.error === "CARD_ALREADY_EXISTS") {
+          setRecoveryEmail(email);
+          setError(email
+            ? "Une carte existe déjà pour ces coordonnées. Tu peux recevoir un lien sécurisé pour la retrouver."
+            : "Une carte existe déjà pour ces coordonnées. Saisis l’email utilisé sur la carte pour la récupérer, ou demande-la en caisse.");
+          return;
+        }
+        if (data.error === "RATE_LIMITED") {
+          setError("Trop de tentatives. Réessaie plus tard.");
+          return;
+        }
+        setError("Impossible de créer la carte pour le moment.");
+        return;
+      }
+
+      localStorage.setItem(`loyalty:${slug}`, String(data.token));
+      router.push(`/c/${data.token}`);
+    } catch {
+      setError("Connexion impossible. Vérifie le réseau puis réessaie.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function requestRecovery() {
+    if (!recoveryEmail || recoveryLoading) return;
+    setRecoveryLoading(true);
+    setRecoveryMessage("");
+    try {
+      const response = await fetch("/api/recovery/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug, email: recoveryEmail }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 503 && data.error === "RECOVERY_UNAVAILABLE") {
+        setRecoveryMessage("La récupération par email est en cours d’activation. Demande ta carte en caisse pour le moment.");
+        return;
+      }
+      if (!response.ok) {
+        setRecoveryMessage("Impossible d’envoyer le lien pour le moment. Réessaie plus tard.");
+        return;
+      }
+      setRecoveryMessage("Si une carte correspond à cette adresse, un lien valable 15 minutes va être envoyé.");
+    } catch {
+      setRecoveryMessage("Connexion impossible. Réessaie quand le réseau est revenu.");
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
+  return <form className="form" onSubmit={submit}>
+    <div className="field">
+      <label>Prénom <span className="muted">(facultatif)</span></label>
+      <input className="input" name="firstName" autoComplete="given-name"/>
+    </div>
+    <div className="field">
+      <label>Email <span className="muted">(facultatif, utile pour retrouver la carte)</span></label>
+      <input className="input" name="email" type="email" autoComplete="email"/>
+    </div>
+    <div className="field">
+      <label>Téléphone <span className="muted">(facultatif)</span></label>
+      <input className="input" name="phone" type="tel" autoComplete="tel"/>
+    </div>
+    <label style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+      <input type="checkbox" name="consent" style={{marginTop:4}}/>
+      <span>J’accepte de recevoir les offres et actualités de ce commerce. Je peux me désinscrire à tout moment.</span>
+    </label>
+    {error ? <div className="notice error">{error}</div> : null}
+    {recoveryEmail ? <button className="btn" type="button" onClick={requestRecovery} disabled={recoveryLoading}>
+      {recoveryLoading ? "Envoi…" : "M’envoyer un lien de récupération"}
+    </button> : null}
+    {recoveryMessage ? <div className="notice">{recoveryMessage}</div> : null}
+    <button className="btn btn-primary" disabled={submitting}>{submitting ? "Création…" : "Créer ma carte"}</button>
+    <p className="muted" style={{fontSize:13}}>Les informations de contact sont facultatives. Le consentement marketing est séparé de la création de la carte.</p>
+  </form>;
+}
