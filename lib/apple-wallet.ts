@@ -54,37 +54,44 @@ export async function buildApplePass(card: WalletCard) {
   const image = await walletImage();
   const authToken = appleAuthenticationToken(card.token);
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
-  const props: ConstructorParameters<typeof PKPass>[2] = {
-    formatVersion: 1,
-    passTypeIdentifier: cfg.passTypeIdentifier,
-    teamIdentifier: cfg.teamIdentifier,
-    serialNumber: card.cardId,
-    organizationName: card.restaurantName,
-    description: `${card.programName} - Fidgo`,
-    logoText: card.restaurantName,
-    foregroundColor: "rgb(255, 255, 255)",
-    labelColor: "rgb(229, 231, 235)",
-    backgroundColor: rgb(card.primaryColor),
-    webServiceURL: `${appUrl}/api/wallet/apple/web`,
-    authenticationToken: authToken,
-    storeCard: {
-      primaryFields: [{ key: "balance", label: card.mode === "STAMPS" ? "TAMPONS" : "POINTS", value: card.balance }],
-      secondaryFields: [{ key: "reward", label: "RÉCOMPENSE", value: card.balance >= card.rewardThreshold ? "Disponible" : `${card.rewardThreshold - card.balance} restant(s)` }],
-      auxiliaryFields: [{ key: "code", label: "CARTE", value: card.shortCode }],
-      backFields: [
-        { key: "rewardDetail", label: "Récompense", value: card.rewardLabel },
-        { key: "program", label: "Programme", value: card.programName },
-        ...(card.cardMessage ? [{ key: "message", label: "Message", value: card.cardMessage }] : []),
-        ...(appUrl ? [{ key: "web", label: "Carte en ligne", value: `${appUrl}/c/${card.token}` }] : []),
-      ],
-    },
-  };
 
   const pass = new PKPass(
     { "icon.png": image, "icon@2x.png": image, "icon@3x.png": image, "logo.png": image, "logo@2x.png": image, "logo@3x.png": image },
     { wwdr: cfg.wwdr, signerCert: cfg.signerCert, signerKey: cfg.signerKey, signerKeyPassphrase: cfg.signerKeyPassphrase },
-    props,
+    {
+      formatVersion: 1,
+      passTypeIdentifier: cfg.passTypeIdentifier,
+      teamIdentifier: cfg.teamIdentifier,
+      serialNumber: card.cardId,
+      organizationName: card.restaurantName,
+      description: `${card.programName} - Fidgo`,
+      logoText: card.restaurantName,
+      foregroundColor: "rgb(255, 255, 255)",
+      labelColor: "rgb(229, 231, 235)",
+      backgroundColor: rgb(card.primaryColor),
+      webServiceURL: `${appUrl}/api/wallet/apple/web`,
+      authenticationToken: authToken,
+    },
   );
+
+  pass.type = "storeCard";
+  pass.primaryFields.push({
+    key: "balance",
+    label: card.mode === "STAMPS" ? "TAMPONS" : "POINTS",
+    value: card.balance,
+  });
+  pass.secondaryFields.push({
+    key: "reward",
+    label: "RÉCOMPENSE",
+    value: card.balance >= card.rewardThreshold ? "Disponible" : `${card.rewardThreshold - card.balance} restant(s)`,
+  });
+  pass.auxiliaryFields.push({ key: "code", label: "CARTE", value: card.shortCode });
+  pass.backFields.push(
+    { key: "rewardDetail", label: "Récompense", value: card.rewardLabel },
+    { key: "program", label: "Programme", value: card.programName },
+  );
+  if (card.cardMessage) pass.backFields.push({ key: "message", label: "Message", value: card.cardMessage });
+  if (appUrl) pass.backFields.push({ key: "web", label: "Carte en ligne", value: `${appUrl}/c/${card.token}` });
   pass.setBarcodes({
     format: "PKBarcodeFormatQR",
     message: `LOY1:${card.token}`,
