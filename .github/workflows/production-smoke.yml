@@ -19,7 +19,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 4
     env:
       HEALTH_URL: https://fidgo-env-probe.vercel.app/api/health
     steps:
@@ -28,20 +28,43 @@ jobs:
         run: |
           set -euo pipefail
           echo "Waiting for $HEALTH_URL"
-          body=""
-          for attempt in $(seq 1 20); do
-            echo "Attempt $attempt/20"
-            if body=$(curl --silent --show-error --fail --max-time 15 "$HEALTH_URL"); then
+
+          for attempt in $(seq 1 8); do
+            echo "Attempt $attempt/8"
+            rm -f /tmp/fidgo-health-body
+
+            http_code=$(curl --silent --show-error --max-time 15 \
+              -o /tmp/fidgo-health-body -w '%{http_code}' "$HEALTH_URL" || true)
+            body=$(cat /tmp/fidgo-health-body 2>/dev/null || true)
+
+            echo "HTTP $http_code"
+            if echo "$body" | jq -e . >/dev/null 2>&1; then
               echo "$body" | jq .
+
               if echo "$body" | jq -e '.ok == true and .service == "fidgo" and .database == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
                 echo "Fidgo production health is green."
                 exit 0
               fi
-              echo "Endpoint answered but is not ready yet."
+
+              # auth=down means AUTH_SECRET is absent. Retrying for ten minutes cannot fix
+              # a missing environment variable, so fail immediately with a useful message.
+              if echo "$body" | jq -e '.service == "fidgo" and .auth == "down"' >/dev/null; then
+                echo "::error::Fidgo runtime is not configured: AUTH_SECRET is missing in Vercel Production."
+                if echo "$body" | jq -e '.database == "down"' >/dev/null; then
+                  echo "::error::DATABASE_URL is also missing or unavailable in Vercel Production."
+                fi
+                exit 1
+              fi
+
+              echo "Fidgo answered but is not ready yet."
             else
-              echo "Endpoint not ready yet."
+              echo "Health endpoint did not return valid JSON yet."
+              head -c 500 /tmp/fidgo-health-body 2>/dev/null || true
+              echo
             fi
-            sleep 30
+
+            sleep 15
           done
-          echo "Production health did not become ready in time."
+
+          echo "::error::Production health did not become ready after 8 attempts."
           exit 1
