@@ -1,5 +1,5 @@
 {
-  "name": "loyalty-v0",
+  "name": "fidgo",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -24,6 +24,7 @@
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "3.2.0",
     "@types/bcryptjs": "2.4.6",
     "@types/node": "22.10.2",
     "@types/qrcode": "1.5.5",

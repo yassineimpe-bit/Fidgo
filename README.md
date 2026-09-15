@@ -1,4 +1,4 @@
-# Loyalty Rush MVP
+# Fidgo
 
 SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, boulangeries et petits commerces alimentaires.
 
@@ -22,7 +22,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - affiche QR A4 ;
 - PWA minimale et instrumentation p50/p95 QR → validation ;
 - schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
-- anti-bruteforce simple PostgreSQL et contrôle d'origine sur les mutations.
+- anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
 
 ## Volontairement après validation terrain
 

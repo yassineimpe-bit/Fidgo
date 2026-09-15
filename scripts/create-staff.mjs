@@ -1,0 +1,2 @@
+import postgres from "postgres"; import bcrypt from "bcryptjs";
+const [,,slug,email,password]=process.argv;if(!slug||!email||!password)throw new Error("Usage: node scripts/create-staff.mjs <slug> <email> <password>");const sql=postgres(process.env.DATABASE_URL);const e=(await sql`select id from establishments where slug=${slug}`)[0];if(!e)throw new Error("Unknown establishment");const hash=await bcrypt.hash(password,12);await sql`insert into staff_users(establishment_id,email,password_hash) values(${e.id},${email},${hash})`;await sql.end();console.log("staff created");

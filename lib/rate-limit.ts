@@ -1,0 +1,4 @@
+import { sql } from "@/lib/db";
+import { hashRateKey, requestIp } from "@/lib/security";
+export async function consumeRateLimit(rawKey:string,limit:number,windowSeconds:number):Promise<{allowed:boolean;remaining:number}>{const key=hashRateKey(rawKey);const [row]=await sql`insert into rate_limits (key_hash,hits,window_started_at) values (${key},1,now()) on conflict (key_hash) do update set hits=case when rate_limits.window_started_at < now()-(${windowSeconds}::int * interval '1 second') then 1 else rate_limits.hits+1 end, window_started_at=case when rate_limits.window_started_at < now()-(${windowSeconds}::int * interval '1 second') then now() else rate_limits.window_started_at end returning hits`;const hits=Number(row.hits);return{allowed:hits<=limit,remaining:Math.max(0,limit-hits)};}
+export async function rateLimit(request:Request,scope:string,limit:number,windowSeconds:number){return consumeRateLimit(`${scope}:${requestIp(request)}`,limit,windowSeconds);}

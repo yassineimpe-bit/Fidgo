@@ -24,25 +24,18 @@ export async function POST(request: Request) {
   if (restaurantName.length < 2 || !isEmail(email) || password.length < 8) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
 
   const baseSlug = slugify(restaurantName) || "commerce";
-  const slug = `${baseSlug}-${id("slug").slice(-4).toLowerCase()}`;
+  const slug = `${baseSlug}-${id().slice(-4).toLowerCase()}`;
   const passwordHash = await bcrypt.hash(password, 12);
 
   try {
     const result = await sql.begin(async (tx) => {
-      const establishment = (await tx`
-        insert into establishments(id,slug,name) values(${id("est")},${slug},${restaurantName}) returning id,slug,name
-      `)[0];
-      const staff = (await tx`
-        insert into staff_users(id,establishment_id,email,password_hash,role) values(${id("usr")},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role
-      `)[0];
-      await tx`
-        insert into loyalty_programs(id,establishment_id,name,mode,stamps_required,stamps_per_visit,reward_threshold,reward_label)
-        values(${id("prg")},${establishment.id},'Programme fidélité','STAMPS',10,1,10,'1 récompense offerte')
-      `;
+      const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
+      const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role`)[0];
+      await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
       return { establishment, staff };
     });
 
-    const token = await signSession({ userId: result.staff.id, establishmentId: result.establishment.id, role: result.staff.role, email: result.staff.email });
+    const token = await signSession({ staffId: result.staff.id, establishmentId: result.establishment.id, role: result.staff.role, email: result.staff.email });
     const response = NextResponse.json({ ok: true, slug: result.establishment.slug });
     response.cookies.set(sessionCookie(token));
     return response;
