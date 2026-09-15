@@ -9,5 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    env: {
+      DATABASE_URL: "postgres://user:password@127.0.0.1:5432/fidgo_test",
+    },
   },
 });
