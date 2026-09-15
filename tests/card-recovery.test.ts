@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CARD_RECOVERY_TTL_MINUTES,
+  cardRecoveryEnabled,
   createCardRecoveryToken,
   hashCardRecoveryToken,
   isValidCardRecoveryToken,
@@ -34,5 +35,19 @@ describe("card recovery tokens", () => {
     const first = createCardRecoveryToken().token;
     const second = createCardRecoveryToken().token;
     expect(first).not.toBe(second);
+  });
+
+  it("stays disabled until flag and email transport are all configured", () => {
+    expect(cardRecoveryEnabled({})).toBe(false);
+    expect(cardRecoveryEnabled({ CARD_RECOVERY_ENABLED: "true" })).toBe(false);
+    expect(cardRecoveryEnabled({
+      CARD_RECOVERY_ENABLED: "true",
+      RESEND_API_KEY: "re_test",
+    })).toBe(false);
+    expect(cardRecoveryEnabled({
+      CARD_RECOVERY_ENABLED: "true",
+      RESEND_API_KEY: "re_test",
+      EMAIL_FROM: "Fidgo <cards@example.com>",
+    })).toBe(true);
   });
 });
