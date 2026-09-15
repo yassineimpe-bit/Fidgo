@@ -17,8 +17,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
-      - run: npm run build
-        env:
-          DATABASE_URL: postgres://user:password@localhost:5432/loyalty
-          AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only
-          NEXT_PUBLIC_APP_URL: https://example.com
+      - name: Build without production secrets
+        run: npm run build
