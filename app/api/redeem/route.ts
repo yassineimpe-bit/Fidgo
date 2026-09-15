@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key) values(${session.establishmentId},${card.id},${session.staffId},'redeem',${-threshold},${balance},${unit},${idempotencyKey})`;
       await tx`update cards set balance=${balance},updated_at=now() where id=${card.id}`;
       await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'LOYALTY_REDEEM','card',${String(card.id)},${tx.json({threshold,balance})})`;
+      await tx`insert into product_events(establishment_id,card_id,staff_user_id,event_type,metadata) values(${session.establishmentId},${card.id},${session.staffId},'REWARD_REDEEMED',${tx.json({threshold,balance})})`;
       return { cardId: String(card.id), balance, duplicate:false, rewardLabel:card.reward_label };
     });
     const { cardId, ...payload } = result;

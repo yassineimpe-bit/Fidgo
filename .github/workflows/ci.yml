@@ -27,3 +27,35 @@ jobs:
       - run: npm run test
       - name: Build without production secrets
         run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fidgo
+          POSTGRES_PASSWORD: fidgo
+          POSTGRES_DB: fidgo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fidgo -d fidgo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://fidgo:fidgo@127.0.0.1:5432/fidgo_test
+      AUTH_SECRET: fidgo-ci-secret-at-least-32-characters
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:setup
+      - run: npm run test:e2e

@@ -29,7 +29,7 @@ create table if not exists loyalty_programs (
   points_per_euro numeric(10,2) not null default 0 check (points_per_euro >= 0),
   points_per_purchase int not null default 10 check (points_per_purchase >= 0),
   daily_earn_limit int not null default 0 check (daily_earn_limit >= 0),
-  cooldown_seconds int not null default 60 check (cooldown_seconds >= 0),
+  cooldown_seconds int not null default 120 check (cooldown_seconds >= 0),
   expires_after_days int,
   card_message text,
   active boolean not null default true,
@@ -181,6 +181,19 @@ create table if not exists audit_logs (
   created_at timestamptz not null default now()
 );
 create index if not exists audit_logs_estab_idx on audit_logs (establishment_id, created_at desc);
+
+create table if not exists product_events (
+  id uuid primary key default gen_random_uuid(),
+  establishment_id uuid not null references establishments(id) on delete cascade,
+  card_id uuid references cards(id) on delete set null,
+  staff_user_id uuid references staff_users(id) on delete set null,
+  event_type text not null check (event_type in ('JOIN_PAGE_VIEW','JOIN_SUBMIT','SCAN_SUCCESS','SCAN_FAILED','CREDIT_SUCCESS','REWARD_REDEEMED')),
+  duration_ms int check (duration_ms is null or duration_ms between 0 and 60000),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists product_events_estab_type_idx on product_events (establishment_id, event_type, created_at desc);
+create index if not exists product_events_card_idx on product_events (card_id, created_at desc) where card_id is not null;
 
 create table if not exists rate_limits (
   key_hash text primary key,

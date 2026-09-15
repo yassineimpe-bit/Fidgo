@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportClientError } from "@/components/client-observability";
 
 export default function AppError({
   error,
@@ -10,7 +11,7 @@ export default function AppError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Fidgo route error", error);
+    reportClientError(error, error.digest);
   }, [error]);
 
   return (

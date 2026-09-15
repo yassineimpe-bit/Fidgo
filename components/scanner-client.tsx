@@ -16,6 +16,7 @@ type CardView = {
   defaultEarn: number;
   pointsPerEuro: number;
   rewardAvailable: boolean;
+  canOverrideCooldown: boolean;
 };
 
 type Metric = {
@@ -35,20 +36,33 @@ function saveMetric(metric: Metric) {
   } catch {}
 }
 
-function beep() {
+function recordPilotEvent(eventType: "SCAN_SUCCESS" | "SCAN_FAILED", durationMs: number, source: "qr" | "manual", errorCode?: string) {
+  void fetch("/api/events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventType, durationMs, source, errorCode }),
+  }).catch(() => undefined);
+}
+
+function feedback(kind: "success" | "reward" | "error") {
   try {
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) return;
-    const context = new AudioContextCtor();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.frequency.value = 880;
-    gain.gain.value = 0.08;
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.08);
+    if (AudioContextCtor) {
+      const context = new AudioContextCtor();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.frequency.value = kind === "error" ? 220 : kind === "reward" ? 1_120 : 880;
+      gain.gain.value = 0.08;
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.onended = () => { void context.close(); };
+      oscillator.start();
+      oscillator.stop(context.currentTime + (kind === "reward" ? 0.18 : 0.08));
+    }
   } catch {}
+  if (navigator.vibrate) {
+    navigator.vibrate(kind === "error" ? [90, 60, 90] : kind === "reward" ? [60, 50, 140] : 60);
+  }
 }
 
 export function ScannerClient() {
@@ -66,8 +80,10 @@ export function ScannerClient() {
   const [permissionError, setPermissionError] = useState(false);
   const [manualQuery, setManualQuery] = useState("");
   const [online, setOnline] = useState(true);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
 
-  async function loadCardFromToken(value: string, detectedAt = performance.now()) {
+  async function loadCardFromToken(value: string, detectedAt = performance.now(), source: "qr" | "manual" = "qr") {
     if (!navigator.onLine) throw new Error("OFFLINE");
 
     const networkStarted = performance.now();
@@ -83,12 +99,18 @@ export function ScannerClient() {
       serverMs = Number(data.serverMs || 0);
       if (!response.ok) throw new Error(data.error || "SCAN_ERROR");
       setCard(data);
+      setCooldownRemaining(null);
+      setOverrideReason("");
       setStatus("Carte prête");
       detectedAtRef.current = detectedAt;
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAt), ok: true, at: new Date().toISOString() });
+      const totalMs = Math.round(performance.now() - detectedAt);
+      saveMetric({ phase: "lookup", networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs, ok: true, at: new Date().toISOString() });
+      recordPilotEvent("SCAN_SUCCESS", totalMs, source);
     } catch (caught) {
       const elapsed = Math.round(performance.now() - networkStarted);
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAt), ok: false, at: new Date().toISOString() });
+      const totalMs = Math.round(performance.now() - detectedAt);
+      saveMetric({ phase: "lookup", networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs, ok: false, at: new Date().toISOString() });
+      recordPilotEvent("SCAN_FAILED", totalMs, source, scannerErrorInfo(caught).code);
       throw caught;
     }
   }
@@ -122,7 +144,7 @@ export function ScannerClient() {
       if (!value.startsWith("LOY1:")) return;
       const now = performance.now();
       if (busyRef.current) return;
-      if (lastTokenRef.current?.value === value && now - lastTokenRef.current.at < 2000) return;
+      if (lastTokenRef.current?.value === value && now - lastTokenRef.current.at < 2_000) return;
       busyRef.current = true;
       lastTokenRef.current = { value, at: now };
       setStatus("Carte détectée…");
@@ -132,16 +154,38 @@ export function ScannerClient() {
       } catch (caught) {
         const info = scannerErrorInfo(caught);
         setError(info);
+        feedback("error");
         setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Scan refusé");
-        if (info.sessionExpired || info.network) {
+        if (info.sessionExpired || info.network) busyRef.current = false;
+        else window.setTimeout(() => {
+          setCard(null);
+          setPurchase("");
+          setManualQuery("");
+          setCooldownRemaining(null);
+          setOverrideReason("");
+          actionKeyRef.current = null;
           busyRef.current = false;
-        } else {
-          window.setTimeout(reset, 1300);
-        }
+          setError(null);
+          setStatus("Caméra active");
+        }, 1_300);
       }
-    }, { preferredCamera: "environment", highlightScanRegion: true, highlightCodeOutline: true, maxScansPerSecond: 12, returnDetailedScanResult: true });
-    scanner.start().then(() => setStatus(navigator.onLine ? "Caméra active" : "Hors ligne")).catch(() => { setPermissionError(true); setStatus("Caméra inaccessible"); });
-    return () => { scanner.stop(); scanner.destroy(); };
+    }, {
+      preferredCamera: "environment",
+      highlightScanRegion: true,
+      highlightCodeOutline: true,
+      maxScansPerSecond: 12,
+      returnDetailedScanResult: true,
+    });
+    scanner.start()
+      .then(() => setStatus(navigator.onLine ? "Caméra active" : "Hors ligne"))
+      .catch(() => {
+        setPermissionError(true);
+        setStatus("Caméra inaccessible");
+      });
+    return () => {
+      scanner.stop();
+      scanner.destroy();
+    };
   }, []);
 
   async function manualLookup(event: FormEvent) {
@@ -150,21 +194,25 @@ export function ScannerClient() {
     setError(null);
     busyRef.current = true;
     const detectedAt = performance.now();
+    let cardRequestStarted = false;
     try {
       if (!navigator.onLine) throw new Error("OFFLINE");
       const response = await fetch(`/api/lookup?q=${encodeURIComponent(manualQuery.trim())}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "NOT_FOUND");
-      await loadCardFromToken(`LOY1:${data.token}`, detectedAt);
+      cardRequestStarted = true;
+      await loadCardFromToken(`LOY1:${data.token}`, detectedAt, "manual");
     } catch (caught) {
       busyRef.current = false;
       const info = scannerErrorInfo(caught);
+      if (!cardRequestStarted) recordPilotEvent("SCAN_FAILED", Math.round(performance.now() - detectedAt), "manual", info.code);
       setError(info);
+      feedback("error");
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Recherche refusée");
     }
   }
 
-  async function perform(kind: "credit" | "redeem") {
+  async function perform(kind: "credit" | "redeem", reason?: string) {
     if (!card) return;
     if (!navigator.onLine) {
       setOnline(false);
@@ -175,20 +223,22 @@ export function ScannerClient() {
 
     setAction(kind);
     setError(null);
-    if (!actionKeyRef.current || actionKeyRef.current.kind !== kind) actionKeyRef.current = { kind, key: crypto.randomUUID() };
+    if (!actionKeyRef.current || actionKeyRef.current.kind !== kind) {
+      actionKeyRef.current = { kind, key: crypto.randomUUID() };
+    }
     const idempotencyKey = actionKeyRef.current.key;
     const started = performance.now();
     let serverMs = 0;
 
     try {
-      const payload: { token: string; idempotencyKey: string; purchaseAmountCents?: number } = { token: card.token, idempotencyKey };
+      const payload: { token: string; idempotencyKey: string; purchaseAmountCents?: number; overrideReason?: string } = {
+        token: card.token,
+        idempotencyKey,
+      };
+      if (reason) payload.overrideReason = reason;
       if (kind === "credit" && card.mode === "POINTS" && card.pointsRule === "PER_EURO") {
         const parsed = Number(purchase.replace(",", "."));
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          setError(scannerErrorInfo(new Error("INVALID_AMOUNT")));
-          setAction("");
-          return;
-        }
+        if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("INVALID_AMOUNT");
         payload.purchaseAmountCents = Math.round(parsed * 100);
       }
 
@@ -200,20 +250,26 @@ export function ScannerClient() {
       const data = await response.json();
       const actionMs = Math.round(performance.now() - started);
       serverMs = Number(data.serverMs || 0);
-      if (!response.ok) throw new Error(data.error || "ACTION_ERROR");
+      if (!response.ok) {
+        if (data.error === "COOLDOWN") setCooldownRemaining(Number(data.remainingSeconds) || null);
+        throw new Error(data.error || "ACTION_ERROR");
+      }
 
       actionKeyRef.current = null;
       const newBalance = Number(data.balance);
+      const rewardReached = kind === "credit" && !card.rewardAvailable && newBalance >= card.threshold;
       setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold });
-      beep();
-      if (navigator.vibrate) navigator.vibrate(60);
+      setCooldownRemaining(null);
+      setOverrideReason("");
+      feedback(kind === "redeem" || rewardReached ? "reward" : "success");
       setStatus(kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`);
       saveMetric({ phase: "action", action: kind, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
-      window.setTimeout(reset, 1250);
+      window.setTimeout(reset, 1_250);
     } catch (caught) {
       const info = scannerErrorInfo(caught);
       const actionMs = Math.round(performance.now() - started);
       setError(info);
+      feedback("error");
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion perdue — retry sûr" : "Action refusée");
       saveMetric({ phase: "action", action: kind, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: false, at: new Date().toISOString() });
       if (!info.retryable) actionKeyRef.current = null;
@@ -226,6 +282,8 @@ export function ScannerClient() {
     setCard(null);
     setPurchase("");
     setManualQuery("");
+    setCooldownRemaining(null);
+    setOverrideReason("");
     actionKeyRef.current = null;
     busyRef.current = false;
     if (navigator.onLine) {
@@ -245,5 +303,51 @@ export function ScannerClient() {
       ? "Ajouter les points"
       : `+${card?.defaultEarn || 0} points`;
 
-  return <main className="scanner-page"><video ref={videoRef} className="scanner-video" playsInline muted autoPlay /><div className="scanner-shade" /><div className="scanner-top"><span className="scanner-pill">{online ? status : "Hors ligne"}</span><a className="scanner-pill" href="/s/stats">Stats</a></div><section className="scan-sheet">{card ? <div className="scan-result"><div style={{ color: "#aaa" }}>{card.mode === "STAMPS" ? "Tampons" : "Points"} · {card.shortCode}</div><strong>{card.firstName || "Client"}</strong><div style={{ fontSize: 20 }}>{card.balance} / {card.threshold} {card.mode === "STAMPS" ? "tampons" : "points"}</div>{card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}{card.mode === "POINTS" && card.pointsRule === "PER_EURO" && <div className="field"><label>Montant achat (€)</label><input className="input" inputMode="decimal" value={purchase} onChange={(e) => setPurchase(e.target.value)} placeholder="12,50" /></div>}{error && <div className="scan-error">{error.message}{error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}</div>}<div className="scan-actions"><button className="scan-main" disabled={!online || Boolean(action)} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button><button className="scan-redeem" disabled={!online || !card.rewardAvailable || Boolean(action)} onClick={() => perform("redeem")}>{retryingRedeem ? "Réessayer sans doublon" : "Utiliser récompense"}</button></div><button className="btn" style={{ marginTop: 10, width: "100%", background: "transparent", color: "white", borderColor: "#444" }} onClick={reset}>Annuler</button></div> : <div><strong style={{ fontSize: 20 }}>{permissionError ? "Caméra indisponible" : online ? "Présente le QR client" : "Connexion internet requise"}</strong><p style={{ margin: "6px 0 12px", color: "#aaa" }}>{permissionError ? "Utilise le code court ou l’email ci-dessous." : online ? "La caméra reste ouverte. Aucun bouton Scanner." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p><form onSubmit={manualLookup} style={{ display: "flex", gap: 8 }}><input className="input" value={manualQuery} onChange={(e) => setManualQuery(e.target.value)} placeholder="Code court ou email" disabled={!online} /><button className="btn" type="submit" disabled={!online}>Chercher</button></form>{error && <div className="scan-error" style={{ marginTop: 10 }}>{error.message}{error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}</div>}</div>}</section></main>;
+  return <main className="scanner-page">
+    <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
+    <div className="scanner-shade" />
+    <div className="scanner-top">
+      <span className="scanner-pill">{online ? status : "Hors ligne"}</span>
+      <a className="scanner-pill" href="/s/stats">Stats</a>
+    </div>
+    <section className="scan-sheet">
+      {card ? <div className="scan-result">
+        <div style={{color:"#aaa"}}>{card.mode === "STAMPS" ? "Tampons" : "Points"} · {card.shortCode}</div>
+        <strong>{card.firstName || "Client"}</strong>
+        <div style={{fontSize:20}}>{card.balance} / {card.threshold} {card.mode === "STAMPS" ? "tampons" : "points"}</div>
+        {card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}
+        {card.mode === "POINTS" && card.pointsRule === "PER_EURO" && <div className="field">
+          <label>Montant achat (€)</label>
+          <input className="input" inputMode="decimal" value={purchase} onChange={(event) => setPurchase(event.target.value)} placeholder="12,50" />
+        </div>}
+        {error && <div className="scan-error">
+          {error.code === "COOLDOWN" && cooldownRemaining
+            ? `Passage déjà enregistré il y a moins de deux minutes. Réessaie dans ${cooldownRemaining} s.`
+            : error.message}
+          {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
+        </div>}
+        {error?.code === "COOLDOWN" && card.canOverrideCooldown && <div className="field">
+          <label htmlFor="cooldown-override-reason">Motif obligatoire pour créditer quand même</label>
+          <input className="input" id="cooldown-override-reason" value={overrideReason} maxLength={240} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Ex. second achat distinct" />
+          <button className="btn btn-danger" disabled={!overrideReason.trim() || Boolean(action)} onClick={() => perform("credit", overrideReason.trim())}>Créditer quand même</button>
+        </div>}
+        <div className="scan-actions">
+          <button className="scan-main" disabled={!online || Boolean(action)} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>
+          <button className="scan-redeem" disabled={!online || !card.rewardAvailable || Boolean(action)} onClick={() => perform("redeem")}>{retryingRedeem ? "Réessayer sans doublon" : "Utiliser récompense"}</button>
+        </div>
+        <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} onClick={reset}>Annuler</button>
+      </div> : <div>
+        <strong style={{fontSize:20}}>{permissionError ? "Caméra indisponible" : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
+        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{permissionError ? "Utilise le code court ou l’email ci-dessous." : online ? "La caméra reste ouverte. Aucun bouton Scanner." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
+        <form onSubmit={manualLookup} style={{display:"flex",gap:8}}>
+          <input className="input" value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email" disabled={!online} />
+          <button className="btn" type="submit" disabled={!online}>Chercher</button>
+        </form>
+        {error && <div className="scan-error" style={{marginTop:10}}>
+          {error.message}
+          {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
+        </div>}
+      </div>}
+    </section>
+  </main>;
 }

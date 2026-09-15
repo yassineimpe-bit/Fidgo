@@ -12,8 +12,14 @@ Crée une session commerçant httpOnly de 12 h. Protection anti-bruteforce par c
 Entrée : `slug`, `firstName?`, `email?`, `phone?`, `marketingConsent`.
 Retour : `token`, `short_code`, `balance`. Les coordonnées restent facultatives.
 
+### `POST /api/events`
+Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAILED` pour un membre du staff authentifié. Les événements scanner acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
+
 ### `GET /api/card/[token]`
 Retourne uniquement les données nécessaires à l'affichage public de la carte, sans email ni téléphone. Réponse `no-store`.
+
+### `GET /api/card/[token]/status`
+Lecture légère dédiée au rafraîchissement de la carte : `balance`, `threshold`, `rewardAvailable`, `updatedAt`. Elle possède un rate limiter distinct, compatible avec un polling toutes les trois secondes pendant cinq minutes.
 
 ## Commerçant authentifié
 
@@ -23,12 +29,13 @@ La session est revérifiée en base à chaque requête protégée afin qu'un emp
 Valide le QR dans le tenant courant et retourne la fiche minimale avant action.
 
 ### `POST /api/credit`
-Entrée : `token`, `idempotencyKey`, `purchaseAmountCents?`.
+Entrée : `token`, `idempotencyKey`, `purchaseAmountCents?`, `overrideReason?`.
 - tampons : le serveur applique strictement `stamps_per_visit` ;
 - points `PER_PURCHASE` : le serveur applique strictement `points_per_purchase` ;
 - points `PER_EURO` : un montant d'achat positif est obligatoire.
 
 Applique aussi cooldown, limite quotidienne, verrou `FOR UPDATE` et idempotence.
+Un OWNER/MANAGER peut dépasser le cooldown avec `overrideReason`. Le motif est obligatoire et produit un audit `CARD_ADJUSTED`.
 
 ### `POST /api/redeem`
 Consomme exactement le seuil de récompense configuré.
@@ -62,6 +69,9 @@ OWNER/MANAGER. Exporte les données client, carte et transactions en JSON pour t
 
 ### `DELETE /api/customers/[id]`
 OWNER/MANAGER. Efface prénom/email/téléphone/consentement, marque le client supprimé et désactive la carte. Le ledger reste pseudonymisé pour préserver l'intégrité comptable/fraude.
+
+### `POST /api/customers/[id]/adjust`
+OWNER/MANAGER. Entrée : `newBalance`, `reason`, `idempotencyKey`. Verrouille la carte, ajoute une transaction `adjust` et un audit `CARD_ADJUSTED`, puis synchronise les Wallets activés.
 
 ## Erreurs sensibles
 
