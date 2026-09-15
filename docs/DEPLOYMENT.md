@@ -32,7 +32,7 @@ Le seed est idempotent et vérifie l'intégrité du ledger de la carte de démon
 
 Importer **exactement** `yassineimpe-bit/Fidgo` dans le projet Vercel et utiliser `main` comme Production Branch.
 
-Le projet de test `fidgo-env-probe` existe, mais la connexion Git doit être vérifiée dans **Project Settings → Git**. Un vrai raccord Git doit créer automatiquement des déploiements/checks Vercel sur les pushes et pull requests.
+Le projet `fidgo-env-probe` est désormais connecté au dépôt GitHub `yassineimpe-bit/Fidgo`. Chaque nouveau push sur `main` doit créer automatiquement un déploiement Vercel de production.
 
 Région imposée par `vercel.json` : `fra1`.
 
