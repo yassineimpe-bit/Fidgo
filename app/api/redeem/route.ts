@@ -26,7 +26,16 @@ export async function POST(req: Request) {
         from cards c join loyalty_programs p on p.establishment_id=c.establishment_id
         where c.token=${token} and c.establishment_id=${session.establishmentId} for update of c
       `;
-      if (!card || !card.active || !card.program_active) throw new Error("CARD_NOT_FOUND");
+      if (!card) throw new Error("CARD_NOT_FOUND");
+
+      // A retry may have performed the first idempotency lookup before another
+      // request committed, then waited for this card lock. Re-check after the lock
+      // so concurrent replays return the original result instead of consuming twice
+      // or surfacing INSUFFICIENT_BALANCE.
+      const [idemAfterLock] = await tx`select card_id,balance_after from transactions where establishment_id=${session.establishmentId} and idempotency_key=${idempotencyKey} limit 1`;
+      if (idemAfterLock) return { cardId: String(idemAfterLock.card_id), balance: Number(idemAfterLock.balance_after), duplicate: true };
+
+      if (!card.active || !card.program_active) throw new Error("CARD_NOT_FOUND");
       if (card.expires_at && new Date(card.expires_at) < new Date()) throw new Error("CARD_EXPIRED");
       const threshold = Number(card.reward_threshold);
       if (Number(card.balance) < threshold) throw new Error("INSUFFICIENT_BALANCE");
