@@ -1,0 +1,35 @@
+name: production-probe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe production endpoints
+        shell: bash
+        run: |
+          set +e
+          for url in \
+            "https://fidgo-env-probe.vercel.app/" \
+            "https://fidgo-env-probe.vercel.app/api/health" \
+            "https://fidgo-env-probe.vercel.app/j/fidgo-demo"; do
+            echo "===== $url ====="
+            rm -f /tmp/headers /tmp/body
+            code=$(curl -L --silent --show-error --max-time 20 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$url")
+            rc=$?
+            echo "curl_rc=$rc http_code=$code"
+            echo "--- headers ---"
+            head -n 30 /tmp/headers 2>/dev/null || true
+            echo "--- body (first 1200 bytes) ---"
+            head -c 1200 /tmp/body 2>/dev/null || true
+            echo
+          done
+          exit 0
