@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { sql } from "@/lib/db";
 import type { StaffRole } from "@/lib/loyalty";
+import { normalizeTokenVersion, sessionVersionMatches } from "@/lib/session-version";
 
 const COOKIE = "loyalty_staff";
 
@@ -15,6 +16,7 @@ export type StaffSession = {
   establishmentId: string;
   email: string;
   role: StaffRole;
+  tokenVersion: number;
 };
 
 export async function signSession(session: StaffSession) {
@@ -37,16 +39,26 @@ export function sessionCookie(value: string) {
   };
 }
 
+export function clearedSessionCookie() {
+  return {
+    ...sessionCookie(""),
+    maxAge: 0,
+  };
+}
+
 async function decodeSession(): Promise<StaffSession | null> {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
+    const tokenVersion = normalizeTokenVersion(payload.tokenVersion);
+    if (tokenVersion === null) return null;
     return {
       staffId: String(payload.staffId),
       establishmentId: String(payload.establishmentId),
       email: String(payload.email),
       role: String(payload.role || "EMPLOYEE") as StaffRole,
+      tokenVersion,
     };
   } catch {
     return null;
@@ -57,7 +69,7 @@ export async function getSession(): Promise<StaffSession | null> {
   const decoded = await decodeSession();
   if (!decoded) return null;
   const [current] = await sql`
-    select s.id, s.establishment_id, s.email, s.role
+    select s.id, s.establishment_id, s.email, s.role, s.token_version
     from staff_users s
     join establishments e on e.id = s.establishment_id
     where s.id = ${decoded.staffId}
@@ -66,11 +78,12 @@ export async function getSession(): Promise<StaffSession | null> {
       and e.status = 'active'
     limit 1
   `;
-  if (!current) return null;
+  if (!current || !sessionVersionMatches(decoded.tokenVersion, current.token_version)) return null;
   return {
     staffId: String(current.id),
     establishmentId: String(current.establishment_id),
     email: String(current.email),
     role: String(current.role) as StaffRole,
+    tokenVersion: Number(current.token_version),
   };
 }
