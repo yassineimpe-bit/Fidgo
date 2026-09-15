@@ -11,13 +11,15 @@ export type WalletRuntimeStatus = {
   google: WalletProviderStatus;
 };
 
-function providerStatus(enabledKey: string, required: string[], env: NodeJS.ProcessEnv): WalletProviderStatus {
+type EnvLike = Record<string, string | undefined>;
+
+function providerStatus(enabledKey: string, required: string[], env: EnvLike): WalletProviderStatus {
   const enabled = env[enabledKey] === "true";
   const missing = required.filter((key) => !env[key]);
   return { enabled, configured: enabled && missing.length === 0, missing };
 }
 
-export function getWalletRuntimeStatus(env: NodeJS.ProcessEnv = process.env): WalletRuntimeStatus {
+export function getWalletRuntimeStatus(env: EnvLike = process.env): WalletRuntimeStatus {
   const appUrl = env.NEXT_PUBLIC_APP_URL || "";
   let appUrlHttps = false;
   try {
