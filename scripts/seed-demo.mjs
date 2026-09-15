@@ -44,16 +44,19 @@ try {
   if (ownerEmail && ownerPassword) {
     if (ownerPassword.length < 12) throw new Error("DEMO_OWNER_PASSWORD doit contenir au moins 12 caractères.");
     const passwordHash = await bcrypt.hash(ownerPassword, 12);
-    await sql`
-      insert into staff_users(establishment_id,email,password_hash,role,active)
-      values(${establishment.id},${ownerEmail},${passwordHash},'OWNER',true)
-      on conflict(lower(email)) do update set
-        establishment_id=excluded.establishment_id,
-        password_hash=excluded.password_hash,
-        role='OWNER',
-        active=true,
-        updated_at=now()
-    `;
+    const [existingOwner] = await sql`select id from staff_users where lower(email)=lower(${ownerEmail}) limit 1`;
+    if (existingOwner) {
+      await sql`
+        update staff_users
+        set establishment_id=${establishment.id},password_hash=${passwordHash},role='OWNER',active=true,updated_at=now()
+        where id=${existingOwner.id}
+      `;
+    } else {
+      await sql`
+        insert into staff_users(establishment_id,email,password_hash,role,active)
+        values(${establishment.id},${ownerEmail},${passwordHash},'OWNER',true)
+      `;
+    }
   }
 
   let [customer] = await sql`
