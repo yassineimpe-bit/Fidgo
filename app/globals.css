@@ -28,6 +28,9 @@ button { cursor: pointer; }
 .hero { padding: 88px 0 72px; }
 .hero-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 56px; align-items: center; }
 .eyebrow { display: inline-flex; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 700; background: #fff; }
+.badge { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border-radius:999px; border:1px solid var(--line); background:#f9fafb; color:var(--muted); font-size:12px; font-weight:800; }
+.badge.success { background:#eaf8f0; border-color:#c7efd8; color:var(--success); }
+.badge.warning { background:#fff7e8; border-color:#f7dca4; color:#8a5a00; }
 h1,h2,h3,p { margin-top: 0; }
 h1 { font-size: clamp(42px, 7vw, 76px); line-height: .98; letter-spacing: -.055em; margin: 18px 0 22px; }
 h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -.04em; }
