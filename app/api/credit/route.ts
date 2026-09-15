@@ -32,7 +32,15 @@ export async function POST(req: Request) {
         from cards c join loyalty_programs p on p.establishment_id=c.establishment_id join customers u on u.id=c.customer_id
         where c.token=${token} and c.establishment_id=${session.establishmentId} and u.deleted_at is null for update of c
       `;
-      if (!card || !card.active || !card.program_active) throw new Error("CARD_NOT_FOUND");
+      if (!card) throw new Error("CARD_NOT_FOUND");
+
+      // A concurrent retry can miss the first idempotency lookup, then wait on the
+      // card row lock while the first request commits. Re-check after acquiring the
+      // lock so the retry returns duplicate=true instead of incorrectly hitting cooldown.
+      const [idemAfterLock] = await tx`select card_id,balance_after,delta from transactions where establishment_id=${session.establishmentId} and idempotency_key=${idempotencyKey} limit 1`;
+      if (idemAfterLock) return { cardId: String(idemAfterLock.card_id), balance: Number(idemAfterLock.balance_after), delta: Number(idemAfterLock.delta), duplicate: true };
+
+      if (!card.active || !card.program_active) throw new Error("CARD_NOT_FOUND");
       if (card.expires_at && new Date(card.expires_at) < new Date()) throw new Error("CARD_EXPIRED");
       if (card.last_earn_at && Date.now() - new Date(card.last_earn_at).getTime() < Number(card.cooldown_seconds) * 1000) throw new Error("COOLDOWN");
 
