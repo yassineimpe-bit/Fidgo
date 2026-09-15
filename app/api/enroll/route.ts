@@ -79,11 +79,15 @@ export async function POST(req: Request) {
             ${establishment.id}, ${customer.id}, ${token}, ${code},
             case when ${establishment.expires_after_days}::int is null then null
                  else now() + (${establishment.expires_after_days}::int * interval '1 day') end
-          ) returning token, short_code, balance
+          ) returning id, token, short_code, balance
+        `;
+        await tx`
+          insert into product_events(establishment_id, card_id, event_type)
+          values(${establishment.id}, ${card.id}, 'JOIN_SUBMIT')
         `;
         return card;
       });
-      return Response.json(created, { status: 201, headers: PRIVATE_HEADERS });
+      return Response.json({ token: created.token, short_code: created.short_code, balance: created.balance }, { status: 201, headers: PRIVATE_HEADERS });
     } catch (error) {
       const codeValue = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
       if (codeValue !== "23505") throw error;

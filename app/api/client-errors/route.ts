@@ -1,0 +1,29 @@
+import { createHash } from "node:crypto";
+import { boundedText } from "@/lib/input";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { rejectCrossOrigin, requestIp } from "@/lib/security";
+
+export async function POST(req: Request) {
+  const originError = rejectCrossOrigin(req);
+  if (originError) return originError;
+  const rate = await consumeRateLimit(`client-error:${requestIp(req)}`, 20, 60 * 60);
+  if (!rate.allowed) return Response.json({ ok: true }, { status: 202 });
+
+  const body = await req.json().catch(() => ({}));
+  const name = boundedText(body.name, 80, "Error") || "Error";
+  const message = boundedText(body.message, 500, "Unknown client error") || "Unknown client error";
+  const path = boundedText(body.path, 240, "/") || "/";
+  const digest = boundedText(body.digest, 120) || null;
+  const fingerprint = createHash("sha256").update(`${name}:${message}`).digest("hex").slice(0, 20);
+
+  // Le message brut peut contenir une valeur saisie par l'utilisateur. Seule
+  // son empreinte est envoyée aux logs d'observabilité.
+  console.error("FIDGO_CLIENT_ERROR", {
+    name,
+    fingerprint,
+    digest,
+    path,
+    userAgent: boundedText(req.headers.get("user-agent"), 300) || "unknown",
+  });
+  return Response.json({ ok: true }, { status: 202 });
+}

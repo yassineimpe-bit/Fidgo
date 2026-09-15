@@ -36,6 +36,14 @@ function saveMetric(metric: Metric) {
   } catch {}
 }
 
+function recordPilotEvent(eventType: "SCAN_SUCCESS" | "SCAN_FAILED", durationMs: number, source: "qr" | "manual", errorCode?: string) {
+  void fetch("/api/events", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ eventType, durationMs, source, errorCode }),
+  }).catch(() => undefined);
+}
+
 function feedback(kind: "success" | "reward" | "error") {
   try {
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -75,7 +83,7 @@ export function ScannerClient() {
   const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
 
-  async function loadCardFromToken(value: string, detectedAt = performance.now()) {
+  async function loadCardFromToken(value: string, detectedAt = performance.now(), source: "qr" | "manual" = "qr") {
     if (!navigator.onLine) throw new Error("OFFLINE");
 
     const networkStarted = performance.now();
@@ -95,10 +103,14 @@ export function ScannerClient() {
       setOverrideReason("");
       setStatus("Carte prête");
       detectedAtRef.current = detectedAt;
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAt), ok: true, at: new Date().toISOString() });
+      const totalMs = Math.round(performance.now() - detectedAt);
+      saveMetric({ phase: "lookup", networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs, ok: true, at: new Date().toISOString() });
+      recordPilotEvent("SCAN_SUCCESS", totalMs, source);
     } catch (caught) {
       const elapsed = Math.round(performance.now() - networkStarted);
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAt), ok: false, at: new Date().toISOString() });
+      const totalMs = Math.round(performance.now() - detectedAt);
+      saveMetric({ phase: "lookup", networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs, ok: false, at: new Date().toISOString() });
+      recordPilotEvent("SCAN_FAILED", totalMs, source, scannerErrorInfo(caught).code);
       throw caught;
     }
   }
@@ -182,15 +194,18 @@ export function ScannerClient() {
     setError(null);
     busyRef.current = true;
     const detectedAt = performance.now();
+    let cardRequestStarted = false;
     try {
       if (!navigator.onLine) throw new Error("OFFLINE");
       const response = await fetch(`/api/lookup?q=${encodeURIComponent(manualQuery.trim())}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "NOT_FOUND");
-      await loadCardFromToken(`LOY1:${data.token}`, detectedAt);
+      cardRequestStarted = true;
+      await loadCardFromToken(`LOY1:${data.token}`, detectedAt, "manual");
     } catch (caught) {
       busyRef.current = false;
       const info = scannerErrorInfo(caught);
+      if (!cardRequestStarted) recordPilotEvent("SCAN_FAILED", Math.round(performance.now() - detectedAt), "manual", info.code);
       setError(info);
       feedback("error");
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Recherche refusée");

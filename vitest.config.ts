@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    exclude: ["tests/e2e/**", "node_modules/**", ".next/**"],
     env: {
       DATABASE_URL: "postgres://user:password@127.0.0.1:5432/fidgo_test",
     },

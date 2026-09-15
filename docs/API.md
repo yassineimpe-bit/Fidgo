@@ -12,6 +12,9 @@ Crée une session commerçant httpOnly de 12 h. Protection anti-bruteforce par c
 Entrée : `slug`, `firstName?`, `email?`, `phone?`, `marketingConsent`.
 Retour : `token`, `short_code`, `balance`. Les coordonnées restent facultatives.
 
+### `POST /api/events`
+Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAILED` pour un membre du staff authentifié. Les événements scanner acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
+
 ### `GET /api/card/[token]`
 Retourne uniquement les données nécessaires à l'affichage public de la carte, sans email ni téléphone. Réponse `no-store`.
 

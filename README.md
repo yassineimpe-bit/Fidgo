@@ -23,6 +23,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - personnalisation commerce ;
 - affiche QR A4 ;
 - PWA minimale et instrumentation p50/p95 QR → validation ;
+- événements pilote persistés sans token brut ni coordonnées client ;
 - récupération de carte par email avec jeton à usage unique ;
 - schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
 - anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
@@ -53,4 +54,4 @@ npm run dev
 
 Puis ouvrir `/signup`.
 
-Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/WALLETS.md`, `docs/PILOT.md`.
+Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/PILOT.md`.

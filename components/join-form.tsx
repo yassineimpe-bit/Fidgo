@@ -12,6 +12,11 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
   const [recoveryMessage, setRecoveryMessage] = useState("");
 
   useEffect(() => {
+    void fetch("/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ eventType: "JOIN_PAGE_VIEW", slug }),
+    }).catch(() => undefined);
     const token = localStorage.getItem(`loyalty:${slug}`);
     if (token) router.replace(`/c/${token}`);
   }, [slug, router]);

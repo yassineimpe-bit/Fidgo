@@ -32,6 +32,10 @@ Le crédit : vérifie session/rôle, idempotence, verrouille la carte `FOR UPDAT
 
 Le cooldown par défaut est de 120 secondes. Seuls OWNER et MANAGER peuvent le dépasser ; le motif obligatoire est conservé dans la transaction et dans l'audit `CARD_ADJUSTED`.
 
+## Instrumentation pilote
+
+`product_events` contient uniquement les événements opérationnels nécessaires au pilote. `SCAN_SUCCESS` stocke la durée QR → fiche mesurée sur le téléphone, sans token de carte, email ni secret. Les transactions restent la source de vérité pour les crédits et récompenses.
+
 ## Points et tampons
 
 Le même moteur stocke des unités entières. Le programme choisit explicitement `PER_PURCHASE` ou `PER_EURO`. En `PER_EURO`, le serveur exige le montant et calcule les points ; un employé ne peut pas injecter arbitrairement le nombre d’unités. Le QR ne contient jamais le solde : uniquement `LOY1:<token aléatoire 128 bits>`.

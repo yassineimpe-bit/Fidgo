@@ -72,6 +72,7 @@ export async function POST(req: Request) {
       await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key,metadata) values(${session.establishmentId},${card.id},${session.staffId},'earn',${delta},${balance},${unit},${idempotencyKey},${tx.json({purchaseAmountCents:body.purchaseAmountCents??null,pointsRule:card.points_rule,overrideReason:overrodeCooldown?overrideReason:null})})`;
       await tx`update cards set balance=${balance},last_earn_at=now(),updated_at=now() where id=${card.id}`;
       await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'LOYALTY_EARN','card',${String(card.id)},${tx.json({delta,balance})})`;
+      await tx`insert into product_events(establishment_id,card_id,staff_user_id,event_type,metadata) values(${session.establishmentId},${card.id},${session.staffId},'CREDIT_SUCCESS',${tx.json({delta,override:overrodeCooldown})})`;
       if (overrodeCooldown) {
         await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'CARD_ADJUSTED','card',${String(card.id)},${tx.json({oldBalance:Number(card.balance),newBalance:balance,delta,reason:overrideReason,source:'cooldown_override'})})`;
       }
