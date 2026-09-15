@@ -1,10 +1,22 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { canScan } from "@/lib/loyalty";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { PRIVATE_HEADERS } from "@/lib/security";
 
 export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  const q = new URL(req.url).searchParams.get("q")?.trim();
+  // Cette route renvoie un token de carte : reservee aux roles qui scannent.
+  // Un VIEWER (lecture seule) n'a aucune raison de pouvoir l'obtenir.
+  if (!canScan(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+
+  // Sans limite, un compte employe pouvait enumerer les codes courts et tester
+  // l'existence d'adresses email en masse.
+  const limited = await enforceRateLimit(req, `lookup:${session.staffId}`, 60, 60);
+  if (limited) return limited;
+
+  const q = new URL(req.url).searchParams.get("q")?.trim().slice(0, 254);
   if (!q) return Response.json({ error: "INVALID_QUERY" }, { status: 400 });
 
   const [row] = await sql`
@@ -17,5 +29,7 @@ export async function GET(req: Request) {
       and (upper(c.short_code) = upper(${q}) or lower(u.email) = lower(${q}))
     limit 1
   `;
-  return row ? Response.json(row) : Response.json({ error: "NOT_FOUND" }, { status: 404 });
+  return row
+    ? Response.json(row, { headers: PRIVATE_HEADERS })
+    : Response.json({ error: "NOT_FOUND" }, { status: 404 });
 }

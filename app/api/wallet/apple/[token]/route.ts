@@ -1,9 +1,15 @@
 import { appleWalletEnabled, buildApplePass } from "@/lib/apple-wallet";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { walletCardByToken } from "@/lib/wallet-data";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
+  // Emission de pass = signature cryptographique + ecriture en base.
+  // Route publique, donc plafonnee pour eviter un DoS CPU bon marche.
+  const limited = await enforceRateLimit(request, "wallet-apple-issue", 10, 60);
+  if (limited) return limited;
+
   const { token } = await params;
   const card = await walletCardByToken(token);
   if (!card) return Response.json({ error: "CARD_NOT_FOUND" }, { status: 404 });

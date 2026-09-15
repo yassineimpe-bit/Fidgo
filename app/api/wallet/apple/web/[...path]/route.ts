@@ -40,8 +40,12 @@ function registrationPath(parts: string[]) {
 export async function POST(request: Request, context: Context) {
   const { path } = await context.params;
   if (path.length === 2 && path[0] === "v1" && path[1] === "log") {
+    // Endpoint impose par Apple, donc non authentifiable. On accuse reception
+    // sans jamais recopier le corps brut dans les logs (log injection /
+    // saturation du stockage de logs par un tiers anonyme).
     const body = await request.json().catch(() => ({})) as { logs?: unknown };
-    console.warn("Apple Wallet device log", body.logs || body);
+    const count = Array.isArray(body.logs) ? body.logs.length : 0;
+    console.warn(`Apple Wallet device log received (${count} entries)`);
     return new Response(null, { status: 200 });
   }
 

@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -13,7 +16,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+          cache: npm
+      # `npm install` sans lockfile rendait les builds non reproductibles et
+      # exposait a une version compromise publiee en amont entre deux deploys.
+      - run: npm ci --no-audit --no-fund
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
