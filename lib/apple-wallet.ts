@@ -1,0 +1,132 @@
+import { createHash, createHmac } from "node:crypto";
+import { connect } from "node:http2";
+import { PKPass } from "passkit-generator";
+import { sql } from "@/lib/db";
+import type { WalletCard } from "@/lib/wallet-data";
+
+export function appleWalletEnabled() {
+  return process.env.APPLE_WALLET_ENABLED === "true";
+}
+
+function config() {
+  if (!appleWalletEnabled()) throw new Error("APPLE_WALLET_DISABLED");
+  const passTypeIdentifier = process.env.APPLE_PASS_TYPE_IDENTIFIER;
+  const teamIdentifier = process.env.APPLE_TEAM_IDENTIFIER;
+  const wwdr = process.env.APPLE_WWDR_CERT_BASE64;
+  const signerCert = process.env.APPLE_SIGNER_CERT_BASE64;
+  const signerKey = process.env.APPLE_SIGNER_KEY_BASE64;
+  if (!passTypeIdentifier || !teamIdentifier || !wwdr || !signerCert || !signerKey) throw new Error("APPLE_WALLET_NOT_CONFIGURED");
+  return {
+    passTypeIdentifier,
+    teamIdentifier,
+    wwdr: Buffer.from(wwdr, "base64"),
+    signerCert: Buffer.from(signerCert, "base64"),
+    signerKey: Buffer.from(signerKey, "base64"),
+    signerKeyPassphrase: process.env.APPLE_SIGNER_KEY_PASSPHRASE || undefined,
+  };
+}
+
+export function appleAuthenticationToken(cardToken: string) {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is required");
+  return createHmac("sha256", secret).update(`fidgo:apple:${cardToken}`).digest("base64url");
+}
+
+export function appleAuthenticationTokenHash(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function rgb(hex: string) {
+  const value = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.slice(1) : "111827";
+  return `rgb(${parseInt(value.slice(0,2),16)}, ${parseInt(value.slice(2,4),16)}, ${parseInt(value.slice(4,6),16)})`;
+}
+
+async function walletImage() {
+  const base = process.env.NEXT_PUBLIC_APP_URL;
+  if (!base) throw new Error("NEXT_PUBLIC_APP_URL is required");
+  const response = await fetch(`${base.replace(/\/$/, "")}/wallet-logo.png`, { cache: "force-cache" });
+  if (!response.ok) throw new Error("APPLE_WALLET_LOGO_UNAVAILABLE");
+  return Buffer.from(await response.arrayBuffer());
+}
+
+export async function buildApplePass(card: WalletCard) {
+  const cfg = config();
+  const image = await walletImage();
+  const authToken = appleAuthenticationToken(card.token);
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/$/, "");
+  const props: ConstructorParameters<typeof PKPass>[2] = {
+    formatVersion: 1,
+    passTypeIdentifier: cfg.passTypeIdentifier,
+    teamIdentifier: cfg.teamIdentifier,
+    serialNumber: card.cardId,
+    organizationName: card.restaurantName,
+    description: `${card.programName} - Fidgo`,
+    logoText: card.restaurantName,
+    foregroundColor: "rgb(255, 255, 255)",
+    labelColor: "rgb(229, 231, 235)",
+    backgroundColor: rgb(card.primaryColor),
+    webServiceURL: `${appUrl}/api/wallet/apple/web`,
+    authenticationToken: authToken,
+    barcodes: [{ format: "PKBarcodeFormatQR", message: `LOY1:${card.token}`, messageEncoding: "iso-8859-1", altText: card.shortCode }],
+    storeCard: {
+      primaryFields: [{ key: "balance", label: card.mode === "STAMPS" ? "TAMPONS" : "POINTS", value: card.balance }],
+      secondaryFields: [{ key: "reward", label: "RÉCOMPENSE", value: card.balance >= card.rewardThreshold ? "Disponible" : `${card.rewardThreshold - card.balance} restant(s)` }],
+      auxiliaryFields: [{ key: "code", label: "CARTE", value: card.shortCode }],
+      backFields: [
+        { key: "rewardDetail", label: "Récompense", value: card.rewardLabel },
+        { key: "program", label: "Programme", value: card.programName },
+        ...(card.cardMessage ? [{ key: "message", label: "Message", value: card.cardMessage }] : []),
+        ...(appUrl ? [{ key: "web", label: "Carte en ligne", value: `${appUrl}/c/${card.token}` }] : []),
+      ],
+    },
+  };
+  const pass = new PKPass(
+    { "icon.png": image, "icon@2x.png": image, "icon@3x.png": image, "logo.png": image, "logo@2x.png": image, "logo@3x.png": image },
+    { wwdr: cfg.wwdr, signerCert: cfg.signerCert, signerKey: cfg.signerKey, signerKeyPassphrase: cfg.signerKeyPassphrase },
+    props,
+  );
+  const buffer = pass.getAsBuffer();
+  await sql`
+    insert into wallet_passes(establishment_id,card_id,provider,external_id,serial_number,authentication_token_hash,status,last_synced_at)
+    values(${card.establishmentId},${card.cardId},'APPLE',${cfg.passTypeIdentifier},${card.cardId},${appleAuthenticationTokenHash(authToken)},'active',now())
+    on conflict(card_id,provider) do update set external_id=excluded.external_id,serial_number=excluded.serial_number,authentication_token_hash=excluded.authentication_token_hash,status='active',last_synced_at=now(),last_error=null,updated_at=now()
+  `;
+  return buffer;
+}
+
+async function sendPassPush(pushToken: string) {
+  const cfg = config();
+  return new Promise<void>((resolve, reject) => {
+    const client = connect("https://api.push.apple.com", { cert: cfg.signerCert, key: cfg.signerKey, passphrase: cfg.signerKeyPassphrase });
+    client.once("error", reject);
+    const request = client.request({ ":method": "POST", ":path": `/3/device/${pushToken}`, "apns-topic": cfg.passTypeIdentifier });
+    let status = 0;
+    let body = "";
+    request.on("response", (headers) => { status = Number(headers[":status"] || 0); });
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => { body += chunk; });
+    request.on("end", () => {
+      client.close();
+      if (status === 200) resolve(); else reject(new Error(`APPLE_APNS_${status}:${body}`));
+    });
+    request.end("{}");
+  });
+}
+
+export async function notifyAppleWallet(cardId: string) {
+  if (!appleWalletEnabled()) return;
+  const [walletPass] = await sql`select id from wallet_passes where card_id=${cardId} and provider='APPLE' and status='active' limit 1`;
+  if (!walletPass) return;
+  await sql`update wallet_passes set last_synced_at=now(),updated_at=now() where id=${walletPass.id}`;
+  const registrations = await sql`select push_token from apple_wallet_registrations where wallet_pass_id=${walletPass.id}`;
+  const failures: string[] = [];
+  await Promise.all(registrations.map(async (row) => {
+    try { await sendPassPush(String(row.push_token)); }
+    catch (error) { failures.push(error instanceof Error ? error.message : "APPLE_APNS_FAILED"); }
+  }));
+  if (failures.length) await sql`update wallet_passes set last_error=${failures.join(" | ").slice(0,1000)},updated_at=now() where id=${walletPass.id}`;
+}
+
+export function applePassTypeIdentifier() {
+  return config().passTypeIdentifier;
+}
