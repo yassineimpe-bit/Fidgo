@@ -2,15 +2,15 @@
 
 ## 1. PostgreSQL
 
-Créer une base PostgreSQL managée dans l'Union européenne (Neon ou équivalent), puis récupérer `DATABASE_URL` avec SSL.
+La base de production actuelle est hébergée sur Neon dans l'Union européenne. `DATABASE_URL` doit rester un secret de déploiement et ne jamais être commitée.
 
-Initialiser la base :
+Initialiser une nouvelle base si nécessaire :
 
 ```bash
 DATABASE_URL='postgres://...' npm run db:setup
 ```
 
-Créer le commerce et la carte de démonstration :
+Créer ou remettre à niveau le commerce et la carte de démonstration :
 
 ```bash
 DATABASE_URL='postgres://...' \
@@ -26,31 +26,43 @@ Ou faire les deux :
 npm run bootstrap:demo
 ```
 
-Le script affiche ensuite l'URL publique d'inscription et l'URL de la carte de démonstration.
+Le seed est idempotent et vérifie l'intégrité du ledger de la carte de démonstration.
 
 ## 2. Vercel
 
-Importer `yassineimpe-bit/Fidgo` dans Vercel.
+Importer **exactement** `yassineimpe-bit/Fidgo` dans le projet Vercel et utiliser `main` comme Production Branch.
 
-Projet Vercel actuellement raccordé au dépôt GitHub : `fidgo-env-probe`.
+Le projet de test `fidgo-env-probe` existe, mais la connexion Git doit être vérifiée dans **Project Settings → Git**. Un vrai raccord Git doit créer automatiquement des déploiements/checks Vercel sur les pushes et pull requests.
 
 Région imposée par `vercel.json` : `fra1`.
 
-Variables minimales :
+Le code doit pouvoir construire sans secrets de production. Tant que les secrets ne sont pas installés, `/api/health` répond proprement en erreur de readiness au lieu de casser le build.
+
+Variables runtime minimales :
 
 - `DATABASE_URL`
-- `AUTH_SECRET` (au moins 32 caractères aléatoires)
-- `NEXT_PUBLIC_APP_URL` (URL HTTPS de production)
+- `AUTH_SECRET` (au moins 32 caractères aléatoires, stocké comme variable sensible)
+- `NEXT_PUBLIC_APP_URL` est recommandé pour fixer le domaine canonique ; sur Vercel, Fidgo sait aussi utiliser les URL système Vercel comme fallback
 - `APPLE_WALLET_ENABLED=false` tant que les certificats Apple ne sont pas installés
 - `GOOGLE_WALLET_ENABLED=false` tant que l'Issuer Google n'est pas configuré
 
-Après le premier déploiement :
+Après modification d'une variable, créer un nouveau déploiement : un ancien déploiement ne récupère pas rétroactivement les nouvelles variables.
+
+Le healthcheck de production doit notamment renvoyer :
+
+- `ok: true`
+- `database: "up"`
+- `auth: "up"`
+- `wallet.https: true`
+
+Après le premier déploiement sain :
 
 1. vérifier `GET /api/health` ;
-2. exécuter `npm run bootstrap:demo` contre la base de production ;
-3. ouvrir `/j/fidgo-demo` ;
-4. ouvrir la carte créée ;
-5. vérifier le scanner `/s` avec un compte Owner de démo.
+2. ouvrir `/j/fidgo-demo` ;
+3. vérifier la carte de démonstration ;
+4. créer un compte Owner réel via `/signup` ou le seed de démo ;
+5. vérifier le scanner `/s` ;
+6. tester crédit, remboursement/récompense, rejeu idempotent et annulation.
 
 ## 3. Google Wallet
 
@@ -60,7 +72,7 @@ Configurer dans Vercel :
 - `GOOGLE_WALLET_ISSUER_ID`
 - `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64`
 
-Le compte de service doit être autorisé dans le compte Google Wallet issuer.
+Le compte de service doit être autorisé dans le compte Google Wallet issuer. Les boutons Wallet restent désactivés tant que HTTPS et les identifiants requis ne sont pas réellement complets.
 
 Une fois activé, la page carte affiche `Ajouter à Google Wallet`. Le clic crée/met à jour la Loyalty Class et le Loyalty Object puis redirige vers la feuille officielle Google Wallet.
 
@@ -76,7 +88,7 @@ Configurer dans Vercel :
 - `APPLE_SIGNER_KEY_BASE64`
 - `APPLE_SIGNER_KEY_PASSPHRASE` si nécessaire
 
-Le certificat doit correspondre au Pass Type Identifier du compte Apple Developer.
+`AUTH_SECRET` doit également être présent. Le certificat doit correspondre au Pass Type Identifier du compte Apple Developer.
 
 Une fois activé, la page carte télécharge un `.pkpass` signé. Safari/iOS présente ensuite la feuille système `Ajouter à Apple Wallet`.
 
@@ -96,4 +108,4 @@ Ne pas considérer Fidgo `PILOT READY` avant :
 - test de coupure réseau / retry ;
 - validation isolation multi-tenant.
 
-Les certificats, clés privées et JSON de service account ne doivent jamais être commités dans GitHub.
+Les certificats, clés privées, mots de passe, connection strings et JSON de service account ne doivent jamais être commités dans GitHub.
