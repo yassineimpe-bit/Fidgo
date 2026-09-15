@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { sql } from "@/lib/db";
+export async function GET(_:Request,{params}:{params:Promise<{token:string}>}){const {token}=await params;const rows=await sql`select c.token,c.short_code,c.balance,cu.first_name,e.name as establishment_name,p.mode,p.reward_threshold,p.reward_label from loyalty_cards c join customers cu on cu.id=c.customer_id join establishments e on e.id=c.establishment_id join loyalty_programs p on p.establishment_id=e.id where c.token=${token} and c.active=true and cu.deleted_at is null limit 1`;if(!rows[0])return NextResponse.json({error:"NOT_FOUND"},{status:404});return NextResponse.json(rows[0])}
