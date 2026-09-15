@@ -2,6 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 
 export const CARD_RECOVERY_TTL_MINUTES = 15;
 
+type RecoveryEnv = Record<string, string | undefined>;
+
+export function cardRecoveryEnabled(env: RecoveryEnv = process.env) {
+  return env.CARD_RECOVERY_ENABLED === "true"
+    && Boolean(env.RESEND_API_KEY?.trim())
+    && Boolean(env.EMAIL_FROM?.trim());
+}
+
 export function hashCardRecoveryToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
