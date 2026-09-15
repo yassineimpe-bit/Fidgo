@@ -1,0 +1,33 @@
+name: prod-smoke
+
+on:
+  push:
+    branches:
+      - ops/prod-smoke
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Fidgo production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://fidgo-kf4f4htcyk-6112.vercel.app/api/health"
+          echo "Probing $URL"
+          status="$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 30 "$URL" || true)"
+          echo "HTTP $status"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          if [ "$status" != "200" ]; then
+            echo "Production health endpoint is not publicly healthy (HTTP $status)." >&2
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const data = JSON.parse(fs.readFileSync('/tmp/health.json', 'utf8'));
+          if (data.ok !== true) throw new Error(`health ok=${data.ok}`);
+          if (data.database !== 'up') throw new Error(`database=${data.database}`);
+          console.log('Fidgo production health OK:', data);
+          NODE
