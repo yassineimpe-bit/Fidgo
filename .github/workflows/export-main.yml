@@ -15,6 +15,9 @@ jobs:
         with:
           ref: main
 
+      - name: Show exported revision
+        run: git rev-parse HEAD
+
       - name: Package Fidgo main
         run: |
           zip -r /tmp/fidgo-main.zip . \
