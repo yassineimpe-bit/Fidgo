@@ -13,14 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Probe production endpoints
+      - name: Probe Vercel endpoints
         shell: bash
         run: |
           set +e
           for url in \
             "https://fidgo-env-probe.vercel.app/" \
             "https://fidgo-env-probe.vercel.app/api/health" \
-            "https://fidgo-env-probe.vercel.app/j/fidgo-demo"; do
+            "https://fidgo-env-probe-9arp0j8ii-kf4f4htcyk-6112.vercel.app/" \
+            "https://fidgo-env-probe-9arp0j8ii-kf4f4htcyk-6112.vercel.app/api/health"; do
             echo "===== $url ====="
             rm -f /tmp/headers /tmp/body
             code=$(curl -L --silent --show-error --max-time 20 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$url")
