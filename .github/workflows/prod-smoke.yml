@@ -10,20 +10,31 @@ jobs:
   health:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe Fidgo production health
+      - name: Probe Vercel control deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://fidgo-deploy-check-kf4f4htcyk-6112.vercel.app/"
+          status="$(curl -sS -L -o /tmp/control.html -w '%{http_code}' --max-time 30 "$URL" || true)"
+          echo "control HTTP $status"
+          cat /tmp/control.html 2>/dev/null || true
+          echo
+          test "$status" = "200"
+          grep -q "Fidgo deploy check" /tmp/control.html
+
+      - name: Probe Fidgo production alias
         shell: bash
         run: |
           set -euo pipefail
           URL="https://fidgo-live-kf4f4htcyk-6112.vercel.app/api/health"
-          echo "Probing $URL"
           status="$(curl -sS -D /tmp/headers.txt -o /tmp/health.json -w '%{http_code}' --max-time 30 "$URL" || true)"
-          echo "HTTP $status"
+          echo "fidgo HTTP $status"
           cat /tmp/headers.txt 2>/dev/null || true
           echo '--- body ---'
           cat /tmp/health.json 2>/dev/null || true
           echo
           if [ "$status" != "200" ]; then
-            echo "Production health endpoint is not publicly healthy (HTTP $status)." >&2
+            echo "Fidgo production alias is not READY (HTTP $status)." >&2
             exit 1
           fi
           node - <<'NODE'
