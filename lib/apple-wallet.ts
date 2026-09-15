@@ -38,7 +38,7 @@ export function appleAuthenticationTokenHash(token: string) {
 
 function rgb(hex: string) {
   const value = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.slice(1) : "111827";
-  return `rgb(${parseInt(value.slice(0,2),16)}, ${parseInt(value.slice(2,4),16)}, ${parseInt(value.slice(4,6),16)})`;
+  return `rgb(${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)})`;
 }
 
 async function walletImage() {
@@ -67,7 +67,6 @@ export async function buildApplePass(card: WalletCard) {
     backgroundColor: rgb(card.primaryColor),
     webServiceURL: `${appUrl}/api/wallet/apple/web`,
     authenticationToken: authToken,
-    barcodes: [{ format: "PKBarcodeFormatQR", message: `LOY1:${card.token}`, messageEncoding: "iso-8859-1", altText: card.shortCode }],
     storeCard: {
       primaryFields: [{ key: "balance", label: card.mode === "STAMPS" ? "TAMPONS" : "POINTS", value: card.balance }],
       secondaryFields: [{ key: "reward", label: "RÉCOMPENSE", value: card.balance >= card.rewardThreshold ? "Disponible" : `${card.rewardThreshold - card.balance} restant(s)` }],
@@ -80,11 +79,19 @@ export async function buildApplePass(card: WalletCard) {
       ],
     },
   };
+
   const pass = new PKPass(
     { "icon.png": image, "icon@2x.png": image, "icon@3x.png": image, "logo.png": image, "logo@2x.png": image, "logo@3x.png": image },
     { wwdr: cfg.wwdr, signerCert: cfg.signerCert, signerKey: cfg.signerKey, signerKeyPassphrase: cfg.signerKeyPassphrase },
     props,
   );
+  pass.setBarcodes({
+    format: "PKBarcodeFormatQR",
+    message: `LOY1:${card.token}`,
+    messageEncoding: "iso-8859-1",
+    altText: card.shortCode,
+  });
+
   const buffer = pass.getAsBuffer();
   await sql`
     insert into wallet_passes(establishment_id,card_id,provider,external_id,serial_number,authentication_token_hash,status,last_synced_at)
@@ -124,7 +131,7 @@ export async function notifyAppleWallet(cardId: string) {
     try { await sendPassPush(String(row.push_token)); }
     catch (error) { failures.push(error instanceof Error ? error.message : "APPLE_APNS_FAILED"); }
   }));
-  if (failures.length) await sql`update wallet_passes set last_error=${failures.join(" | ").slice(0,1000)},updated_at=now() where id=${walletPass.id}`;
+  if (failures.length) await sql`update wallet_passes set last_error=${failures.join(" | ").slice(0, 1000)},updated_at=now() where id=${walletPass.id}`;
 }
 
 export function applePassTypeIdentifier() {
