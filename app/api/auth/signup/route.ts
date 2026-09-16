@@ -34,8 +34,8 @@ export async function POST(request: Request) {
       const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
       const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role,token_version`)[0];
       await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
-      await createTrialSubscription(tx, String(establishment.id), billingInterval);
-      return { establishment, staff };
+      const trialEndsAt = await createTrialSubscription(tx, String(establishment.id), billingInterval);
+      return { establishment, staff, trialEndsAt };
     });
 
     const token = await signSession({
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
           establishmentId: String(result.establishment.id),
           email,
           interval: billingInterval,
+          trialEndsAt: result.trialEndsAt,
         });
         checkoutUrl = session.url;
       } catch (error) {
