@@ -43,7 +43,7 @@ jobs:
             if echo "$body" | jq -e . >/dev/null 2>&1; then
               echo "$body" | jq .
 
-              if echo "$body" | jq -e '.ok == true and .service == "retiko" and .database == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
+              if echo "$body" | jq -e '.ok == true and .service == "retiko" and .database == "up" and .schema == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
                 echo "Retiko production health is green."
                 exit 0
               fi
@@ -53,6 +53,11 @@ jobs:
                 if echo "$body" | jq -e '.database == "down"' >/dev/null; then
                   echo "::error::DATABASE_URL is also missing or unavailable in Vercel Production."
                 fi
+                exit 1
+              fi
+
+              if echo "$body" | jq -e '.service == "retiko" and .database == "up" and .schema == "down"' >/dev/null; then
+                echo "::error::Retiko database is reachable but its schema is stale. Apply the pending production migrations before opening the pilot."
                 exit 1
               fi
 
