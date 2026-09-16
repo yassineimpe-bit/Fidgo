@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("PWA : manifeste installable et fallback hors-ligne neutre", async ({ page, request }) => {
+test("PWA : manifeste installable, icônes et fallback hors-ligne neutre", async ({ page, request }) => {
   const manifestResponse = await request.get("/manifest.webmanifest");
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
@@ -12,12 +12,23 @@ test("PWA : manifeste installable et fallback hors-ligne neutre", async ({ page,
     scope: "/",
     display: "standalone",
   });
+  expect(manifest.icons).toEqual(expect.arrayContaining([
+    expect.objectContaining({ src: "/icon-192.png", sizes: "192x192", type: "image/png" }),
+    expect.objectContaining({ src: "/icon-512.png", sizes: "512x512", type: "image/png" }),
+  ]));
+
+  for (const icon of ["/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"]) {
+    const response = await request.get(icon);
+    expect(response.ok()).toBeTruthy();
+    expect(response.headers()["content-type"]).toContain("image/png");
+  }
 
   const workerResponse = await request.get("/sw.js");
   expect(workerResponse.ok()).toBeTruthy();
   const worker = await workerResponse.text();
-  expect(worker).toContain("retiko-shell-v2");
+  expect(worker).toContain("retiko-shell-v3");
   expect(worker).toContain("/offline");
+  expect(worker).toContain("/apple-touch-icon.png");
 
   await page.goto("/offline");
   await expect(page.getByRole("heading", { name: "Connexion indisponible" })).toBeVisible();
