@@ -9,7 +9,7 @@ import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 
 const GENERIC_RESPONSE = {
   ok: true,
-  message: "Si une carte correspond à cette adresse, un lien de récupération va être envoyé.",
+  message: "Si cette adresse est associée à une carte, vous allez recevoir un lien pour la retrouver.",
 };
 
 export async function POST(req: Request) {
@@ -23,8 +23,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400, headers: PRIVATE_HEADERS });
   }
 
-  // Main can safely contain the recovery code before the migration/email provider
-  // are live. The public behavior remains opaque until the runtime flag is enabled.
   if (!cardRecoveryEnabled()) {
     return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
   }
@@ -50,15 +48,11 @@ export async function POST(req: Request) {
     limit 1
   `;
 
-  // Always answer the same way when no card exists. This route must not become
-  // the email-enumeration oracle that /api/enroll was hardened to remove.
   if (!card) return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
 
   const recovery = createCardRecoveryToken();
   try {
     await sql.begin(async (tx) => {
-      // Only the newest recovery email remains usable. This also limits the blast
-      // radius if a user requests several links and an old email is later exposed.
       await tx`
         update card_recovery_tokens
         set used_at = now()
@@ -73,8 +67,6 @@ export async function POST(req: Request) {
     const code = typeof error === "object" && error && "code" in error
       ? String((error as { code?: unknown }).code)
       : "";
-    // A deployment can briefly precede its migration. Returning the exact same
-    // 202 avoids turning migration state into a card-existence oracle.
     if (code === "42P01") {
       return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
     }
