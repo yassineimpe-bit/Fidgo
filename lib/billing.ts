@@ -24,11 +24,29 @@ export type BillingRuntimeStatus = {
 };
 
 const REQUIRED_STRIPE_ENV = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_ANNUAL"] as const;
+const STRIPE_MIN_TRIAL_AHEAD_SECONDS = 48 * 60 * 60;
 
 export function getBillingRuntimeStatus(env: Record<string, string | undefined> = process.env): BillingRuntimeStatus {
   const enabled = env.STRIPE_ENABLED === "true";
   const missing = REQUIRED_STRIPE_ENV.filter((key) => !env[key]?.trim());
   return { enabled, configured: enabled && missing.length === 0, missing };
+}
+
+/**
+ * Stripe Checkout exige que trial_end soit au moins 48 h dans le futur.
+ * L'essai Fidgo commence a la creation du compte : on reutilise donc la date
+ * d'expiration deja stockee au lieu de redonner 30 jours a chaque Checkout.
+ */
+export function checkoutTrialEnd(
+  value: Date | string | null | undefined,
+  nowMs: number = Date.now(),
+): number | null {
+  if (!value) return null;
+  const dateMs = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (!Number.isFinite(dateMs)) return null;
+  const trialEndSeconds = Math.floor(dateMs / 1000);
+  const nowSeconds = Math.floor(nowMs / 1000);
+  return trialEndSeconds - nowSeconds >= STRIPE_MIN_TRIAL_AHEAD_SECONDS ? trialEndSeconds : null;
 }
 
 let cachedClient: Stripe | null = null;
@@ -46,6 +64,13 @@ function priceIdFor(interval: BillingInterval): string {
   return priceId;
 }
 
+function intervalFromStripePriceId(priceId: string | undefined): BillingInterval | null {
+  if (!priceId) return null;
+  if (priceId === process.env.STRIPE_PRICE_MONTHLY) return "monthly";
+  if (priceId === process.env.STRIPE_PRICE_ANNUAL) return "annual";
+  return null;
+}
+
 /**
  * Un seul abonnement par commerce : cree en essai (30 jours) des l'inscription.
  * Le paiement Stripe reel n'intervient que si STRIPE_ENABLED est actif.
@@ -55,11 +80,13 @@ export async function createTrialSubscription(
   establishmentId: string,
   billingInterval: BillingInterval,
 ) {
-  await tx`
+  const [row] = await tx`
     insert into subscriptions (establishment_id, plan, billing_interval, status, trial_ends_at)
     values (${establishmentId}, 'FIDGO', ${billingInterval}, 'trial', now() + (${TRIAL_DAYS}::int * interval '1 day'))
     on conflict (establishment_id) do nothing
+    returning trial_ends_at
   `;
+  return row?.trial_ends_at ?? null;
 }
 
 export async function getSubscription(establishmentId: string) {
@@ -74,23 +101,27 @@ export async function getSubscription(establishmentId: string) {
 }
 
 /**
- * Checkout Stripe en mode abonnement, avec essai de TRIAL_DAYS jours et
- * codes promo activables (offres fondateurs) sans palier fonctionnel dedie.
+ * Checkout Stripe en mode abonnement. L'essai est rattache a la date de
+ * creation du compte et n'est jamais reinitialise par un nouveau Checkout.
  */
 export async function createCheckoutSession(input: {
   establishmentId: string;
   email: string;
   interval: BillingInterval;
+  trialEndsAt?: Date | string | null;
+  customerId?: string | null;
 }) {
   const stripe = stripeClient();
   const appUrl = getAppUrl();
+  const trialEnd = checkoutTrialEnd(input.trialEndsAt);
+
   return stripe.checkout.sessions.create({
     mode: "subscription",
-    customer_email: input.email,
+    ...(input.customerId ? { customer: input.customerId } : { customer_email: input.email }),
     client_reference_id: input.establishmentId,
     line_items: [{ price: priceIdFor(input.interval), quantity: 1 }],
     subscription_data: {
-      trial_period_days: TRIAL_DAYS,
+      ...(trialEnd ? { trial_end: trialEnd } : {}),
       metadata: { establishmentId: input.establishmentId },
     },
     allow_promotion_codes: true,
@@ -148,15 +179,18 @@ export async function applyStripeEvent(event: Stripe.Event) {
     const subscription = event.data.object as Stripe.Subscription;
     const establishmentId = subscription.metadata?.establishmentId || null;
     const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id ?? null;
-    const currentPeriodEnd = subscription.items.data[0]?.current_period_end;
+    const firstItem = subscription.items.data[0];
+    const currentPeriodEnd = firstItem?.current_period_end;
     const periodEnd = currentPeriodEnd ? new Date(currentPeriodEnd * 1000) : null;
     const status = mapStripeStatus(subscription.status);
+    const billingInterval = intervalFromStripePriceId(firstItem?.price?.id);
     if (establishmentId) {
       await sql`
         update subscriptions
         set status = ${status},
             external_subscription_id = ${subscription.id},
             external_customer_id = coalesce(${customerId}, external_customer_id),
+            billing_interval = coalesce(${billingInterval}, billing_interval),
             current_period_end = ${periodEnd},
             cancel_at_period_end = ${subscription.cancel_at_period_end},
             updated_at = now()
@@ -166,6 +200,7 @@ export async function applyStripeEvent(event: Stripe.Event) {
       await sql`
         update subscriptions
         set status = ${status},
+            billing_interval = coalesce(${billingInterval}, billing_interval),
             current_period_end = ${periodEnd},
             cancel_at_period_end = ${subscription.cancel_at_period_end},
             updated_at = now()
