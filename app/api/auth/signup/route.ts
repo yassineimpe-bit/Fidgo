@@ -47,6 +47,11 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     if (String(error).includes("staff_users_email_key")) return NextResponse.json({ error: "EMAIL_EXISTS" }, { status: 409 });
-    throw error;
+    // Une exception ici (schema desynchronise, base injoignable, etc.) ne doit
+    // jamais remonter comme une page d'erreur Next.js sans corps JSON : le
+    // client ne saurait plus rien afficher. On journalise le detail cote
+    // serveur (visible dans les logs Vercel) et on renvoie un code stable.
+    console.error("SIGNUP_FAILED", error);
+    return NextResponse.json({ error: "SIGNUP_FAILED" }, { status: 500 });
   }
 }

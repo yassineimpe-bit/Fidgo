@@ -35,22 +35,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 400 });
   }
 
-  const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
-  const user = users[0];
-  const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
-  const passwordOk = await bcrypt.compare(password, hash);
-  if (!user || !user.active || !passwordOk) {
-    return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
-  }
+  try {
+    const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
+    const user = users[0];
+    const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
+    const passwordOk = await bcrypt.compare(password, hash);
+    if (!user || !user.active || !passwordOk) {
+      return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
+    }
 
-  const token = await signSession({
-    staffId: String(user.id),
-    establishmentId: String(user.establishment_id),
-    role: String(user.role) as "OWNER" | "MANAGER" | "EMPLOYEE" | "VIEWER",
-    email: String(user.email),
-    tokenVersion: Number(user.token_version),
-  });
-  const response = NextResponse.json({ ok: true, role: user.role }, { headers: { "cache-control": "no-store" } });
-  response.cookies.set(sessionCookie(token));
-  return response;
+    const token = await signSession({
+      staffId: String(user.id),
+      establishmentId: String(user.establishment_id),
+      role: String(user.role) as "OWNER" | "MANAGER" | "EMPLOYEE" | "VIEWER",
+      email: String(user.email),
+      tokenVersion: Number(user.token_version),
+    });
+    const response = NextResponse.json({ ok: true, role: user.role }, { headers: { "cache-control": "no-store" } });
+    response.cookies.set(sessionCookie(token));
+    return response;
+  } catch (error) {
+    // Meme logique que /api/auth/signup : ne jamais laisser une exception
+    // (base injoignable, schema desynchronise) remonter sans corps JSON.
+    console.error("LOGIN_FAILED", error);
+    return NextResponse.json({ error: "LOGIN_FAILED" }, { status: 500 });
+  }
 }
