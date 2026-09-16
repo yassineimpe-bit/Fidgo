@@ -3,11 +3,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const RECOVERY_MESSAGE = "Si cette adresse est associée à une carte, vous allez recevoir un lien pour la retrouver.";
+
 export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; recoveryEnabled?: boolean }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState("");
 
@@ -21,12 +22,29 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
     if (token) router.replace(`/c/${token}`);
   }, [slug, router]);
 
+  async function requestRecovery(email: string) {
+    if (!recoveryEnabled || !email || recoveryLoading) return;
+    setRecoveryLoading(true);
+    setRecoveryMessage(RECOVERY_MESSAGE);
+    try {
+      await fetch("/api/recovery/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug, email }),
+      });
+    } catch {
+      // La formulation reste volontairement identique pour ne pas transformer
+      // l'interface en oracle d'énumération.
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting) return;
     setSubmitting(true);
     setError("");
-    setRecoveryEmail("");
     setRecoveryMessage("");
 
     const form = new FormData(event.currentTarget);
@@ -39,7 +57,7 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
         body: JSON.stringify({
           slug,
           firstName: form.get("firstName") || null,
-          email: email || null,
+          email,
           phone: form.get("phone") || null,
           marketingConsent: form.get("consent") === "on",
         }),
@@ -48,14 +66,8 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
 
       if (!response.ok) {
         if (data.error === "CARD_ALREADY_EXISTS") {
-          if (recoveryEnabled && email) {
-            setRecoveryEmail(email);
-            setError("Une carte existe déjà pour ces coordonnées. Tu peux recevoir un lien sécurisé pour la retrouver.");
-          } else if (recoveryEnabled) {
-            setError("Une carte existe déjà pour ces coordonnées. Saisis l’email utilisé sur la carte pour la récupérer, ou demande-la en caisse.");
-          } else {
-            setError("Une carte existe déjà pour ces coordonnées. Demande-la en caisse avec ton code court ou ton email.");
-          }
+          if (recoveryEnabled) await requestRecovery(email);
+          else setError(RECOVERY_MESSAGE);
           return;
         }
         if (data.error === "RATE_LIMITED") {
@@ -72,29 +84,6 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
       setError("Connexion impossible. Vérifie le réseau puis réessaie.");
     } finally {
       setSubmitting(false);
-    }
-  }
-
-  async function requestRecovery() {
-    if (!recoveryEnabled || !recoveryEmail || recoveryLoading) return;
-    setRecoveryLoading(true);
-    setRecoveryMessage("");
-    try {
-      const response = await fetch("/api/recovery/request", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slug, email: recoveryEmail }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setRecoveryMessage("Impossible d’envoyer le lien pour le moment. Réessaie plus tard.");
-        return;
-      }
-      setRecoveryMessage(data.message || "Si une carte correspond à cette adresse, un lien valable 15 minutes va être envoyé.");
-    } catch {
-      setRecoveryMessage("Connexion impossible. Réessaie quand le réseau est revenu.");
-    } finally {
-      setRecoveryLoading(false);
     }
   }
 
@@ -116,11 +105,8 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
       <span>J’accepte de recevoir les offres et actualités de ce commerce. Je peux me désinscrire à tout moment.</span>
     </label>
     {error ? <div className="notice error">{error}</div> : null}
-    {recoveryEnabled && recoveryEmail ? <button className="btn" type="button" onClick={requestRecovery} disabled={recoveryLoading}>
-      {recoveryLoading ? "Envoi…" : "M’envoyer un lien de récupération"}
-    </button> : null}
-    {recoveryMessage ? <div className="notice">{recoveryMessage}</div> : null}
+    {recoveryMessage ? <div className="notice">{recoveryMessage}{recoveryLoading ? " Envoi en cours…" : ""}</div> : null}
     <button className="btn btn-primary" disabled={submitting}>{submitting ? "Création…" : "Créer ma carte"}</button>
-    <p className="muted" style={{fontSize:13}}>L’email sert à retrouver ta carte. Le téléphone reste facultatif. Le consentement marketing est séparé de la création de la carte.</p>
+    <p className="muted" style={{fontSize:13}}>L’email est nécessaire pour retrouver la carte en cas de perte. Le téléphone reste facultatif et le consentement marketing est séparé de la création de la carte.</p>
   </form>;
 }

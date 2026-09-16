@@ -8,9 +8,14 @@ import { ClientObservability } from "@/components/client-observability";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: { default: "Fidgo", template: "%s · Fidgo" },
+  title: { default: "Retiko", template: "%s · Retiko" },
   description: "Fidélité digitale pour restaurants et commerces alimentaires",
   manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Retiko",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
