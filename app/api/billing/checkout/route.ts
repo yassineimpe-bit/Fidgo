@@ -19,14 +19,24 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const interval = isBillingInterval(body.billingInterval) ? body.billingInterval : "monthly";
 
-  const [subscription] = await sql`select 1 from subscriptions where establishment_id = ${session.establishmentId} limit 1`;
+  const [subscription] = await sql`
+    select status, trial_ends_at, external_customer_id, external_subscription_id
+    from subscriptions
+    where establishment_id = ${session.establishmentId}
+    limit 1
+  `;
   if (!subscription) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (subscription.external_subscription_id && String(subscription.status) !== "cancelled") {
+    return Response.json({ error: "ALREADY_SUBSCRIBED" }, { status: 409 });
+  }
 
   try {
     const checkoutSession = await createCheckoutSession({
       establishmentId: session.establishmentId,
       email: session.email,
       interval,
+      trialEndsAt: subscription.trial_ends_at as Date | string | null,
+      customerId: subscription.external_customer_id ? String(subscription.external_customer_id) : null,
     });
     return Response.json({ url: checkoutSession.url });
   } catch (error) {
