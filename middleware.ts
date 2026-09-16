@@ -14,7 +14,9 @@ function contentSecurityPolicy(nonce: string) {
     "img-src 'self' data: https:",
     "font-src 'self' data:",
     "connect-src 'self'",
-    "worker-src 'self'",
+    // qr-scanner charge son fallback ZXing/jsQR dans un Worker créé depuis
+    // une URL blob:. Safari iOS n'a pas BarcodeDetector et dépend de ce chemin.
+    "worker-src 'self' blob:",
     "manifest-src 'self'",
     "upgrade-insecure-requests",
   ].join("; ");

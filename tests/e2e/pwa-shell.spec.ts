@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 test("PWA : manifeste installable, icônes et fallback hors-ligne neutre", async ({ page, request }) => {
+  const documentResponse = await request.get("/login");
+  const csp = documentResponse.headers()["content-security-policy"];
+  expect(csp).toContain("worker-src 'self' blob:");
+  expect(documentResponse.headers()["permissions-policy"]).toContain("camera=(self)");
+
   const manifestResponse = await request.get("/manifest.webmanifest");
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
@@ -29,6 +34,23 @@ test("PWA : manifeste installable, icônes et fallback hors-ligne neutre", async
   expect(worker).toContain("retiko-shell-v3");
   expect(worker).toContain("/offline");
   expect(worker).toContain("/apple-touch-icon.png");
+
+  // Le fallback de qr-scanner utilise exactement ce type de Worker blob sur
+  // Safari iOS, où BarcodeDetector n'est pas disponible.
+  await page.goto("/login");
+  const workerResult = await page.evaluate(() => new Promise<string>((resolve, reject) => {
+    const source = URL.createObjectURL(new Blob(["postMessage('worker-ready')"], { type: "application/javascript" }));
+    const decoderWorker = new Worker(source);
+    const timeout = window.setTimeout(() => reject(new Error("Blob worker timeout")), 3_000);
+    decoderWorker.onmessage = (event) => {
+      window.clearTimeout(timeout);
+      decoderWorker.terminate();
+      URL.revokeObjectURL(source);
+      resolve(String(event.data));
+    };
+    decoderWorker.onerror = (event) => reject(new Error(event.message));
+  }));
+  expect(workerResult).toBe("worker-ready");
 
   await page.goto("/offline");
   await expect(page.getByRole("heading", { name: "Connexion indisponible" })).toBeVisible();
