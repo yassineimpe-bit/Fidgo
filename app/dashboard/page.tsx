@@ -23,10 +23,12 @@ export default async function DashboardPage() {
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_FAILED') scan_failed,
       (select coalesce(percentile_cont(0.5) within group (order by duration_ms),0)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_p50,
       (select coalesce(percentile_cont(0.95) within group (order by duration_ms),0)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_p95,
-      (select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId}) cards_with_activity,
+      (select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and type='earn') cards_with_activity,
       (select count(*)::int from (
-        select card_id from transactions where establishment_id=${session.establishmentId}
-        group by card_id having count(distinct date_trunc('day', created_at)) >= 2
+        select card_id from transactions
+        where establishment_id=${session.establishmentId} and type='earn'
+        group by card_id
+        having count(distinct date_trunc('day', created_at at time zone 'Europe/Paris')) >= 2
       ) recurring) cards_recurring
   `;
   const latest = await sql`
