@@ -15,12 +15,15 @@ function normalizeAppUrl(value?: string) {
 
 export function getAppUrl(env: AppUrlEnv = process.env) {
   const explicit = normalizeAppUrl(env.NEXT_PUBLIC_APP_URL);
-  if (explicit) return explicit;
 
-  // Le domaine Retiko est définitif. En Production Vercel, ne jamais laisser
-  // les QR, liens Wallet ou emails retomber sur l'alias technique du projet si
-  // NEXT_PUBLIC_APP_URL a été oublié. Les previews conservent leur URL Vercel.
+  // Le domaine Retiko est définitif. En Production Vercel, les URL publiques
+  // générées doivent rester sur retiko.fr même si une variable a été oubliée
+  // ou pointe encore vers l'ancien alias technique. `env:check` signale la
+  // mauvaise configuration ; ce garde-fou évite malgré tout d'imprimer ou
+  // d'envoyer un lien Vercel à un vrai client.
   if (env.VERCEL_ENV === "production") return RETIKO_PRODUCTION_ORIGIN;
+
+  if (explicit) return explicit;
 
   return normalizeAppUrl(env.VERCEL_PROJECT_PRODUCTION_URL)
     || normalizeAppUrl(env.VERCEL_URL);
