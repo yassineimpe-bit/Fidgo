@@ -1,4 +1,4 @@
-# API MVP
+# API MVP Retiko
 
 ## Public
 
@@ -9,8 +9,12 @@ Crée un établissement, un programme par défaut, un owner et une souscription 
 Crée une session commerçant httpOnly de 12 h. Protection anti-bruteforce par couple IP/email.
 
 ### `POST /api/enroll`
-Entrée : `slug`, `firstName?`, `email?`, `phone?`, `marketingConsent`.
-Retour : `token`, `short_code`, `balance`. Les coordonnées restent facultatives.
+Entrée : `slug`, `firstName?`, `email`, `phone?`, `marketingConsent`.
+Retour lors d'une nouvelle inscription : `token`, `short_code`, `balance`.
+L'email est obligatoire en V0 afin qu'une carte puisse être récupérée de façon sécurisée. Le téléphone reste facultatif et le consentement marketing est séparé.
+
+### `POST /api/recovery/request`
+Entrée : `slug`, `email`. Répond toujours avec la même formulation publique et un statut `202` lorsqu'une demande valide est reçue, qu'une carte existe ou non. Un email n'est envoyé que si une carte active correspond à l'adresse.
 
 ### `POST /api/events`
 Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAILED` pour un membre du staff authentifié. Les événements scanner acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
@@ -18,8 +22,8 @@ Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAIL
 ### `GET /api/card/[token]`
 Retourne uniquement les données nécessaires à l'affichage public de la carte, sans email ni téléphone. Réponse `no-store`.
 
-### `GET /api/card/[token]/status`
-Lecture légère dédiée au rafraîchissement de la carte : `balance`, `threshold`, `rewardAvailable`, `updatedAt`. Elle possède un rate limiter distinct, compatible avec un polling toutes les trois secondes pendant cinq minutes.
+### `POST /api/card/status`
+Lecture légère dédiée au rafraîchissement de la carte : le token est envoyé dans le corps JSON et n'apparaît jamais dans l'URL. Retour : `balance`, `threshold`, `rewardAvailable`, `updatedAt`. La route possède un rate limiter distinct, compatible avec un polling toutes les trois secondes pendant cinq minutes, suspendu quand l'onglet est masqué.
 
 ## Commerçant authentifié
 
@@ -38,7 +42,7 @@ Applique aussi cooldown, limite quotidienne, verrou `FOR UPDATE` et idempotence.
 Un OWNER/MANAGER peut dépasser le cooldown avec `overrideReason`. Le motif est obligatoire et produit un audit `CARD_ADJUSTED`.
 
 ### `POST /api/redeem`
-Consomme exactement le seuil de récompense configuré.
+Consomme exactement le seuil de récompense configuré. Cette route exige toujours une session staff authentifiée : la carte client publique ne peut jamais consommer elle-même une récompense.
 
 ### `POST /api/transactions/reverse`
 OWNER/MANAGER seulement. Crée une transaction inverse. Une transaction de type `reversal` ne peut pas être inversée à nouveau.
