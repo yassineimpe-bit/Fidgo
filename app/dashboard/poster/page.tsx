@@ -9,28 +9,50 @@ export default async function PosterPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [restaurant] = await sql`select name,slug,logo_url from establishments where id=${session.establishmentId}`;
-  const [program] = await sql`select reward_threshold,reward_label from loyalty_programs where establishment_id=${session.establishmentId}`;
+  const [restaurant] = await sql`
+    select e.name, e.slug, e.logo_url,
+      p.mode, p.reward_threshold, p.reward_label
+    from establishments e
+    join loyalty_programs p on p.establishment_id = e.id
+    where e.id = ${session.establishmentId}
+      and p.active = true
+    limit 1
+  `;
+
+  if (!restaurant) redirect("/dashboard");
 
   const base = getAppUrl() || "http://localhost:3000";
   const url = `${base}/j/${restaurant.slug}`;
   const qr = await QRCode.toDataURL(url, { width: 900, margin: 1, errorCorrectionLevel: "M" });
+  const unit = restaurant.mode === "STAMPS" ? "tampons" : "points";
   const domain = new URL(base).host;
 
-  return <main>
-    <div className="no-print" style={{ padding: 16, display: "flex", justifyContent: "center", gap: 10 }}>
-      <a className="btn" href="/dashboard">Retour</a>
-      <PrintButton />
-    </div>
-    <section className="poster">
-      {restaurant.logo_url && <img src={restaurant.logo_url} alt="" style={{ width: 110, height: 110, objectFit: "contain" }} />}
-      <h1>Votre fidélité sur votre téléphone</h1>
-      <p>{restaurant.name}</p>
-      <p>{program.reward_threshold} passages = {program.reward_label}</p>
-      <img src={qr} alt="QR inscription fidélité" />
-      <p style={{ fontSize: 16 }}>Scannez pour créer votre carte</p>
-      <p style={{ fontSize: 13 }}>{url}</p>
-      <p style={{ fontSize: 12, opacity: 0.7 }}>Propulsé par Retiko · {domain}</p>
-    </section>
-  </main>;
+  return (
+    <main>
+      <div className="no-print" style={{ padding: 16, display: "flex", justifyContent: "center", gap: 10 }}>
+        <a className="btn" href="/dashboard">Retour</a>
+        <PrintButton />
+      </div>
+      <section className="poster">
+        {restaurant.logo_url ? (
+          <img
+            src={String(restaurant.logo_url)}
+            alt={`Logo ${restaurant.name}`}
+            style={{ width: 110, height: 110, objectFit: "contain", marginBottom: 22 }}
+          />
+        ) : null}
+        <div style={{ fontSize: "14pt", fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase" }}>
+          Carte fidélité · {restaurant.name}
+        </div>
+        <h1>Scanne pour créer ta carte fidélité</h1>
+        <p style={{ maxWidth: "150mm", marginBottom: "8mm" }}>
+          Cumule {restaurant.reward_threshold} {unit} et profite de : <strong>{restaurant.reward_label}</strong>
+        </p>
+        <img src={qr} alt="QR inscription fidélité" />
+        <p style={{ fontSize: "14pt", marginTop: "8mm", marginBottom: "2mm" }}>Aucune application à télécharger</p>
+        <p style={{ fontSize: "10pt", color: "#666", overflowWrap: "anywhere" }}>{url}</p>
+        <p style={{ fontSize: "9pt", color: "#999", marginTop: "4mm" }}>Propulsé par Retiko · {domain}</p>
+      </section>
+    </main>
+  );
 }

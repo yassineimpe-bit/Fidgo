@@ -46,7 +46,7 @@ Mot de passe, jeton de session, jeton de carte, secret d'API, ou email complet d
 
 ## 6. Vos droits
 
-Vous pouvez demander l'accès, la rectification, l'effacement ou l'export de vos données en contactant directement le commerce chez qui vous avez une carte de fidélité (responsable de traitement), ou Retiko à [adresse email de contact] pour les données de compte commerçant. Voir la procédure détaillée dans `PROCEDURE-EXPORT-SUPPRESSION.md`.
+Vous pouvez demander l'accès, la rectification, l'effacement ou l'export de vos données en contactant directement le commerce chez qui vous avez une carte de fidélité (responsable de traitement), ou Retiko à [adresse email de contact] pour les données de compte commerçant. Voir la procédure détaillée dans `RGPD_PROCEDURES.md`.
 
 ## 7. Sous-traitants techniques
 
