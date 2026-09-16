@@ -21,7 +21,7 @@ Deux traitements coexistent sur Retiko :
 
 ### Carte de fidélité client
 
-- email (obligatoire, sert uniquement à retrouver la carte en cas de perte) ;
+- email (obligatoire pour permettre la récupération de la carte ; il ne peut être utilisé pour des communications marketing du commerce qu'en cas de consentement explicite séparé) ;
 - prénom et téléphone (facultatifs) ;
 - consentement marketing (case décochée par défaut, séparée de la création de la carte) ;
 - solde de fidélité et historique des passages (tampons/points, récompenses).
@@ -30,7 +30,7 @@ Aucune donnée bancaire n'est collectée par Retiko pour le programme de fidéli
 
 ## 3. Ce que nous ne stockons jamais en clair dans les journaux techniques
 
-Mot de passe, jeton de session, jeton de carte, secret d'API, ou email complet dans les journaux d'erreur : voir `docs/OBSERVABILITY.md`.
+Mot de passe, jeton de session, jeton de carte, lien de récupération, secret d'API ou email complet dans les journaux d'erreur. Les segments d'URL opaques et UUID sont également masqués avant journalisation : voir `docs/OBSERVABILITY.md`.
 
 ## 4. Base légale et finalité
 
@@ -41,7 +41,7 @@ Mot de passe, jeton de session, jeton de carte, secret d'API, ou email complet d
 ## 5. Durée de conservation
 
 - carte client : conservée tant que le compte du commerce est actif, ou jusqu'à demande de suppression ;
-- après suppression demandée, les données d'identification (email, téléphone, prénom) sont effacées et la carte désactivée ; l'historique des transactions est conservé sous forme pseudonymisée pour l'intégrité comptable et la lutte antifraude ;
+- après suppression demandée, les données d'identification (email, téléphone, prénom) sont effacées et la carte désactivée ; l'historique des transactions est conservé sous forme pseudonymisée pour préserver l'intégrité du registre de fidélité et les besoins de sécurité/antifraude ;
 - compte commerçant : conservé pendant la durée de la relation contractuelle.
 
 ## 6. Vos droits
