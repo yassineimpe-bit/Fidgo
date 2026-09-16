@@ -8,6 +8,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: "Email ou mot de passe incorrect.",
   TOO_MANY_ATTEMPTS: "Trop de tentatives. Réessaie dans quelques minutes.",
   INVALID_ORIGIN: "Requête refusée. Recharge la page puis réessaie.",
+  SERVICE_UNAVAILABLE: "Le service de connexion n’est pas encore disponible. Réessaie un peu plus tard.",
   SIGNUP_FAILED: "Impossible de créer le compte pour le moment.",
   LOGIN_FAILED: "Connexion impossible pour le moment.",
 };
