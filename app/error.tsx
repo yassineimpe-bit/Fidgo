@@ -17,7 +17,7 @@ export default function AppError({
   return (
     <main className="auth-wrap">
       <section className="card auth-card">
-        <span className="eyebrow">Fidgo</span>
+        <span className="eyebrow">Retiko</span>
         <h2 style={{ margin: "14px 0 8px" }}>Service momentanément indisponible</h2>
         <p className="muted">
           La page n’a pas pu charger ses données. Aucune action fidélité n’a été validée pendant cet échec.
