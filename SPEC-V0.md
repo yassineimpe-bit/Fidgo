@@ -1,15 +1,35 @@
 # Retiko V0
-## Cahier des charges pré-pilote consolidé
+## Cahier des charges pré-pilote et lancement commercial
 
 ### 1. Objectif de la V0
 
-Retiko doit permettre à un commerce indépendant de lancer un programme de fidélité numérique utilisable par de vrais clients, sans application native obligatoire.
+Retiko doit permettre à un **commerce indépendant de proximité** de lancer un programme de fidélité numérique utilisable par de vrais clients, sans application native obligatoire et sans matériel supplémentaire.
 
 La V0 est validée lorsque :
 
-> **Un restaurateur qui ne connaît pas Retiko peut créer son compte, configurer son programme, imprimer son QR, installer Retiko sur son téléphone, inscrire un vrai client, scanner sa carte, créditer un passage, atteindre puis consommer une récompense sans aide nécessaire du produit.**
+> **Un commerçant qui ne connaît pas Retiko peut créer son compte, configurer son programme, imprimer son QR, installer Retiko sur son téléphone, inscrire un vrai client, scanner sa carte, créditer un passage ou un achat, atteindre puis consommer une récompense sans aide technique.**
 
-Pendant le pilote, Retiko sera néanmoins présent au premier service. L’autonomie est un critère de qualité du produit, pas une obligation d’abandonner le commerçant avec une bêta un samedi midi.
+Pendant les premiers pilotes, Retiko peut être présent au premier service. L’autonomie reste cependant un critère de qualité du produit : le commerçant doit ensuite pouvoir utiliser Retiko sans accompagnement quotidien.
+
+Positionnement commercial retenu :
+
+> **Retiko, la fidélité digitale simple pour les commerces de proximité.**
+
+Retiko n’est donc plus positionné uniquement comme un produit pour la restauration.
+
+Verticales prioritaires :
+
+```text
+snacks / fast-food indépendants
+coffee shops
+boulangeries
+restaurants à clientèle récurrente
+coiffeurs / barbiers
+boucheries
+poissonneries
+fromageries
+petits commerces alimentaires spécialisés
+```
 
 ---
 
@@ -18,7 +38,7 @@ Pendant le pilote, Retiko sera néanmoins présent au premier service. L’auton
 La boucle à rendre parfaite avant toute autre fonctionnalité est :
 
 ```text
-Restaurateur
+Commerçant
       ↓
 Création du compte
       ↓
@@ -34,7 +54,7 @@ Création de sa carte
       ↓
 Carte web / PWA
       ↓
-Restaurateur scanne le QR client
+Commerçant scanne le QR client
       ↓
 Crédit fidélité
       ↓
@@ -51,7 +71,55 @@ Apple Wallet et Google Wallet ne sont **pas des dépendances de cette boucle pou
 
 ---
 
-# 3. P0 : infrastructure de production
+# 3. Modèles de fidélité métier
+
+Retiko doit rester générique, tout en proposant des configurations adaptées aux principaux métiers.
+
+## Tampons / passages
+
+Pertinent notamment pour :
+
+```text
+snacks
+coffee shops
+boulangeries
+coiffeurs
+barbiers
+```
+
+Exemples :
+
+```text
+8 menus = 1 menu offert
+10 achats = 1 produit offert
+5 coupes = 1 avantage fidélité
+```
+
+## Points selon montant dépensé
+
+Pertinent notamment pour :
+
+```text
+boucheries
+poissonneries
+fromageries
+commerces avec paniers très variables
+```
+
+Exemple :
+
+```text
+1 € dépensé = 1 point
+500 points = 10 € de récompense
+```
+
+Le commerçant reste libre de modifier les paramètres proposés.
+
+À terme, l’onboarding pourra proposer un modèle par type de commerce, sans créer plusieurs produits Retiko distincts.
+
+---
+
+# 4. P0 : infrastructure de production
 
 Avant tout pilote, la production doit être réellement exploitable.
 
@@ -66,14 +134,16 @@ Avant tout pilote, la production doit être réellement exploitable.
 | auth | fonctionnelle |
 | `/api/health` | vert |
 | PWA | testée sur appareil réel |
-| domaine définitif | configuré |
+| domaine définitif | `https://retiko.fr` |
 
 Le healthcheck attendu doit indiquer au minimum :
 
 ```json
 {
   "ok": true,
+  "service": "retiko",
   "database": "up",
+  "schema": "up",
   "auth": "up"
 }
 ```
@@ -82,17 +152,15 @@ Apple et Google peuvent encore être désactivés.
 
 ---
 
-# 4. P0 : domaine définitif
+# 5. P0 : domaine définitif
 
-Le domaine doit être choisi et configuré **avant toute impression physique et avant le premier pilote**.
-
-Il ne faut pas distribuer :
+Le domaine public définitif est :
 
 ```text
-fidgo-env-probe.vercel.app
+https://retiko.fr
 ```
 
-aux clients.
+Aucun support commercial ne doit utiliser l’ancien alias technique Vercel.
 
 Le domaine définitif doit être utilisé pour :
 
@@ -106,24 +174,17 @@ emails
 futur web service Apple Wallet
 ```
 
-Le QR imprimé doit donc pointer directement vers quelque chose du type :
+Le QR imprimé doit pointer directement vers :
 
 ```text
-https://<domaine-final>/j/mon-commerce
+https://retiko.fr/j/<commerce>
 ```
 
-Le domaine doit être stabilisé avant :
-
-- impression des affiches ;
-- activation de Resend ;
-- configuration de `EMAIL_FROM` ;
-- émission réelle des passes Apple Wallet.
-
-Une redirection depuis l’ancien domaine Vercel pourra rester en sécurité, mais aucun support commercial ne doit dépendre de ce domaine de test.
+La redirection `www.retiko.fr` vers `retiko.fr` doit rester opérationnelle.
 
 ---
 
-# 5. P0 : validation sur appareils physiques
+# 6. P0 : validation sur appareils physiques
 
 Tests obligatoires :
 
@@ -146,19 +207,25 @@ connexion
 → crédit réel
 ```
 
-Le besoin de reconnexion après installation est acceptable à condition d’être correctement expliqué.
+Tester également :
 
-La PWA scanner doit fonctionner avant de construire l’onboarding autour d’elle.
+```text
+faible luminosité
+écran client sombre
+verre de protection
+QR à différentes distances
+plusieurs scans successifs
+refus puis réactivation de la caméra
+connexion mobile dégradée
+```
+
+La PWA scanner doit fonctionner avant toute prospection commerciale active.
 
 ---
 
-# 6. P0 : scanner rush-safe
+# 7. P0 : scanner rush-safe
 
-Le scanner doit fonctionner en situation réelle de service, pas seulement posé tranquillement sur un bureau avec un QR parfait imprimé sur une feuille A4 neuve.
-
-## Scan QR
-
-Le QR client contient l’identifiant Retiko prévu par le système.
+Le scanner doit fonctionner en situation réelle de service.
 
 Après détection :
 
@@ -179,9 +246,7 @@ Objectifs :
 | détection QR | < 500 ms idéal |
 | QR → fiche client | < 1 s idéal |
 | action → confirmation | < 1 s idéal |
-| p95 parcours | < 2 s |
-
----
+| p95 parcours | < 2,5 s maximum pilote |
 
 ## Fallback manuel
 
@@ -197,14 +262,14 @@ Code client
 
 Elle doit permettre de retrouver la carte même si :
 
-- caméra indisponible ;
-- QR client illisible ;
-- écran endommagé ;
-- luminosité mauvaise.
+```text
+caméra indisponible
+QR illisible
+écran endommagé
+luminosité mauvaise
+```
 
 L’email peut rester un mode secondaire réservé au staff autorisé.
-
----
 
 ## Feedback immédiat
 
@@ -226,17 +291,13 @@ sonore
 haptique
 ```
 
-Succès : vibration courte + bip.
-
-Récompense : pattern distinct.
-
-Erreur : retour distinct et immédiatement compréhensible.
+La récompense débloquée doit avoir un retour distinct.
 
 ---
 
-# 7. P0 : anti double-crédit
+# 8. P0 : anti double-crédit
 
-La protection repose sur plusieurs niveaux :
+La protection repose sur :
 
 ```text
 idempotency_key
@@ -248,15 +309,11 @@ interface
 audit
 ```
 
-### Cooldown par défaut
-
-Décision V0 :
+Cooldown V0 par défaut :
 
 ```text
 2 minutes
 ```
-
-Le but est d’éviter le double scan accidentel, pas d’empêcher un client de revenir plusieurs fois dans la journée.
 
 Si un second crédit est demandé :
 
@@ -265,31 +322,17 @@ Passage déjà enregistré
 il y a 42 secondes.
 ```
 
-Aucune nouvelle unité n’est ajoutée automatiquement.
-
-### Override
-
 Un `OWNER` ou `MANAGER` peut utiliser :
 
 ```text
 Créditer quand même
 ```
 
-avec :
-
-```text
-motif obligatoire
-```
-
-et audit :
-
-```text
-CARD_ADJUSTED
-```
+avec motif obligatoire et audit.
 
 ---
 
-# 8. P0 : ajustement manuel et procédure de rattrapage
+# 9. P0 : ajustement manuel et procédure de rattrapage
 
 Le dashboard doit permettre :
 
@@ -301,13 +344,7 @@ recherche par code court
 → confirmer
 ```
 
-Une modification manuelle doit toujours produire un audit log :
-
-```text
-CARD_ADJUSTED
-```
-
-avec au minimum :
+Une modification manuelle doit toujours produire un audit `CARD_ADJUSTED` avec au minimum :
 
 ```text
 staff_user_id
@@ -322,7 +359,7 @@ Cette fonction est indispensable au plan de continuité du pilote.
 
 ---
 
-# 9. P0 : carte web client
+# 10. P0 : carte web client
 
 La carte `/c/{token}` constitue la référence V0.
 
@@ -331,8 +368,7 @@ Elle doit afficher :
 | Information | Obligatoire |
 |---|---|
 | commerce | ✅ |
-| logo | ✅ |
-| couleur | ✅ |
+| identité visuelle | ✅ |
 | prénom | ✅ |
 | QR | ✅ |
 | code court | ✅ |
@@ -342,90 +378,45 @@ Elle doit afficher :
 | récompense | ✅ |
 | récompense disponible | ✅ |
 
-Exemple :
-
-```text
-CAFÉ MARTIN
-
-Yassine
-
-● ● ● ● ● ● ● ○ ○ ○
-
-7 / 10 tampons
-
-Encore 3 passages
-avant votre café offert
-
-[ QR ]
-
-482913
-```
+La carte doit rester parfaitement exploitable sans Apple Wallet ni Google Wallet.
 
 ---
 
-# 10. P0 : rafraîchissement automatique du solde
+# 11. P0 : rafraîchissement automatique du solde
 
-Lorsque la carte reste affichée au comptoir, le client doit voir son nouveau tampon apparaître sans rafraîchir manuellement la page.
+Lorsque la carte reste affichée au comptoir, le client doit voir son nouveau solde sans actualisation manuelle.
 
-Il faut utiliser un endpoint de lecture dédié et léger.
-
-Exemple :
+Endpoint léger :
 
 ```text
 /api/card/{token}/status
 ```
 
-Cet endpoint ne renvoie que les informations nécessaires :
-
-```json
-{
-  "balance": 8,
-  "threshold": 10,
-  "rewardAvailable": false,
-  "updatedAt": "..."
-}
-```
-
-Il dispose de son **propre rate limiter**, calibré pour le polling.
-
-### Politique polling V0
+Politique V0 :
 
 ```text
 carte visible
 → polling toutes les 3 secondes
 ```
 
-Lorsque `document.visibilityState !== "visible"` :
+Lorsque la page n’est plus visible :
 
 ```text
 polling suspendu
 ```
 
-Après environ :
+Après environ 5 minutes sans interaction :
 
 ```text
-5 minutes sans interaction
+polling arrêté
+→ bouton Actualiser mon solde
 ```
-
-le polling s’arrête.
-
-L’interface affiche alors :
-
-```text
-[ Actualiser mon solde ]
-```
-
-Une interaction avec la page peut relancer la période active.
-
-Cela évite qu’un téléphone oublié dans une poche transforme Retiko en test de charge involontaire.
 
 ---
 
-# 11. P0 : récupération de carte
+# 12. P0 : récupération de carte
 
-La récupération par stockage local est uniquement un confort.
-
-Elle ne constitue **pas** une stratégie fiable de récupération long terme, notamment à cause des comportements de stockage navigateur/PWA sur mobile.
+Le stockage local est uniquement un confort.
 
 ## Même navigateur
 
@@ -437,64 +428,43 @@ Vous avez déjà une carte Retiko
 [ Ouvrir ma carte ]
 ```
 
-Très utile pour un retour rapide.
-
-Mais aucune mesure de rétention ne doit dépendre de ce mécanisme.
-
----
-
 ## Récupération email
 
-Elle devient **P0 obligatoire avant le pilote**.
+Elle est obligatoire avant une prospection large.
 
 Prérequis :
 
 ```text
-domaine définitif
-→ configuration email
+retiko.fr
 → Resend
 → EMAIL_FROM
 → CARD_RECOVERY_ENABLED=true
 ```
 
-Le mécanisme développé reste :
+Mécanisme :
 
 ```text
 token aléatoire 256 bits
 → hash stocké en DB
 → expiration 15 minutes
 → usage unique
-→ envoyé uniquement à l'adresse concernée
 ```
 
 ---
 
-# 12. Anti-énumération récupération
+# 13. Anti-énumération récupération
 
-Une requête de récupération ne doit jamais révéler si une adresse possède une carte.
+Une demande de récupération ne doit jamais révéler si une adresse possède une carte.
 
 Réponse publique unique :
 
 > Si cette adresse est associée à une carte, vous allez recevoir un lien pour la retrouver.
 
-Même :
-
-```text
-status HTTP
-structure de réponse
-message
-comportement observable
-```
-
-qu’une carte existe ou non.
-
-L’email n’est réellement envoyé que si une carte correspond.
-
-Le traitement serveur doit limiter autant que raisonnablement possible les différences temporelles observables.
+Le statut HTTP, la structure de réponse et le comportement observable doivent rester aussi uniformes que raisonnablement possible.
 
 ---
 
-# 13. P1 mais avant pilote : onboarding commerçant
+# 14. P1 avant prospection : onboarding commerçant
 
 Objectif :
 
@@ -502,38 +472,37 @@ Objectif :
 < 5 minutes
 ```
 
-entre la création du compte et un premier QR fonctionnel.
+entre création du compte et premier QR fonctionnel.
 
 Parcours :
 
 | Étape | Action |
 |---:|---|
 | 1 | compte |
-| 2 | commerce |
-| 3 | logo/couleur |
-| 4 | tampons ou points |
-| 5 | seuil |
-| 6 | récompense |
-| 7 | QR |
-| 8 | installation PWA |
-| 9 | premier scan test |
+| 2 | type de commerce |
+| 3 | commerce / identité visuelle |
+| 4 | modèle proposé : tampons ou points |
+| 5 | seuil et récompense |
+| 6 | QR |
+| 7 | installation PWA |
+| 8 | premier scan test |
 
-Afficher une checklist :
+Exemples de préconfiguration :
 
 ```text
-Configuration Retiko
-
-✓ Compte créé
-✓ Commerce configuré
-✓ Programme fidélité
-○ Imprimer mon QR
-○ Installer Retiko
-○ Faire un test
+Boulangerie → 10 achats = 1 produit offert
+Snack → 8 passages = 1 avantage
+Coiffeur → 5 visites = 1 récompense
+Boucherie → points selon montant
+Fromagerie → points selon montant
+Poissonnerie → points selon montant
 ```
+
+Ces valeurs restent modifiables.
 
 ---
 
-# 14. QR et affiche pilote
+# 15. QR et support pilote
 
 L’affiche A4 est obligatoire avant le pilote.
 
@@ -545,7 +514,7 @@ nom
 promesse fidélité
 récompense
 QR
-éventuellement URL courte
+URL courte éventuelle
 ```
 
 Exemple :
@@ -554,45 +523,33 @@ Exemple :
 VOTRE FIDÉLITÉ
 SUR VOTRE TÉLÉPHONE
 
-10 passages = 1 café offert
+[ avantage du commerce ]
 
 [ QR ]
 
 Scannez pour obtenir votre carte
 ```
 
-Le QR pointe exclusivement vers le domaine définitif.
+Le QR pointe exclusivement vers `retiko.fr`.
 
-Les formats A5, sticker, chevalet ou réseaux sociaux pourront être ajoutés plus tard.
+Les formats A5, sticker, chevalet et réseaux sociaux peuvent suivre après validation terrain.
 
 ---
 
-# 15. P0 : instrumentation du pilote
-
-Les analytics avancées restent hors V0.
-
-L’instrumentation, elle, est obligatoire.
+# 16. P0 : instrumentation du pilote
 
 Événements minimum :
 
 ```text
 JOIN_PAGE_VIEW
 JOIN_SUBMIT
-
 SCAN_SUCCESS
 SCAN_FAILED
-
 CREDIT_SUCCESS
 REWARD_REDEEMED
 ```
 
-`SCAN_SUCCESS` doit notamment enregistrer :
-
-```text
-durationMs
-```
-
-sans token brut, email ou secret.
+`SCAN_SUCCESS` doit enregistrer `durationMs` sans token brut, email ou secret.
 
 Les transactions existantes restent la source de vérité pour :
 
@@ -606,14 +563,12 @@ fréquence
 
 ---
 
-# 16. KPI pilote
+# 17. KPI pilote produit
 
-## Conversion
+## Conversion client
 
 ```text
-JOIN_SUBMIT
-/
-JOIN_PAGE_VIEW
+JOIN_SUBMIT / JOIN_PAGE_VIEW
 ```
 
 ## Performance scanner
@@ -624,15 +579,13 @@ Mesurer :
 p50
 p95
 taux d'erreur
+fallback code court
 ```
 
 ## Retour client
 
-Exemple de métrique :
-
 ```text
-cartes ayant des transactions
-sur au moins deux jours distincts
+cartes ayant des transactions sur au moins deux jours distincts
 /
 cartes ayant au moins une transaction
 ```
@@ -643,55 +596,66 @@ cartes ayant au moins une transaction
 nombre de REWARD_REDEEMED
 ```
 
-## Adoption par le personnel
+## Adoption commerce
 
-`scans/jour` seul n’est pas interprétable.
-
-Il faut récupérer auprès du commerce :
+Lorsque disponible :
 
 ```text
-nombre de tickets caisse / jour
+scans fidélité / tickets caisse
 ```
 
-issu de son Z de caisse ou équivalent.
-
-Le relevé peut être transmis une fois par semaine.
-
-Le KPI devient :
-
-```text
-scans fidélité
-/
-tickets caisse
-```
-
-On peut ainsi distinguer :
-
-```text
-12 scans / 40 tickets = intéressant
-12 scans / 300 tickets = personnel n'utilise presque pas Retiko
-```
-
-Cette collecte doit être prévue dans l’accord pilote.
+Le nombre de tickets peut être relevé depuis le Z de caisse ou fourni manuellement pendant le pilote.
 
 ---
 
-# 17. Disponibilité opérationnelle
+# 18. KPI commerciaux
 
-Chaque commerce pilote doit définir ses **plages de service critiques**.
-
-Exemple :
+Dès les premières démarches commerciales, mesurer :
 
 ```text
-Lundi–vendredi :
-11h30–14h00
-18h30–21h30
-
-Samedi :
-11h30–22h00
+prospects visités
+prospects ayant accepté une démo
+pilotes ouverts
+pilotes réellement actifs
+pilotes convertis en payant
+délai moyen signature → activation
+CAC cash
+CAC incluant temps et déplacements
+ARPU
+part des abonnements annuels
+churn
+LTV lorsque suffisamment de recul existe
 ```
 
-Les métriques d’incident distinguent :
+Le taux de conversion doit être suivi par secteur :
+
+```text
+boulangerie
+snack
+coiffeur / barber
+boucherie
+poissonnerie
+fromagerie
+restaurant
+```
+
+Le but est de découvrir rapidement quels métiers ont la meilleure combinaison :
+
+```text
+besoin perçu
+facilité de vente
+usage réel
+rétention
+rentabilité commerciale
+```
+
+---
+
+# 19. Disponibilité opérationnelle
+
+Chaque commerce pilote doit définir ses plages de service critiques.
+
+Les métriques distinguent :
 
 ```text
 indisponibilité totale
@@ -702,8 +666,6 @@ et :
 ```text
 indisponibilité pendant les plages critiques
 ```
-
-Un incident à 03h00 n’a évidemment pas le même poids qu’une panne à 12h45.
 
 KPI :
 
@@ -717,9 +679,9 @@ temps total des plages critiques
 
 ---
 
-# 18. Observabilité
+# 20. Observabilité
 
-Avant le premier pilote, Retiko doit disposer d’un outil de remontée d’erreurs type Sentry ou équivalent.
+Avant le premier pilote, Retiko doit disposer d’une remontée d’erreurs exploitable.
 
 Capturer :
 
@@ -741,21 +703,21 @@ device
 identifiant interne commerce
 ```
 
-Pas :
+Jamais :
 
 ```text
 password
 JWT
 token carte
 clé privée
-email complet inutile
+secret
 ```
 
 `/api/health` doit également être surveillé.
 
 ---
 
-# 19. Procédure d’incident pilote
+# 21. Procédure d’incident pilote
 
 En cas de panne :
 
@@ -776,33 +738,30 @@ dashboard
 → motif obligatoire
 ```
 
-avec audit `CARD_ADJUSTED`.
-
-Pour les premiers pilotes, objectif interne :
+Pour les premiers pilotes :
 
 ```text
 incident bloquant pendant service
-→ prise en compte < 30 minutes
+→ prise en compte interne < 30 minutes lorsque possible
 ```
 
 Ce n’est pas un SLA commercial.
 
 ---
 
-# 20. RGPD pré-pilote
+# 22. RGPD pré-pilote
 
 Pour les données du programme fidélité :
 
 ```text
 Commerce = responsable du traitement
-
 Retiko = sous-traitant
 ```
 
-Retiko peut rester responsable de traitement pour ses propres données SaaS :
+Retiko reste responsable de traitement pour ses propres données SaaS :
 
 ```text
-compte restaurateur
+compte commerçant
 relation commerciale
 facturation
 support
@@ -818,11 +777,11 @@ accord pilote
 annexe sous-traitance
 ```
 
-Le consentement marketing doit être séparé du fonctionnement de la carte.
+Le consentement marketing doit rester séparé du fonctionnement de la carte.
 
 ---
 
-# 21. Accord pilote
+# 23. Accord pilote
 
 Durée proposée :
 
@@ -830,11 +789,13 @@ Durée proposée :
 30 jours
 ```
 
-Prix :
+Prix pendant le pilote :
 
 ```text
 gratuit
 ```
+
+Pour les premiers pilotes, **aucune carte bancaire n’est demandée au démarrage**.
 
 Le document doit couvrir :
 
@@ -850,41 +811,13 @@ absence d'engagement après pilote
 conditions de fin
 export / suppression
 absence de garantie de disponibilité
-relevé hebdomadaire du nombre de tickets caisse
+relevé hebdomadaire du nombre de tickets si disponible
 plages horaires critiques
 ```
 
 ---
 
-# 22. Sous-traitance RGPD
-
-Annexe minimum :
-
-```text
-nature du traitement
-finalité
-durée
-catégories de données
-catégories de personnes
-mesures de sécurité
-sous-traitants ultérieurs
-gestion incidents
-droits des personnes
-restitution/suppression
-```
-
-Fournisseurs listés uniquement s’ils sont réellement utilisés :
-
-```text
-Vercel
-Neon
-Resend
-Sentry / équivalent
-```
-
----
-
-# 23. Pilotes terrain
+# 24. Pilotes terrain
 
 Nombre initial :
 
@@ -892,36 +825,280 @@ Nombre initial :
 1 à 3 commerces
 ```
 
-Cibles privilégiées :
+Cibles prioritaires pour apprendre vite :
 
 ```text
+snack / fast-food indépendant
+boulangerie
 coffee shop
-bubble tea
-snack
-boulangerie indépendante
-petit restaurant
+coiffeur / barber
 ```
 
-Conditions intéressantes :
+Cibles à intégrer rapidement ensuite :
 
 ```text
-trafic régulier
+boucherie
+poissonnerie
+fromagerie
+restaurant à clientèle régulière
+```
+
+Conditions idéales :
+
+```text
 clientèle récurrente
+flux régulier
 décideur présent
 peu de hiérarchie
+absence de programme digital moderne
+ou carte papier actuellement utilisée
 ```
 
-Le premier service est observé directement.
-
-Ensuite Retiko doit pouvoir fonctionner sans intervention quotidienne.
+Le premier service est observé directement. Ensuite Retiko doit fonctionner sans intervention quotidienne.
 
 ---
 
-# 24. Wallet
+# 25. Stratégie géographique de lancement
 
-Le compte Apple Developer peut être lancé immédiatement car le délai administratif est indépendant du développement.
+Le terrain initial est volontairement local.
 
-Mais pour la V0 :
+## Phase 1
+
+```text
+Ussel / Haute-Corrèze / Corrèze
+```
+
+Objectif : proximité, faible coût de déplacement, observation facile des premiers pilotes et création de références locales.
+
+## Phase 2
+
+```text
+Puy-de-Dôme
+Clermont-Ferrand et agglomération
+```
+
+Objectif : augmenter fortement la densité de prospects une fois le pitch et le parcours pilote validés.
+
+La Corrèze sert de laboratoire commercial. Elle ne constitue pas la limite géographique du produit.
+
+---
+
+# 26. Prospection initiale
+
+Le canal prioritaire au départ est la **prospection physique directe**.
+
+Pourquoi :
+
+```text
+produit démontrable en quelques minutes
+contact direct avec le décideur
+faible coût cash
+retour immédiat sur les objections
+possibilité d'activer un pilote sur place
+```
+
+Cadence de départ indicative :
+
+```text
+10 à 15 commerces visités par semaine
+```
+
+Avant la première vraie campagne, préparer au moins :
+
+```text
+50 prospects qualifiés
+10 prospects prioritaires
+3 profils de pilotes idéaux
+```
+
+Pour chaque prospect, suivre :
+
+```text
+nom
+ville
+secteur
+responsable
+contact
+système de fidélité actuel
+carte papier / digital / aucun
+date de visite
+intérêt
+démo effectuée
+pilote accepté
+activation réelle
+conversion payante
+raison du refus
+```
+
+Le pitch doit partir du problème métier, pas de la technologie.
+
+Exemple :
+
+> Vous avez déjà un système de fidélité ? Retiko remplace la carte papier par une carte digitale accessible directement sur le téléphone du client, sans matériel supplémentaire et sans application obligatoire.
+
+La démonstration complète doit tenir en environ 5 minutes.
+
+---
+
+# 27. Positionnement marketing
+
+Promesse principale :
+
+> **La fidélité digitale simple pour les commerces de proximité.**
+
+Sous-promesse possible :
+
+> Créez votre programme, affichez votre QR et commencez à fidéliser vos clients en quelques minutes.
+
+Messages à privilégier :
+
+```text
+pas de carte plastique ou papier à perdre
+pas de terminal supplémentaire
+pas d'application client obligatoire
+programme personnalisable
+utilisable depuis un simple téléphone
+```
+
+Retiko ne doit pas être vendu comme « un QR code ». Le produit doit progressivement démontrer son impact sur :
+
+```text
+retour client
+fréquence de visite
+récompenses utilisées
+engagement fidélité
+```
+
+---
+
+# 28. Tarification de lancement
+
+Tarification publique retenue :
+
+## Offre annuelle principale
+
+```text
+290 € HT / an
+```
+
+Équivalent :
+
+```text
+24,17 € HT / mois
+```
+
+Par rapport au mensuel à 29 € :
+
+```text
+58 € économisés par an
+≈ 2 mois offerts
+```
+
+**L’offre annuelle est l’offre mise en avant par défaut dans l’application et dans le discours commercial.**
+
+## Offre mensuelle secondaire
+
+```text
+29 € HT / mois
+```
+
+Elle reste disponible afin de ne pas bloquer un commerçant qui refuse un engagement annuel.
+
+Le mensuel ne doit pas être présenté comme l’offre principale.
+
+Les éventuelles offres « fondateur » doivent rester limitées aux premiers pilotes et ne doivent pas dégrader durablement le prix public.
+
+---
+
+# 29. Paiement intégré dans Retiko
+
+Après validation du pilote, le paiement doit se faire directement depuis Retiko via Stripe.
+
+Parcours cible :
+
+```text
+création du compte
+↓
+30 jours gratuits
+↓
+rappels avant fin d'essai
+↓
+choix de l'offre
+↓
+290 € HT / an recommandé
+ou 29 € HT / mois
+↓
+Stripe Checkout
+↓
+abonnement actif
+```
+
+Pour les pilotes initiaux, aucune carte n’est demandée au début de l’essai.
+
+Stripe doit gérer autant que possible :
+
+```text
+paiement CB
+récurrence
+factures
+reçus
+échec de paiement
+mise à jour du moyen de paiement
+annulation
+historique de facturation
+```
+
+Une section `Facturation` dans Retiko doit afficher au minimum :
+
+```text
+offre actuelle
+statut abonnement
+prochaine échéance
+bouton Gérer mon abonnement
+```
+
+Le bouton doit ouvrir le Stripe Customer Portal ou équivalent.
+
+---
+
+# 30. Fin d’essai gratuit
+
+À la fin des 30 jours, si aucun abonnement n’est souscrit :
+
+```text
+statut = TRIAL_EXPIRED
+```
+
+Les données ne sont pas supprimées immédiatement.
+
+Le commerçant peut encore :
+
+```text
+se connecter
+voir son dashboard
+voir ses données existantes
+accéder à la facturation
+reprendre un abonnement
+```
+
+Les fonctions opérationnelles peuvent être suspendues :
+
+```text
+nouveaux crédits
+scanner opérationnel
+nouvelles inscriptions
+récompenses consommées
+```
+
+Un bandeau clair doit inviter à activer l’abonnement.
+
+Objectif : permettre une conversion tardive sans obliger le commerce à recommencer sa configuration.
+
+---
+
+# 31. Wallet
+
+Pour la V0 :
 
 ```text
 carte web = produit fonctionnel
@@ -929,69 +1106,129 @@ PWA = accès rapide
 Wallet = confort et rétention
 ```
 
-Apple/Google peuvent être activés pendant le pilote.
+Apple Wallet et Google Wallet peuvent être activés pendant ou après les premiers pilotes.
 
-Aucune conclusion quantitative forte ne doit être tirée d’une comparaison séquentielle semaine 1 / semaine 2 sur trois commerces.
+Ils ne bloquent ni le premier pilote ni le début de la prospection.
 
-Pendant le pilote on mesure seulement :
+Mesures utiles :
 
 ```text
 nombre d'ajouts Wallet
 problèmes observés
 usage réel
-feedback clients
+feedback client
 feedback commerce
 ```
 
 ---
 
-# 25. Ce qui est explicitement hors V0
+# 32. Ce qui reste hors lancement initial
 
-Pour empêcher Retiko de se transformer de nouveau en ERP de fidélité avant d’avoir trois utilisateurs :
+Pour éviter de transformer Retiko en ERP avant d’avoir validé les ventes :
 
 | Fonctionnalité | Moment |
 |---|---|
-| analytics avancées | après pilote |
-| campagnes marketing | après pilote |
-| segmentation clients | après pilote |
-| Stripe | après validation |
-| pricing définitif | après retours |
-| multi-établissements | après demande |
+| analytics avancées | après données terrain |
+| campagnes marketing automatisées | après pilote |
+| segmentation client avancée | après pilote |
+| multi-établissements avancé | après demande réelle |
 | admin avancé | après pilote |
-| permissions extrêmement granulaires | après pilote |
+| permissions extrêmement granulaires | après besoin réel |
 | MFA | V1 |
 | PIN caisse | selon retour |
 | API publique | plus tard |
 | BI avancée | avec vraies données |
+| intégrations caisse/POS | après validation commerciale |
+
+L’intégration caisse peut devenir stratégique, notamment pour les commerces créditant les points selon le montant dépensé, mais elle ne doit pas retarder les premiers clients.
 
 ---
 
-# 26. Ordre d’exécution définitif
+# 33. Go / No-Go avant prospection
+
+La prospection commerciale active peut commencer lorsque les points suivants sont validés :
+
+```text
+[ ] retiko.fr opérationnel
+[ ] création de compte fonctionnelle
+[ ] connexion / déconnexion fonctionnelles
+[ ] /api/health vert
+[ ] base Neon production reliée
+[ ] programme fidélité configurable
+[ ] QR commerce fonctionnel
+[ ] inscription client fonctionnelle
+[ ] carte client fonctionnelle
+[ ] scanner fonctionnel
+[ ] code court fonctionnel
+[ ] crédit fonctionnel
+[ ] récompense fonctionnelle
+[ ] récupération email fonctionnelle
+[ ] test iPhone réel effectué
+[ ] test Android réel effectué
+[ ] isolation tenant validée
+[ ] procédure incident prête
+[ ] politique de confidentialité prête
+[ ] accord pilote prêt
+[ ] prix public fixé
+[ ] offre annuelle configurée
+[ ] démonstration prête
+[ ] support commercial prêt
+[ ] liste de 50 prospects prête
+```
+
+Stripe n’a pas besoin d’être activé avant le tout premier pilote gratuit, mais doit être prêt avant la première conversion payante.
+
+---
+
+# 34. Ordre d’exécution jusqu’au lancement commercial
 
 | Ordre | Chantier |
 |---:|---|
-| **1** | Domaine définitif |
-| **2** | Production Vercel + Neon + secrets |
-| **3** | `/api/health` vert |
-| **4** | PWA iOS/Android testée |
-| **5** | Carte web complète |
-| **6** | Auto-refresh contrôlé |
-| **7** | Scanner rush-safe |
-| **8** | Code court manuel |
-| **9** | Cooldown + override audité |
-| **10** | Ajustement manuel audité |
-| **11** | Resend + récupération sécurisée |
-| **12** | Instrumentation pilote |
-| **13** | Monitoring erreurs |
-| **14** | Onboarding < 5 min |
-| **15** | QR/A4 définitif |
-| **16** | RGPD + accord pilote |
-| **17** | Playwright boucle principale |
-| **18** | Playwright isolation tenant |
-| **19** | Premier commerce pilote |
+| **1** | Production Vercel + Neon + secrets |
+| **2** | `/api/health` entièrement vert |
+| **3** | Parcours signup/login réel |
+| **4** | Parcours client complet en production |
+| **5** | Validation isolation tenant / migration sécurité |
+| **6** | Resend + récupération sécurisée |
+| **7** | PWA iPhone réelle |
+| **8** | PWA Android réelle |
+| **9** | Test scanner conditions de caisse |
+| **10** | Onboarding par type de commerce |
+| **11** | QR/A4 commercial définitif |
+| **12** | RGPD + accord pilote |
+| **13** | Démo commerciale < 5 min |
+| **14** | Landing page orientée commerces de proximité |
+| **15** | Tarification annuelle 290 € / mensuelle 29 € présentée |
+| **16** | Liste initiale de 50 prospects |
+| **17** | Répétition commerciale |
+| **18** | Prospection physique Corrèze |
+| **19** | Premier pilote |
 | **20** | Corrections terrain |
-| **21** | Commerces pilotes 2 et 3 |
-| **22** | Wallet réel |
-| **23** | roadmap V1 décidée avec les données |
+| **21** | Pilotes 2 et 3 |
+| **22** | Stripe avant première conversion payante |
+| **23** | Conversion annuelle prioritaire |
+| **24** | Extension de la prospection au Puy-de-Dôme |
+| **25** | Wallet et roadmap V1 selon les données |
 
-La différence essentielle avec le tout premier cahier des charges est maintenant nette : **on ne construit plus Retiko pour compléter une liste de fonctionnalités. On construit exactement ce qu’il faut pour survivre une semaine derrière une vraie caisse et apprendre quelque chose de fiable.**
+---
+
+# 35. Principe directeur
+
+Retiko n’est plus développé pour accumuler des fonctionnalités.
+
+La priorité est désormais :
+
+```text
+produit stable
+→ premier commerce réel
+→ usage mesuré
+→ conversion payante
+→ rétention
+→ répétition de la vente
+```
+
+Le produit doit pouvoir être vendu à plusieurs métiers sans devenir un logiciel différent pour chacun.
+
+Le premier avantage commercial recherché est la simplicité : remplacer une carte papier ou l’absence totale de programme fidélité par une expérience digitale immédiatement compréhensible.
+
+La première preuve de marché n’est pas le nombre de fonctionnalités livrées. C’est le nombre de commerces qui utilisent réellement Retiko après la période gratuite et acceptent de payer, avec une préférence donnée à l’abonnement annuel.
