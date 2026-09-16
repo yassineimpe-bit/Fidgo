@@ -66,8 +66,11 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
 
       if (!response.ok) {
         if (data.error === "CARD_ALREADY_EXISTS") {
-          setError(RECOVERY_MESSAGE);
-          if (recoveryEnabled) await requestRecovery(email);
+          if (recoveryEnabled) {
+            await requestRecovery(email);
+          } else {
+            setError(RECOVERY_MESSAGE);
+          }
           return;
         }
         if (data.error === "RATE_LIMITED") {
