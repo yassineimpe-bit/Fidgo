@@ -3,6 +3,7 @@ import postgres from "postgres";
 import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
 
 async function tokenForNewCustomer(page: Page, label: string) {
+  await page.goto("/dashboard");
   const card = await enrollCustomer(page, label, `${unique(label)}@example.com`);
   return card.cardUrl.split("/c/")[1];
 }
