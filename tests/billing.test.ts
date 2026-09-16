@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBillingRuntimeStatus, isBillingInterval } from "../lib/billing";
+import { checkoutTrialEnd, getBillingRuntimeStatus, isBillingInterval } from "../lib/billing";
 
 describe("billing runtime status", () => {
   it("reports disabled by default", () => {
@@ -39,5 +39,24 @@ describe("billing interval", () => {
     expect(isBillingInterval("annual")).toBe(true);
     expect(isBillingInterval("yearly")).toBe(false);
     expect(isBillingInterval(undefined)).toBe(false);
+  });
+});
+
+describe("checkout trial deadline", () => {
+  const now = Date.UTC(2026, 8, 16, 8, 0, 0);
+
+  it("preserves the original trial end instead of granting another 30 days", () => {
+    const end = new Date(now + 10 * 24 * 60 * 60 * 1000);
+    expect(checkoutTrialEnd(end, now)).toBe(Math.floor(end.getTime() / 1000));
+  });
+
+  it("does not extend a trial when Stripe can no longer accept the original deadline", () => {
+    const end = new Date(now + 24 * 60 * 60 * 1000);
+    expect(checkoutTrialEnd(end, now)).toBeNull();
+  });
+
+  it("ignores missing or invalid trial dates", () => {
+    expect(checkoutTrialEnd(null, now)).toBeNull();
+    expect(checkoutTrialEnd("not-a-date", now)).toBeNull();
   });
 });
