@@ -81,6 +81,10 @@ test("isolation tenant : le commerce A ne peut agir sur aucune ressource du comm
     const foreignTransactionId = (await history.json())[0]?.id;
     expect(foreignTransactionId).toBeTruthy();
 
+    const historyA = await pageA.request.get("/api/history");
+    expect(historyA.ok()).toBeTruthy();
+    expect((await historyA.json()).some((transaction: { id: string }) => transaction.id === foreignTransactionId)).toBe(false);
+
     const reverse = await pageA.request.post("/api/transactions/reverse", {
       headers: { origin },
       data: { transactionId: foreignTransactionId, idempotencyKey: crypto.randomUUID() },
@@ -104,6 +108,50 @@ test("isolation tenant : le commerce A ne peut agir sur aucune ressource du comm
       data: { active: false },
     });
     expect(patchEmployee.status()).toBe(404);
+
+    const employeeListA = await (await pageA.request.get("/api/employees")).json();
+    expect(employeeListA.some((employee: { id: string }) => employee.id === foreignEmployeeId)).toBe(false);
+
+    // --- programme, commerce et analytics : les identifiants injectés dans
+    // le body sont ignorés, la session reste l'unique source du tenant. ---
+    const restaurantB = await (await pageB.request.get("/api/restaurant")).json();
+    const programB = await (await pageB.request.get("/api/program")).json();
+
+    const patchProgramA = await pageA.request.patch("/api/program", {
+      headers: { origin },
+      data: {
+        establishmentId: restaurantB.id,
+        programName: "Programme A audité",
+        mode: "STAMPS",
+        pointsRule: "PER_PURCHASE",
+        rewardThreshold: 7,
+        rewardLabel: "Récompense A",
+        stampsPerVisit: 1,
+        pointsPerPurchase: 10,
+        pointsPerEuro: 1,
+        dailyEarnLimit: 0,
+        cooldownSeconds: 120,
+        expiresAfterDays: null,
+      },
+    });
+    expect(patchProgramA.ok()).toBeTruthy();
+    const unchangedProgramB = await (await pageB.request.get("/api/program")).json();
+    expect(unchangedProgramB.program_name).toBe(programB.program_name);
+    expect(unchangedProgramB.reward_threshold).toBe(programB.reward_threshold);
+
+    const patchRestaurantA = await pageA.request.patch("/api/restaurant", {
+      headers: { origin },
+      data: { id: restaurantB.id, name: "Commerce A isolé", primaryColor: "#123456" },
+    });
+    expect(patchRestaurantA.ok()).toBeTruthy();
+    const unchangedRestaurantB = await (await pageB.request.get("/api/restaurant")).json();
+    expect(unchangedRestaurantB.name).toBe(restaurantB.name);
+
+    const analyticsA = await (await pageA.request.get("/api/dashboard")).json();
+    expect(analyticsA.customers).toBe(0);
+
+    await pageA.goto("/dashboard/clients");
+    await expect(pageA.getByText(foreignEmail)).toHaveCount(0);
 
     // --- le commerce B, lui, garde bien accès à ses propres ressources ---
     const ownExport = await pageB.request.get(`/api/customers/${foreignCustomerId}/export`);

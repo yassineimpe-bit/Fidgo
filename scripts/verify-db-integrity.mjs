@@ -11,6 +11,11 @@ const expectedTenantConstraints = [
   "transactions_card_same_tenant_fk",
   "transactions_staff_same_tenant_fk",
   "wallet_passes_card_same_tenant_fk",
+  "product_events_card_same_tenant_fk",
+  "product_events_staff_same_tenant_fk",
+  "audit_logs_staff_same_tenant_fk",
+  "audit_logs_staff_requires_tenant_check",
+  "transactions_reversal_same_tenant_fk",
 ];
 
 try {
@@ -50,6 +55,20 @@ try {
         where a.staff_user_id is not null
           and (a.establishment_id is null or a.establishment_id <> s.establishment_id)
       ) as audit_staff_mismatches
+      ,(
+        select count(*)::int
+        from transactions r
+        join transactions original on original.id=r.reversed_transaction_id
+        where r.establishment_id <> original.establishment_id
+      ) as reversal_tenant_mismatches
+      ,(
+        select count(*)::int
+        from transactions
+        where reversed_transaction_id is not null
+        group by reversed_transaction_id
+        having count(*) > 1
+        limit 1
+      ) as duplicate_reversals
   `;
 
   const constraints = await sql`
@@ -67,6 +86,8 @@ try {
   if (Number(tenantData.product_event_card_mismatches) > 0) failures.push(`${tenantData.product_event_card_mismatches} product_event(s) lié(s) à une carte d'un autre tenant`);
   if (Number(tenantData.product_event_staff_mismatches) > 0) failures.push(`${tenantData.product_event_staff_mismatches} product_event(s) lié(s) à un staff d'un autre tenant`);
   if (Number(tenantData.audit_staff_mismatches) > 0) failures.push(`${tenantData.audit_staff_mismatches} audit_log(s) avec acteur hors tenant ou tenant absent`);
+  if (Number(tenantData.reversal_tenant_mismatches) > 0) failures.push(`${tenantData.reversal_tenant_mismatches} annulation(s) liée(s) à un autre tenant`);
+  if (Number(tenantData.duplicate_reversals) > 0) failures.push("transaction(s) annulée(s) plusieurs fois");
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
   console.log(`Soldes négatifs : ${summary.negative_balances}`);
@@ -75,6 +96,8 @@ try {
   console.log(`Événements carte cross-tenant : ${tenantData.product_event_card_mismatches}`);
   console.log(`Événements staff cross-tenant : ${tenantData.product_event_staff_mismatches}`);
   console.log(`Audits staff cross-tenant/tenant absent : ${tenantData.audit_staff_mismatches}`);
+  console.log(`Annulations cross-tenant : ${tenantData.reversal_tenant_mismatches}`);
+  console.log(`Transactions annulées plusieurs fois : ${tenantData.duplicate_reversals || 0}`);
 
   if (failures.length > 0) {
     console.error(`Intégrité DB invalide : ${failures.join(" ; ")}`);
