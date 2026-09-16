@@ -1,4 +1,4 @@
-# API MVP
+# API MVP Retiko
 
 ## Public
 
@@ -11,6 +11,9 @@ Crée une session commerçant httpOnly de 12 h. Protection anti-bruteforce par c
 ### `POST /api/enroll`
 Entrée : `slug`, `firstName?`, `email`, `phone?`, `marketingConsent`.
 Retour : `token`, `short_code`, `balance`. L'email est obligatoire depuis la V0 (récupération de carte) ; prénom et téléphone restent facultatifs.
+
+### `POST /api/recovery/request`
+Entrée : `slug`, `email`. La réponse publique est volontairement identique qu'une carte existe ou non. Un email n'est réellement envoyé que si une carte active correspond à l'adresse.
 
 ### `POST /api/events`
 Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAILED` pour un membre du staff authentifié. Les événements scanner acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
@@ -38,7 +41,7 @@ Applique aussi cooldown, limite quotidienne, verrou `FOR UPDATE` et idempotence.
 Un OWNER/MANAGER peut dépasser le cooldown avec `overrideReason`. Le motif est obligatoire et produit un audit `CARD_ADJUSTED`.
 
 ### `POST /api/redeem`
-Consomme exactement le seuil de récompense configuré.
+Consomme exactement le seuil de récompense configuré. **Staff-only** : une session staff authentifiée avec droit de scan est obligatoire. La carte publique `/c/{token}` affiche qu'une récompense est disponible mais ne peut jamais la consommer.
 
 ### `POST /api/transactions/reverse`
 OWNER/MANAGER seulement. Crée une transaction inverse. Une transaction de type `reversal` ne peut pas être inversée à nouveau.
