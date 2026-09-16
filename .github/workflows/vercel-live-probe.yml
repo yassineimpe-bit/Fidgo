@@ -3,6 +3,8 @@ name: vercel-live-probe
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,36 +13,86 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
-      - name: Probe Retiko public production
+      - name: Verify Retiko public surface
         shell: bash
         run: |
-          set +e
-          for url in \
-            "https://retiko.fr/" \
-            "https://retiko.fr/api/health" \
-            "https://www.retiko.fr/"; do
-            echo "===== $url ====="
-            rm -f /tmp/headers /tmp/body
-            code=$(curl --silent --show-error --max-time 20 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$url")
-            rc=$?
-            echo "curl_rc=$rc http_code=$code"
-            echo "--- headers ---"
-            head -n 20 /tmp/headers 2>/dev/null || true
-            echo "--- body ---"
-            head -c 1500 /tmp/body 2>/dev/null || true
-            echo
-          done
+          set -euo pipefail
 
-          echo "===== www redirect check ====="
-          location=$(curl --silent --show-error --max-time 20 -I https://www.retiko.fr/ \
-            | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, "", $2); print $2; exit}')
-          echo "location=${location:-<none>}"
-          if [ "$location" != "https://retiko.fr/" ] && [ "$location" != "https://retiko.fr" ]; then
-            echo "::warning::www.retiko.fr is not redirecting to the canonical retiko.fr URL yet. DNS may still be propagating."
+          apex="https://retiko.fr"
+          www="https://www.retiko.fr"
+
+          echo "===== apex ====="
+          rm -f /tmp/apex-headers /tmp/apex-body
+          apex_code=$(curl --silent --show-error --max-time 20 \
+            -D /tmp/apex-headers -o /tmp/apex-body -w '%{http_code}' "$apex/")
+          test "$apex_code" = "200" || { echo "::error::retiko.fr returned HTTP $apex_code"; exit 1; }
+          grep -qi 'Retiko' /tmp/apex-body || { echo "::error::retiko.fr homepage does not contain Retiko branding"; exit 1; }
+
+          header_value() {
+            local key="$1"
+            awk -v wanted="$key" 'BEGIN{IGNORECASE=1} $1 == wanted":" {sub(/\r$/, "", $2); print $2; exit}' /tmp/apex-headers
+          }
+
+          test "$(header_value X-Content-Type-Options)" = "nosniff" || { echo "::error::Missing X-Content-Type-Options: nosniff"; exit 1; }
+          test "$(header_value X-Frame-Options)" = "DENY" || { echo "::error::Missing X-Frame-Options: DENY"; exit 1; }
+          test "$(header_value Referrer-Policy)" = "strict-origin-when-cross-origin" || { echo "::error::Unexpected Referrer-Policy"; exit 1; }
+          grep -qi '^strict-transport-security:.*max-age=' /tmp/apex-headers || { echo "::error::Missing HSTS header"; exit 1; }
+          if grep -qi '^x-powered-by:' /tmp/apex-headers; then
+            echo "::error::X-Powered-By should stay disabled"
+            exit 1
           fi
 
-          # Diagnostic workflow only. The blocking production readiness gate is
-          # production-smoke.yml, which requires database/auth to be healthy.
-          exit 0
+          echo "===== www canonical redirect ====="
+          rm -f /tmp/www-headers
+          www_code=$(curl --silent --show-error --max-time 20 \
+            -D /tmp/www-headers -o /dev/null -w '%{http_code}' "$www/")
+          test "$www_code" = "308" || { echo "::error::www.retiko.fr must return 308, got $www_code"; exit 1; }
+          location=$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, "", $2); print $2; exit}' /tmp/www-headers)
+          if [ "$location" != "$apex" ] && [ "$location" != "$apex/" ]; then
+            echo "::error::www.retiko.fr redirects to '${location:-<none>}' instead of $apex"
+            exit 1
+          fi
+
+          echo "===== PWA manifest ====="
+          rm -f /tmp/manifest-headers /tmp/manifest
+          manifest_code=$(curl --silent --show-error --max-time 20 \
+            -D /tmp/manifest-headers -o /tmp/manifest -w '%{http_code}' "$apex/manifest.webmanifest")
+          test "$manifest_code" = "200" || { echo "::error::manifest.webmanifest returned HTTP $manifest_code"; exit 1; }
+          jq -e '.name == "Retiko" and .short_name == "Retiko" and .display == "standalone" and .start_url == "/s"' /tmp/manifest >/dev/null \
+            || { echo "::error::Retiko manifest is missing required install metadata"; cat /tmp/manifest; exit 1; }
+          grep -qi '^content-type:.*\(application/manifest+json\|application/json\)' /tmp/manifest-headers \
+            || { echo "::error::Unexpected manifest Content-Type"; exit 1; }
+
+          echo "===== PWA public assets ====="
+          for asset in icon-192.png icon-512.png apple-touch-icon.png; do
+            rm -f /tmp/asset-headers
+            code=$(curl --silent --show-error --max-time 20 \
+              -D /tmp/asset-headers -o /dev/null -w '%{http_code}' "$apex/$asset")
+            test "$code" = "200" || { echo "::error::$asset returned HTTP $code"; exit 1; }
+            grep -qi '^content-type:.*image/png' /tmp/asset-headers \
+              || { echo "::error::$asset is not served as image/png"; exit 1; }
+          done
+
+          rm -f /tmp/sw-headers /tmp/sw
+          sw_code=$(curl --silent --show-error --max-time 20 \
+            -D /tmp/sw-headers -o /tmp/sw -w '%{http_code}' "$apex/sw.js")
+          test "$sw_code" = "200" || { echo "::error::sw.js returned HTTP $sw_code"; exit 1; }
+          grep -q 'retiko-shell-' /tmp/sw || { echo "::error::sw.js does not expose the Retiko cache namespace"; exit 1; }
+
+          echo "===== runtime health (diagnostic until secrets are configured) ====="
+          rm -f /tmp/health
+          health_code=$(curl --silent --show-error --max-time 20 \
+            -o /tmp/health -w '%{http_code}' "$apex/api/health" || true)
+          echo "health HTTP $health_code"
+          cat /tmp/health 2>/dev/null || true
+          echo
+          if [ "$health_code" = "200" ]; then
+            jq -e '.ok == true and .service == "retiko"' /tmp/health >/dev/null \
+              || { echo "::error::Health returned 200 with an invalid payload"; exit 1; }
+          elif [ "$health_code" != "503" ]; then
+            echo "::warning::Unexpected health status $health_code; production-smoke owns the blocking runtime readiness gate."
+          fi
+
+          echo "Retiko public surface is healthy."
