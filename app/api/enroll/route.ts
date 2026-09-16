@@ -6,20 +6,16 @@ import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 /**
  * Detecte un client deja inscrit SANS jamais exposer son token de carte.
  *
- * L'ancienne version renvoyait token/short_code/balance de la carte existante
- * sur une route non authentifiee : quiconque connaissait le slug public du
- * commerce et l'email d'un client recuperait sa carte, pouvait l'ajouter a son
- * propre Wallet et consommer sa recompense en caisse. C'etait aussi un oracle
- * RGPD ("cette adresse est-elle cliente de ce commerce ?").
+ * La recuperation d'une carte existante passe exclusivement par le lien magique
+ * envoye a l'adresse email concernee. Le telephone reste une donnee optionnelle.
  */
-async function existingCustomerId(establishmentId: string, email: string | null, phone: string | null) {
-  if (!email && !phone) return null;
+async function existingCustomerId(establishmentId: string, email: string, phone: string | null) {
   const [existing] = await sql`
     select u.id
     from customers u
     where u.establishment_id = ${establishmentId}
       and u.deleted_at is null
-      and ((${email}::text is not null and lower(u.email) = lower(${email}))
+      and (lower(u.email) = lower(${email})
         or (${phone}::text is not null and u.phone = ${phone}))
     limit 1
   `;
@@ -32,19 +28,17 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const slug = String(body.slug || "").trim().slice(0, 60);
-  const email = body.email ? String(body.email).trim().toLowerCase().slice(0, 254) : null;
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
   const phone = body.phone ? String(body.phone).trim().slice(0, 40) : null;
   const firstName = body.firstName ? String(body.firstName).trim().slice(0, 80) : null;
   const marketingConsent = body.marketingConsent === true;
 
-  if (!slug || (email && !/^\S+@\S+\.\S+$/.test(email))) {
-    return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (!slug || !/^\S+@\S+\.\S+$/.test(email)) {
+    return Response.json({ error: "INVALID_INPUT" }, { status: 400, headers: PRIVATE_HEADERS });
   }
 
-  // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit
-  // largement a un commerce reel et coupe l'enumeration de masse.
   const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${slug}`, 15, 60 * 60);
-  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429, headers: PRIVATE_HEADERS });
 
   const [establishment] = await sql`
     select e.id, e.status, p.expires_after_days
@@ -54,12 +48,10 @@ export async function POST(req: Request) {
     limit 1
   `;
   if (!establishment || establishment.status !== "active") {
-    return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404 });
+    return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404, headers: PRIVATE_HEADERS });
   }
 
   if (await existingCustomerId(establishment.id, email, phone)) {
-    // Reponse volontairement muette : on confirme au visiteur legitime qu'il a
-    // deja une carte, sans livrer le moindre identifiant exploitable.
     return Response.json({ error: "CARD_ALREADY_EXISTS" }, { status: 409, headers: PRIVATE_HEADERS });
   }
 
@@ -91,12 +83,11 @@ export async function POST(req: Request) {
     } catch (error) {
       const codeValue = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
       if (codeValue !== "23505") throw error;
-      // Course entre deux inscriptions simultanees : on refuse, sans rien divulguer.
       if (await existingCustomerId(establishment.id, email, phone)) {
         return Response.json({ error: "CARD_ALREADY_EXISTS" }, { status: 409, headers: PRIVATE_HEADERS });
       }
     }
   }
 
-  return Response.json({ error: "ENROLL_RETRY" }, { status: 503 });
+  return Response.json({ error: "ENROLL_RETRY" }, { status: 503, headers: PRIVATE_HEADERS });
 }
