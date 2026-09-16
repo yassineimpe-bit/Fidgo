@@ -1,4 +1,4 @@
-# Fidgo
+# Retiko
 
 SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, boulangeries et petits commerces alimentaires.
 
@@ -10,13 +10,13 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - création/désactivation d'accès caisse ;
 - programme **tampons ou points** ;
 - points fixes par achat **ou** points calculés par euro ;
-- inscription client avec données facultatives et consentement marketing séparé ;
+- inscription client avec email obligatoire, téléphone facultatif et consentement marketing séparé ;
 - carte web mobile + QR sécurisé `LOY1:<token>` ;
-- mise à jour automatique du solde quand la carte reste visible ;
-- scanner caisse caméra toujours ouverte ;
+- mise à jour automatique du solde quand la carte reste visible, avec token hors URL de polling ;
+- scanner caisse caméra toujours ouverte + recherche code court ;
 - crédit transactionnel, idempotence, cooldown et limite quotidienne ;
 - override du cooldown et ajustement manuel réservés aux responsables, avec motif et audit ;
-- redeem de récompense ;
+- consommation de récompense réservée à une session staff authentifiée ;
 - ledger append-only + annulation par écriture inverse ;
 - dashboard, clients et historique ;
 - export/effacement RGPD ;
@@ -24,7 +24,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - affiche QR A4 ;
 - PWA minimale et instrumentation p50/p95 QR → validation ;
 - événements pilote persistés sans token brut ni coordonnées client ;
-- récupération de carte par email avec jeton à usage unique ;
+- récupération de carte par email avec jeton à usage unique et réponse anti-énumération ;
 - schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
 - anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
 
@@ -32,7 +32,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 
 - émission réelle Apple Wallet / Google Wallet ;
 - Web Push et campagnes ;
-- Stripe ;
+- Stripe avancé / plans multiples ;
 - multi-sites ;
 - analytics avancées.
 
@@ -41,6 +41,10 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 > Détecter la carte et effectuer l'action fidélité en moins de 3 secondes pendant un rush.
 
 Gate terrain : **30 scans, p95 < 2,5 s, zéro double crédit**.
+
+## Domaine pilote
+
+Le domaine produit définitif est `retiko.fr`. Tant que le DNS OVH n'est pas attaché à Vercel, l'ancien domaine Vercel reste uniquement un endpoint technique de transition et ne doit pas apparaître sur des supports imprimés.
 
 ## Démarrage
 
