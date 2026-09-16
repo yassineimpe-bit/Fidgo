@@ -21,7 +21,7 @@ async function enrollCustomer(page: Page, firstName: string, email: string) {
   expect(joinPath).toMatch(/^\/j\//);
   await page.goto(joinPath!);
   await page.getByLabel(/Prénom/).fill(firstName);
-  await page.getByLabel(/Email/).fill(email);
+  await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Créer ma carte" }).click();
   await expect(page).toHaveURL(/\/c\//);
   const cardUrl = page.url();
@@ -43,6 +43,10 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   const { cardUrl, shortCode } = await enrollCustomer(page, "Camille", customerEmail);
 
   const cardPage = await page.context().newPage();
+  const pollingUrls: string[] = [];
+  cardPage.on("request", (request) => {
+    if (request.url().includes("/api/card/")) pollingUrls.push(request.url());
+  });
   await cardPage.goto(cardUrl);
   await expect(cardPage.getByText("0 / 10")).toBeVisible();
 
@@ -50,6 +54,10 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   await page.getByRole("button", { name: "+1 tampon" }).click();
   await expect(page.getByText("+1 validé")).toBeVisible();
   await expect(cardPage.getByText("1 / 10")).toBeVisible({ timeout: 8_000 });
+
+  const token = cardUrl.split("/c/")[1];
+  expect(pollingUrls.some((url) => new URL(url).pathname === "/api/card/status")).toBeTruthy();
+  expect(pollingUrls.every((url) => !url.includes(token))).toBeTruthy();
 
   await page.waitForTimeout(1_400);
   await openCardInScanner(page, shortCode);
@@ -76,6 +84,18 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   await page.getByRole("button", { name: "Utiliser récompense" }).click();
   await expect(page.getByText(/utilisée/)).toBeVisible();
   await expect(cardPage.getByText("0 / 10")).toBeVisible({ timeout: 8_000 });
+});
+
+test("récompense : une carte client ne peut pas consommer sans session staff", async ({ page, request }) => {
+  await createMerchant(page, "redeem-auth");
+  const { cardUrl } = await enrollCustomer(page, "Lina", `${unique("redeem-client")}@example.com`);
+  const token = cardUrl.split("/c/")[1];
+
+  const response = await request.post("/api/redeem", {
+    headers: { origin },
+    data: { token, idempotencyKey: crypto.randomUUID() },
+  });
+  expect(response.status()).toBe(401);
 });
 
 test("isolation tenant : un commerce ne retrouve pas la carte d’un autre", async ({ browser }) => {
