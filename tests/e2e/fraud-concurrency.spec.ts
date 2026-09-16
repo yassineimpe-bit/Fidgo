@@ -1,11 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
+import { createMerchant, origin, unique } from "./helpers";
 
-async function tokenForNewCustomer(page: Page, label: string) {
-  await page.goto("/dashboard");
-  const card = await enrollCustomer(page, label, `${unique(label)}@example.com`);
-  return card.cardUrl.split("/c/")[1];
+async function tokenForNewCustomer(page: Page, label: string, slug: string) {
+  const response = await page.request.post("/api/enroll", {
+    headers: { origin },
+    data: {
+      slug,
+      firstName: label,
+      email: `${unique(label)}@example.com`,
+      marketingConsent: false,
+    },
+  });
+  expect(response.status()).toBe(201);
+  return String((await response.json()).token);
 }
 
 async function credit(page: Page, token: string, idempotencyKey = crypto.randomUUID(), extra: Record<string, unknown> = {}) {
@@ -24,6 +32,7 @@ async function scanBalance(page: Page, token: string) {
 test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent cohérents", async ({ page }) => {
   test.setTimeout(90_000);
   await createMerchant(page, "fraud-concurrency");
+  const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
   const secondDevice = await page.context().browser()!.newContext({
     storageState: await page.context().storageState(),
@@ -31,7 +40,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
   const secondDevicePage = await secondDevice.newPage();
 
   try {
-    const sameKeyToken = await tokenForNewCustomer(page, "same-key");
+    const sameKeyToken = await tokenForNewCustomer(page, "same-key", restaurant.slug);
     const sameKey = crypto.randomUUID();
     const sameKeyResponses = await Promise.all([
       credit(page, sameKeyToken, sameKey),
@@ -42,7 +51,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
     expect(sameKeyBodies.map((body) => body.duplicate).sort()).toEqual([false, true]);
     expect((await scanBalance(page, sameKeyToken)).balance).toBe(1);
 
-    const distinctKeysToken = await tokenForNewCustomer(page, "distinct-keys");
+    const distinctKeysToken = await tokenForNewCustomer(page, "distinct-keys", restaurant.slug);
     const distinctResponses = await Promise.all([
       credit(page, distinctKeysToken),
       credit(secondDevicePage, distinctKeysToken),
@@ -56,7 +65,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
       await expect(response.json()).resolves.toMatchObject({ error: "INVALID_AMOUNT" });
     }
 
-    const redeemToken = await tokenForNewCustomer(page, "double-redeem");
+    const redeemToken = await tokenForNewCustomer(page, "double-redeem", restaurant.slug);
     const customer = await sql`
       select u.id from customers u join cards c on c.customer_id=u.id where c.token=${redeemToken}
     `;
@@ -72,7 +81,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
     expect(redemptions.map((response) => response.status()).sort()).toEqual([200, 409]);
     expect((await scanBalance(page, redeemToken)).balance).toBe(0);
 
-    const overrideToken = await tokenForNewCustomer(page, "override-race");
+    const overrideToken = await tokenForNewCustomer(page, "override-race", restaurant.slug);
     expect((await credit(page, overrideToken)).ok()).toBeTruthy();
     const observed = await scanBalance(page, overrideToken);
     const overrides = await Promise.all([
@@ -104,7 +113,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
       },
     });
     expect(programUpdate.ok()).toBeTruthy();
-    const mixedToken = await tokenForNewCustomer(page, "redeem-credit");
+    const mixedToken = await tokenForNewCustomer(page, "redeem-credit", restaurant.slug);
     const [mixedCustomer] = await sql`
       select u.id from customers u join cards c on c.customer_id=u.id where c.token=${mixedToken}
     `;
@@ -119,7 +128,7 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
     expect(mixed.every((response) => response.ok())).toBe(true);
     expect((await scanBalance(page, mixedToken)).balance).toBe(1);
 
-    const reverseToken = await tokenForNewCustomer(page, "double-reverse");
+    const reverseToken = await tokenForNewCustomer(page, "double-reverse", restaurant.slug);
     expect((await credit(page, reverseToken)).ok()).toBeTruthy();
     const [reverseCard] = await sql`select id from cards where token=${reverseToken}`;
     const [original] = await sql`
