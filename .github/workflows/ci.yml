@@ -22,6 +22,32 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Audit dependencies
         run: npm audit --audit-level=high
+      - name: Validate production env contract
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://retiko:retiko@db.example.test:5432/retiko?sslmode=require
+          AUTH_SECRET: retiko-ci-production-secret-at-least-32-bytes
+          NEXT_PUBLIC_APP_URL: https://retiko.fr
+          APPLE_WALLET_ENABLED: "false"
+          GOOGLE_WALLET_ENABLED: "false"
+          CARD_RECOVERY_ENABLED: "false"
+        run: npm run env:check
+      - name: Reject technical Vercel URL as canonical production URL
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://retiko:retiko@db.example.test:5432/retiko?sslmode=require
+          AUTH_SECRET: retiko-ci-production-secret-at-least-32-bytes
+          NEXT_PUBLIC_APP_URL: https://fidgo-env-probe.vercel.app
+          APPLE_WALLET_ENABLED: "false"
+          GOOGLE_WALLET_ENABLED: "false"
+          CARD_RECOVERY_ENABLED: "false"
+        shell: bash
+        run: |
+          if npm run env:check; then
+            echo "::error::env:check accepted a non-canonical production URL"
+            exit 1
+          fi
+          echo "Non-canonical production URL correctly rejected."
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
