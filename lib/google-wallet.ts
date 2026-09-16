@@ -87,14 +87,14 @@ function objectBody(card: WalletCard) {
     id: objectId,
     classId,
     state: "ACTIVE",
-    accountName: (card.firstName || "Client Fidgo").slice(0, 20),
+    accountName: (card.firstName || "Client Retiko").slice(0, 20),
     accountId: card.shortCode.slice(0, 20),
     loyaltyPoints: { label: card.mode === "STAMPS" ? "Tampons" : "Points", balance: { int: card.balance } },
     barcode: { type: "QR_CODE", value: `LOY1:${card.token}`, alternateText: card.shortCode },
     textModulesData: [
       { id: "reward", header: "Récompense", body: card.balance >= card.rewardThreshold ? `Disponible : ${card.rewardLabel}` : `${card.rewardThreshold - card.balance} restant(s) avant ${card.rewardLabel}` },
     ],
-    linksModuleData: base ? { uris: [{ uri: `${base}/c/${card.token}`, description: "Voir ma carte Fidgo" }] } : undefined,
+    linksModuleData: base ? { uris: [{ uri: `${base}/c/${card.token}`, description: "Voir ma carte Retiko" }] } : undefined,
   };
 }
 

@@ -6,7 +6,7 @@ export function unique(label: string) {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function testClientIp() {
+export function testClientIp() {
   // Les E2E tournent tous derrière 127.0.0.1. Sans IP logique distincte,
   // les retries Playwright consomment le même bucket de rate-limit signup et
   // un test ultérieur peut recevoir 429 alors que l'application fonctionne.
@@ -14,9 +14,13 @@ function testClientIp() {
   return `2001:db8::${Math.floor(Math.random() * 0xffff).toString(16)}`;
 }
 
+export async function randomizeClientIp(page: Page) {
+  await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
+}
+
 export async function createMerchant(page: Page, label: string) {
   const marker = unique(label);
-  await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
+  await randomizeClientIp(page);
   await page.goto("/signup");
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(`${marker}@example.com`);

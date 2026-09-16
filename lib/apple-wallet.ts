@@ -65,7 +65,7 @@ export async function buildApplePass(card: WalletCard) {
       teamIdentifier: cfg.teamIdentifier,
       serialNumber: card.cardId,
       organizationName: card.restaurantName,
-      description: `${card.programName} - Fidgo`,
+      description: `${card.programName} - Retiko`,
       logoText: card.restaurantName,
       foregroundColor: "rgb(255, 255, 255)",
       labelColor: "rgb(229, 231, 235)",

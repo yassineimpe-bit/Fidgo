@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import QRCode from "qrcode";
+import { getAppUrl } from "@/lib/app-url";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { PrintButton } from "@/components/print-button";
@@ -20,10 +21,11 @@ export default async function PosterPage() {
 
   if (!restaurant) redirect("/dashboard");
 
-  const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const url = `${base.replace(/\/$/, "")}/j/${restaurant.slug}`;
+  const base = getAppUrl() || "http://localhost:3000";
+  const url = `${base}/j/${restaurant.slug}`;
   const qr = await QRCode.toDataURL(url, { width: 900, margin: 1, errorCorrectionLevel: "M" });
   const unit = restaurant.mode === "STAMPS" ? "tampons" : "points";
+  const domain = new URL(base).host;
 
   return (
     <main>
@@ -49,6 +51,7 @@ export default async function PosterPage() {
         <img src={qr} alt="QR inscription fidélité" />
         <p style={{ fontSize: "14pt", marginTop: "8mm", marginBottom: "2mm" }}>Aucune application à télécharger</p>
         <p style={{ fontSize: "10pt", color: "#666", overflowWrap: "anywhere" }}>{url}</p>
+        <p style={{ fontSize: "9pt", color: "#999", marginTop: "4mm" }}>Propulsé par Retiko · {domain}</p>
       </section>
     </main>
   );

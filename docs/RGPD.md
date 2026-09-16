@@ -29,7 +29,9 @@ Modèles de travail présents dans le dépôt :
 
 - `PILOT_AGREEMENT_TEMPLATE.md` pour l'accord pilote ;
 - `DPA_TEMPLATE.md` pour l'annexe de sous-traitance ;
-- `RGPD_PROCEDURES.md` pour l'exercice des droits, les violations de données et la fin de relation.
+- `RGPD_PROCEDURES.md` pour l'exercice des droits, les violations de données et la fin de relation ;
+- `PRIVACY_POLICY_TEMPLATE.md` pour la politique de confidentialité publique ;
+- `MENTIONS_LEGALES_TEMPLATE.md` pour les mentions légales.
 
 ## Sous-traitants techniques
 
