@@ -44,15 +44,18 @@ export function EmployeeManager({ initial }: { initial: Employee[] }) {
       <h3>Ajouter un accès caisse</h3>
       <p className="muted">Crée uniquement les accès nécessaires. Un employé peut scanner et créditer, pas modifier le programme.</p>
       <form className="form" onSubmit={createEmployee}>
-        <div className="field"><label>Email</label><input className="input" name="email" type="email" required autoComplete="off"/></div>
-        <div className="field"><label>Mot de passe temporaire</label><input className="input" name="password" type="password" minLength={8} required autoComplete="new-password"/></div>
-        <div className="field"><label>Rôle</label><select className="select" name="role"><option value="EMPLOYEE">Employé scanner</option><option value="VIEWER">Lecture seule</option></select></div>
+        <div className="field"><label htmlFor="employee-email">Email</label><input className="input" id="employee-email" name="email" type="email" required autoComplete="off"/></div>
+        <div className="field"><label htmlFor="employee-password">Mot de passe temporaire</label><input className="input" id="employee-password" name="password" type="password" minLength={8} required autoComplete="new-password"/></div>
+        <div className="field"><label htmlFor="employee-role">Rôle</label><select className="select" id="employee-role" name="role"><option value="EMPLOYEE">Employé scanner</option><option value="VIEWER">Lecture seule</option></select></div>
         {message && <div className="notice">{message}</div>}
         <button className="btn btn-primary" disabled={busy}>{busy ? "Création…" : "Créer l’accès"}</button>
       </form>
     </section>
     <section className="card">
       <h3>Équipe</h3>
+      {rows.every((row) => ['OWNER', 'MANAGER'].includes(row.role)) && <div className="notice" style={{marginBottom:12}}>
+        Aucun accès caisse créé. Ajoute un accès pour que ton équipe puisse scanner sans partager ton mot de passe owner.
+      </div>}
       <div className="table-wrap"><table><thead><tr><th>Email</th><th>Rôle</th><th>État</th><th></th></tr></thead><tbody>
         {rows.map((employee) => <tr key={employee.id}><td>{employee.email}</td><td>{employee.role}</td><td>{employee.active ? "Actif" : "Coupé"}</td><td>{!['OWNER','MANAGER'].includes(employee.role) && <button className="btn" onClick={() => toggle(employee)}>{employee.active ? "Désactiver" : "Réactiver"}</button>}</td></tr>)}
       </tbody></table></div>

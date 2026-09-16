@@ -29,6 +29,7 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
     updatedAt: initialUpdatedAt,
   });
   const [idle, setIdle] = useState(false);
+  const [justUpdated, setJustUpdated] = useState(false);
   const lastInteraction = useRef(Date.now());
 
   const refresh = useCallback(async () => {
@@ -42,7 +43,13 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
       });
       if (!response.ok) return;
       const next = await response.json() as CardStatus;
-      setStatus(next);
+      setStatus((previous) => {
+        if (next.balance !== previous.balance) {
+          setJustUpdated(true);
+          window.setTimeout(() => setJustUpdated(false), 2_500);
+        }
+        return next;
+      });
     } catch {
       // La carte conserve le dernier solde connu quand le téléphone passe
       // brièvement hors ligne. Le prochain tick visible retentera la lecture.
@@ -93,13 +100,14 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
   const remaining = Math.max(0, status.threshold - status.balance);
   const unit = mode === "STAMPS" ? "tampon" : "point";
 
-  return <div>
-    <div style={{fontSize:44,fontWeight:950,letterSpacing:"-.05em"}}>{status.balance} / {status.threshold}</div>
+  return <div aria-live="polite">
+    <div style={{fontSize:44,fontWeight:950,letterSpacing:"-.05em",transition:"opacity .2s",opacity: justUpdated ? .55 : 1}}>{status.balance} / {status.threshold}</div>
     <div style={{opacity:.85}}>{unit}{status.balance > 1 ? "s" : ""}</div>
     <div className="progress" style={{marginTop:12}}><span style={{width:`${percent}%`}}/></div>
     <p style={{margin:"12px 0 0",opacity:.9}}>
       {status.rewardAvailable ? `Récompense disponible : ${rewardLabel}` : `Encore ${remaining} ${unit}${remaining > 1 ? "s" : ""} avant votre récompense`}
     </p>
+    {justUpdated ? <p style={{margin:"8px 0 0",opacity:.9,fontWeight:800}}>✓ Solde mis à jour</p> : null}
     {idle ? <button className="btn" style={{marginTop:12}} onClick={() => { resume(); void refresh(); }}>Actualiser mon solde</button> : null}
   </div>;
 }

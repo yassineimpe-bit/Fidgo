@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
 import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
+import { PwaInstallHint } from "@/components/pwa-install-hint";
 
 type CardView = {
   token: string;
@@ -18,6 +19,27 @@ type CardView = {
   pointsPerEuro: number;
   rewardAvailable: boolean;
   canOverrideCooldown: boolean;
+};
+
+type CameraIssue = "denied" | "no-camera" | "insecure" | "other" | null;
+
+const CAMERA_ISSUE_TEXT: Record<Exclude<CameraIssue, null>, { title: string; detail: string }> = {
+  denied: {
+    title: "Caméra refusée",
+    detail: "Autorise la caméra dans les réglages du navigateur (icône cadenas ou caméra dans la barre d’adresse) puis réessaie.",
+  },
+  "no-camera": {
+    title: "Aucune caméra détectée",
+    detail: "Cet appareil ne semble pas avoir de caméra utilisable. Utilise la saisie du code court ci-dessous.",
+  },
+  insecure: {
+    title: "Connexion non sécurisée",
+    detail: "La caméra exige une connexion HTTPS. Ouvre Retiko via son adresse https:// habituelle.",
+  },
+  other: {
+    title: "Caméra indisponible",
+    detail: "Réessaie, ou utilise le code court ci-dessous en attendant.",
+  },
 };
 
 type Metric = {
@@ -87,11 +109,14 @@ export function ScannerClient() {
   const [error, setError] = useState<ScannerErrorInfo | null>(null);
   const [action, setAction] = useState("");
   const [purchase, setPurchase] = useState("");
-  const [permissionError, setPermissionError] = useState(false);
+  const [cameraIssue, setCameraIssue] = useState<CameraIssue>(null);
   const [manualQuery, setManualQuery] = useState("");
   const [online, setOnline] = useState(true);
   const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
+  const [restartTick, setRestartTick] = useState(0);
+  const [rewardJustReached, setRewardJustReached] = useState(false);
+  const permissionError = cameraIssue !== null;
 
   async function loadCardFromToken(value: string, detectedAt = performance.now(), source: "qr" | "manual" = "qr") {
     if (!navigator.onLine) throw new Error("OFFLINE");
@@ -149,6 +174,13 @@ export function ScannerClient() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    if (!window.isSecureContext) {
+      setCameraIssue("insecure");
+      setStatus("Caméra inaccessible");
+      return;
+    }
+
     const scanner = new QrScanner(video, async (result) => {
       const value = result.data.trim();
       if (!value.startsWith("LOY1:")) return;
@@ -186,17 +218,32 @@ export function ScannerClient() {
       maxScansPerSecond: 12,
       returnDetailedScanResult: true,
     });
+    setCameraIssue(null);
     scanner.start()
       .then(() => setStatus(navigator.onLine ? "Caméra active" : "Hors ligne"))
-      .catch(() => {
-        setPermissionError(true);
+      .catch(async (caught) => {
+        const name = caught instanceof DOMException ? caught.name : "";
+        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+          setCameraIssue("denied");
+        } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+          setCameraIssue("no-camera");
+        } else {
+          const hasCamera = await QrScanner.hasCamera().catch(() => true);
+          setCameraIssue(hasCamera ? "other" : "no-camera");
+        }
         setStatus("Caméra inaccessible");
       });
     return () => {
       scanner.stop();
       scanner.destroy();
     };
-  }, []);
+  }, [restartTick]);
+
+  function retryCamera() {
+    setCameraIssue(null);
+    setStatus("Initialisation caméra…");
+    setRestartTick((tick) => tick + 1);
+  }
 
   async function manualLookup(event: FormEvent) {
     event.preventDefault();
@@ -269,6 +316,7 @@ export function ScannerClient() {
       const newBalance = Number(data.balance);
       const rewardReached = kind === "credit" && !card.rewardAvailable && newBalance >= card.threshold;
       setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold, lastEarnAt: kind === "credit" ? (data.lastEarnAt ?? new Date().toISOString()) : card.lastEarnAt });
+      setRewardJustReached(rewardReached);
       setCooldownRemaining(null);
       setOverrideReason("");
       feedback(kind === "redeem" || rewardReached ? "reward" : "success");
@@ -294,6 +342,7 @@ export function ScannerClient() {
     setManualQuery("");
     setCooldownRemaining(null);
     setOverrideReason("");
+    setRewardJustReached(false);
     actionKeyRef.current = null;
     busyRef.current = false;
     if (navigator.onLine) {
@@ -317,21 +366,23 @@ export function ScannerClient() {
     <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
     <div className="scanner-shade" />
     <div className="scanner-top">
-      <span className="scanner-pill">{online ? status : "Hors ligne"}</span>
+      <span className="scanner-pill" role="status" aria-live="polite">{online ? status : "Hors ligne"}</span>
       <a className="scanner-pill" href="/s/stats">Stats</a>
     </div>
     <section className="scan-sheet">
-      {card ? <div className="scan-result">
+      {card ? <div className="scan-result" aria-live="polite">
         <div style={{color:"#aaa"}}>{card.mode === "STAMPS" ? "Tampons" : "Points"} · {card.shortCode}</div>
         <strong>{card.firstName || "Client"}</strong>
         <div style={{fontSize:20}}>{card.balance} / {card.threshold} {card.mode === "STAMPS" ? "tampons" : "points"}</div>
         {card.lastEarnAt && <div style={{color:"#aaa",fontSize:13}}>Dernier passage : {formatLastPassage(card.lastEarnAt)}</div>}
-        {card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}
+        {rewardJustReached
+          ? <div className="scan-success" style={{fontSize:18,fontWeight:900}}>🎁 Récompense débloquée : {card.rewardLabel}</div>
+          : card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}
         {card.mode === "POINTS" && card.pointsRule === "PER_EURO" && <div className="field">
           <label>Montant achat (€)</label>
           <input className="input" inputMode="decimal" value={purchase} onChange={(event) => setPurchase(event.target.value)} placeholder="12,50" />
         </div>}
-        {error && <div className="scan-error">
+        {error && <div className="scan-error" role="alert">
           {error.code === "COOLDOWN" && cooldownRemaining
             ? `Passage déjà enregistré il y a moins de deux minutes. Réessaie dans ${cooldownRemaining} s.`
             : error.message}
@@ -348,16 +399,21 @@ export function ScannerClient() {
         </div>
         <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} onClick={reset}>Annuler</button>
       </div> : <div>
-        <strong style={{fontSize:20}}>{permissionError ? "Caméra indisponible" : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
-        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{permissionError ? "Utilise le code court ou l’email ci-dessous." : online ? "La caméra reste ouverte. Aucun bouton Scanner." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
-        <form onSubmit={manualLookup} style={{display:"flex",gap:8}}>
-          <input className="input" value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email" disabled={!online} />
-          <button className="btn" type="submit" disabled={!online}>Chercher</button>
+        <strong style={{fontSize:20}}>{cameraIssue ? CAMERA_ISSUE_TEXT[cameraIssue].title : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
+        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{cameraIssue ? CAMERA_ISSUE_TEXT[cameraIssue].detail : online ? "La caméra reste ouverte. Aucun bouton Scanner." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
+        {cameraIssue && cameraIssue !== "no-camera" && cameraIssue !== "insecure" && <button className="btn" style={{marginBottom:12}} onClick={retryCamera}>Autoriser la caméra</button>}
+        <form onSubmit={manualLookup}>
+          <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court ou email du client</label>
+          <div style={{display:"flex",gap:8}}>
+            <input className="input" id="scanner-manual-query" value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email" disabled={!online} />
+            <button className="btn" type="submit" disabled={!online}>Chercher</button>
+          </div>
         </form>
-        {error && <div className="scan-error" style={{marginTop:10}}>
+        {error && <div className="scan-error" role="alert" style={{marginTop:10}}>
           {error.message}
           {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
         </div>}
+        <div style={{marginTop:12}}><PwaInstallHint tone="dark"/></div>
       </div>}
     </section>
   </main>;

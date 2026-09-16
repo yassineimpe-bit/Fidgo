@@ -14,7 +14,7 @@ type Customer = {
   active?: boolean | null;
 };
 
-export function CustomerTable({ initial, canManage }: { initial: Customer[]; canManage: boolean }) {
+export function CustomerTable({ initial, canManage, searchActive = false }: { initial: Customer[]; canManage: boolean; searchActive?: boolean }) {
   const [rows, setRows] = useState(initial);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -62,6 +62,21 @@ export function CustomerTable({ initial, canManage }: { initial: Customer[]; can
     }
     setRows((current) => current.filter((row) => row.id !== customer.id));
     setMessage("Données personnelles effacées et carte désactivée.");
+  }
+
+  if (rows.length === 0) {
+    return <section className="card">
+      <div className="empty-state">
+        {searchActive ? <>
+          <strong>Aucun résultat pour cette recherche.</strong>
+          <p>Essaie un autre nom, email ou code court.</p>
+        </> : <>
+          <strong>Aucun client pour l’instant.</strong>
+          <p>Imprime ton QR pour inscrire le premier client depuis ta caisse ou ta vitrine.</p>
+          <a className="btn btn-primary" href="/dashboard/poster">Voir mon affiche QR</a>
+        </>}
+      </div>
+    </section>;
   }
 
   return <section className="card">

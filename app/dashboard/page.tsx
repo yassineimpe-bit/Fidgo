@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { AppNav } from "@/components/app-nav";
+import { PwaInstallHint } from "@/components/pwa-install-hint";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -40,24 +41,47 @@ export default async function DashboardPage() {
   const scans = Number(stats.scan_success) + Number(stats.scan_failed);
   const scanErrorRate = scans > 0 ? Math.round((Number(stats.scan_failed) / scans) * 100) : 0;
   const recurringRate = Number(stats.cards_with_activity) > 0 ? Math.round((Number(stats.cards_recurring) / Number(stats.cards_with_activity)) * 100) : 0;
+
+  const commerceDone = Boolean(restaurant.logo_url);
+  const testDone = Number(stats.transactions) > 0;
+  const checklist: { label: string; done: boolean; href: string }[] = [
+    { label: "Compte créé", done: true, href: "/dashboard" },
+    { label: "Commerce configuré", done: commerceDone, href: "/dashboard/settings" },
+    { label: "Programme fidélité configuré", done: true, href: "/dashboard/program" },
+    { label: "Imprimer le QR", done: false, href: "/dashboard/poster" },
+    { label: "Installer Retiko sur le téléphone caisse", done: false, href: "/s" },
+    { label: "Faire un premier test", done: testDone, href: "/s" },
+  ];
+  const nextStep = !commerceDone
+    ? { text: "Étape suivante : personnalise ton commerce (logo et couleur).", href: "/dashboard/settings", cta: "Configurer mon commerce" }
+    : !testDone
+      ? { text: "Étape suivante : imprime ton QR client et fais un premier test.", href: "/dashboard/poster", cta: "Imprimer mon QR" }
+      : { text: "Ton programme est prêt. Retiko peut accueillir de vrais clients.", href: "/s", cta: "Ouvrir le scanner" };
+
   return <><AppNav restaurantName={restaurant.name}/><main className="shell page">
     <div className="section-head"><div><span className="eyebrow">{program.mode === "STAMPS" ? "Tampons" : "Points"}</span><h2 style={{margin:"12px 0 4px"}}>{program.program_name}</h2><p className="muted">{program.reward_threshold} unités = {program.reward_label}</p></div><Link className="btn btn-primary" href="/s">Ouvrir le scanner</Link></div>
-    <section className="grid grid-4">
+    <PwaInstallHint/>
+    <section className="card" style={{marginTop:18, borderColor:"var(--accent)"}}>
+      <div className="section-head"><div><span className="eyebrow">Étape suivante</span><p style={{margin:"10px 0 0", fontSize:17, fontWeight:700}}>{nextStep.text}</p></div><Link className="btn btn-primary" href={nextStep.href}>{nextStep.cta}</Link></div>
+      <div className="grid grid-3" style={{marginTop:6}}>
+        {checklist.map((item) => <Link key={item.label} href={item.href} style={{color: item.done ? "var(--success)" : "var(--text)"}}>{item.done ? "✓" : "○"} {item.label}</Link>)}
+      </div>
+      {!testDone && <div className="notice" style={{marginTop:16}}>
+        <strong style={{display:"block", marginBottom:8}}>Comment faire mon premier test ?</strong>
+        <ol style={{margin:0, paddingLeft:20, lineHeight:1.7}}>
+          <li>Ouvre ton QR d’inscription (onglet séparé ou téléphone perso).</li>
+          <li>Crée une carte de test avec ton propre email.</li>
+          <li>Présente cette carte au scanner Retiko.</li>
+          <li>Crédite un passage et vérifie que le solde bouge.</li>
+        </ol>
+        <p className="muted" style={{marginTop:8, marginBottom:0}}>Aucune donnée n’est créée automatiquement : le test utilise le vrai parcours client.</p>
+      </div>}
+    </section>
+    <section className="grid grid-4" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.customers}</strong><span>clients inscrits</span></div>
       <div className="card metric"><strong>{stats.active_cards}</strong><span>cartes actives</span></div>
       <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
       <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
-    </section>
-    <section className="card" style={{marginTop:18}}>
-      <div className="section-head"><div><h3>Configuration Retiko</h3><p className="muted">Objectif : premier QR fonctionnel en moins de cinq minutes.</p></div></div>
-      <div className="grid grid-3">
-        <span>✓ Compte créé</span>
-        <Link href="/dashboard/settings">{restaurant.logo_url ? "✓" : "○"} Commerce et identité</Link>
-        <Link href="/dashboard/program">✓ Programme fidélité</Link>
-        <Link href="/dashboard/poster">○ Imprimer mon QR</Link>
-        <Link href="/s">○ Installer la PWA scanner</Link>
-        <Link href="/s">{Number(stats.transactions) > 0 ? "✓" : "○"} Faire un premier test</Link>
-      </div>
     </section>
     <section className="grid grid-4" style={{marginTop:18}}>
       <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
@@ -70,7 +94,7 @@ export default async function DashboardPage() {
       <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
       <div className="card metric"><strong>{recurringRate} %</strong><span>clients revenus sur ≥2 jours</span></div>
     </section>
-    <section className="card" style={{marginTop:18}}><div className="section-head"><div><h3>Dernières transactions</h3><p className="muted">{stats.active_week} clients actifs sur 7 jours</p></div><Link className="btn" href="/dashboard/transactions">Tout voir</Link></div><div className="table-wrap"><table><thead><tr><th>Client</th><th>Action</th><th>Variation</th><th>Solde</th><th>Date</th></tr></thead><tbody>{latest.map((row)=><tr key={String(row.id)}><td>{row.first_name || row.short_code}</td><td>{row.type}</td><td>{Number(row.delta)>0?"+":""}{row.delta}</td><td>{row.balance_after}</td><td>{new Date(row.created_at).toLocaleString("fr-FR")}</td></tr>)}</tbody></table></div></section>
+    <section className="card" style={{marginTop:18}}><div className="section-head"><div><h3>Dernières transactions</h3><p className="muted">{stats.active_week} clients actifs sur 7 jours</p></div><Link className="btn" href="/dashboard/transactions">Tout voir</Link></div>{latest.length === 0 ? <div className="empty-state"><strong>Aucun passage enregistré.</strong><p>Fais ton premier test ou attends ton premier vrai client.</p><Link className="btn btn-primary" href="/s">Ouvrir le scanner</Link></div> : <div className="table-wrap"><table><thead><tr><th>Client</th><th>Action</th><th>Variation</th><th>Solde</th><th>Date</th></tr></thead><tbody>{latest.map((row)=><tr key={String(row.id)}><td>{row.first_name || row.short_code}</td><td>{row.type}</td><td>{Number(row.delta)>0?"+":""}{row.delta}</td><td>{row.balance_after}</td><td>{new Date(row.created_at).toLocaleString("fr-FR")}</td></tr>)}</tbody></table></div>}</section>
     <section className="grid grid-2" style={{marginTop:18}}><div className="card"><h3>QR d’inscription</h3><p className="muted">Lien public du commerce : <code>/j/{restaurant.slug}</code></p><Link className="btn" href="/dashboard/poster">Créer l’affiche A4</Link></div><div className="card"><h3>Wallet</h3><p className="muted">Apple Wallet et Google Wallet sont implémentés. Vérifie ici les credentials, passes émises et erreurs de synchronisation.</p><Link className="btn" href="/dashboard/wallet">Diagnostic Wallet</Link></div></section>
   </main></>;
 }
