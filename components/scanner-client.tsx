@@ -8,6 +8,7 @@ type CardView = {
   token: string;
   shortCode: string;
   balance: number;
+  lastEarnAt?: string | null;
   firstName?: string;
   mode: "STAMPS" | "POINTS";
   pointsRule: "PER_PURCHASE" | "PER_EURO";
@@ -42,6 +43,15 @@ function recordPilotEvent(eventType: "SCAN_SUCCESS" | "SCAN_FAILED", durationMs:
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ eventType, durationMs, source, errorCode }),
   }).catch(() => undefined);
+}
+
+function formatLastPassage(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 10_000) return "à l’instant";
+  if (diffMs < 60_000) return `il y a ${Math.round(diffMs / 1_000)} s`;
+  if (diffMs < 3_600_000) return `il y a ${Math.round(diffMs / 60_000)} min`;
+  if (diffMs < 86_400_000) return `il y a ${Math.round(diffMs / 3_600_000)} h`;
+  return `il y a ${Math.round(diffMs / 86_400_000)} j`;
 }
 
 function feedback(kind: "success" | "reward" | "error") {
@@ -258,7 +268,7 @@ export function ScannerClient() {
       actionKeyRef.current = null;
       const newBalance = Number(data.balance);
       const rewardReached = kind === "credit" && !card.rewardAvailable && newBalance >= card.threshold;
-      setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold });
+      setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold, lastEarnAt: kind === "credit" ? (data.lastEarnAt ?? new Date().toISOString()) : card.lastEarnAt });
       setCooldownRemaining(null);
       setOverrideReason("");
       feedback(kind === "redeem" || rewardReached ? "reward" : "success");
@@ -315,6 +325,7 @@ export function ScannerClient() {
         <div style={{color:"#aaa"}}>{card.mode === "STAMPS" ? "Tampons" : "Points"} · {card.shortCode}</div>
         <strong>{card.firstName || "Client"}</strong>
         <div style={{fontSize:20}}>{card.balance} / {card.threshold} {card.mode === "STAMPS" ? "tampons" : "points"}</div>
+        {card.lastEarnAt && <div style={{color:"#aaa",fontSize:13}}>Dernier passage : {formatLastPassage(card.lastEarnAt)}</div>}
         {card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}
         {card.mode === "POINTS" && card.pointsRule === "PER_EURO" && <div className="field">
           <label>Montant achat (€)</label>

@@ -1,17 +1,21 @@
 -- Defense in depth: a row must not be able to reference another tenant even if
 -- an application query accidentally forgets an establishment_id predicate.
 
+-- Un contrainte UNIQUE cree aussi un index du meme nom : rejouer cette
+-- migration levait "relation ... already exists" (duplicate_table), jamais
+-- attrape par "when duplicate_object", et db:setup s'arretait avant
+-- d'appliquer les migrations suivantes (ex. 005, token_version).
 do $$ begin
   alter table customers add constraint customers_id_establishment_key unique (id, establishment_id);
-exception when duplicate_object then null; end $$;
+exception when duplicate_object or duplicate_table then null; end $$;
 
 do $$ begin
   alter table staff_users add constraint staff_users_id_establishment_key unique (id, establishment_id);
-exception when duplicate_object then null; end $$;
+exception when duplicate_object or duplicate_table then null; end $$;
 
 do $$ begin
   alter table cards add constraint cards_id_establishment_key unique (id, establishment_id);
-exception when duplicate_object then null; end $$;
+exception when duplicate_object or duplicate_table then null; end $$;
 
 do $$ begin
   alter table cards add constraint cards_customer_same_tenant_fk

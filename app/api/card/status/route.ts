@@ -4,9 +4,14 @@ import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
-  const { token: input } = await params;
-  const token = parseCardToken(input);
+/**
+ * Le token de carte transite en POST (jamais dans l'URL) : un GET aurait
+ * laisse le token brut dans les journaux d'acces et les caches intermediaires
+ * a chaque poll (toutes les 3 s tant que la carte reste visible).
+ */
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  const token = parseCardToken(body.token);
   if (!token) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
 
   // Une carte visible appelle cette route toutes les trois secondes. Ce bucket

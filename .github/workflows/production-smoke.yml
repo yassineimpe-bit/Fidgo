@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: fidgo-production-smoke
+  group: retiko-production-smoke
   cancel-in-progress: true
 
 jobs:
@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
+      # Basculer vers https://retiko.fr/api/health dès que le domaine est attaché
+      # au projet Vercel et que le DNS OVH est propagé.
       HEALTH_URL: https://fidgo-env-probe.vercel.app/api/health
     steps:
       - name: Wait for Vercel production health
@@ -31,35 +33,33 @@ jobs:
 
           for attempt in $(seq 1 8); do
             echo "Attempt $attempt/8"
-            rm -f /tmp/fidgo-health-body
+            rm -f /tmp/retiko-health-body
 
             http_code=$(curl --silent --show-error --max-time 15 \
-              -o /tmp/fidgo-health-body -w '%{http_code}' "$HEALTH_URL" || true)
-            body=$(cat /tmp/fidgo-health-body 2>/dev/null || true)
+              -o /tmp/retiko-health-body -w '%{http_code}' "$HEALTH_URL" || true)
+            body=$(cat /tmp/retiko-health-body 2>/dev/null || true)
 
             echo "HTTP $http_code"
             if echo "$body" | jq -e . >/dev/null 2>&1; then
               echo "$body" | jq .
 
-              if echo "$body" | jq -e '.ok == true and .service == "fidgo" and .database == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
-                echo "Fidgo production health is green."
+              if echo "$body" | jq -e '.ok == true and .service == "retiko" and .database == "up" and .auth == "up" and .wallet.https == true' >/dev/null; then
+                echo "Retiko production health is green."
                 exit 0
               fi
 
-              # auth=down means AUTH_SECRET is absent. Retrying for ten minutes cannot fix
-              # a missing environment variable, so fail immediately with a useful message.
-              if echo "$body" | jq -e '.service == "fidgo" and .auth == "down"' >/dev/null; then
-                echo "::error::Fidgo runtime is not configured: AUTH_SECRET is missing in Vercel Production."
+              if echo "$body" | jq -e '.service == "retiko" and .auth == "down"' >/dev/null; then
+                echo "::error::Retiko runtime is not configured: AUTH_SECRET is missing in Vercel Production."
                 if echo "$body" | jq -e '.database == "down"' >/dev/null; then
                   echo "::error::DATABASE_URL is also missing or unavailable in Vercel Production."
                 fi
                 exit 1
               fi
 
-              echo "Fidgo answered but is not ready yet."
+              echo "Retiko answered but is not ready yet."
             else
               echo "Health endpoint did not return valid JSON yet."
-              head -c 500 /tmp/fidgo-health-body 2>/dev/null || true
+              head -c 500 /tmp/retiko-health-body 2>/dev/null || true
               echo
             fi
 
