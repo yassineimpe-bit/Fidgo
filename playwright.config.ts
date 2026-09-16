@@ -26,7 +26,9 @@ export default defineConfig({
       DATABASE_URL: process.env.DATABASE_URL || "",
       AUTH_SECRET: process.env.AUTH_SECRET || "fidgo-playwright-secret-at-least-32-characters",
       NEXT_PUBLIC_APP_URL: baseURL,
-      CARD_RECOVERY_ENABLED: "false",
+      CARD_RECOVERY_ENABLED: "true",
+      RESEND_API_KEY: "re_test_dummy_key",
+      EMAIL_FROM: "Fidgo <cards@fidgo.test>",
     },
   },
 });

@@ -1,6 +1,6 @@
 # RGPD - périmètre MVP
 
-- prénom, email et téléphone facultatifs ;
+- prénom et téléphone facultatifs ; email obligatoire (récupération de carte) ;
 - consentement marketing séparé, explicite et non précoché ;
 - aucune donnée de contact dans le QR client ;
 - isolation par `establishment_id` ;

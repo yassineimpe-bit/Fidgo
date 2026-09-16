@@ -104,8 +104,8 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
       <input className="input" id="join-first-name" name="firstName" autoComplete="given-name"/>
     </div>
     <div className="field">
-      <label htmlFor="join-email">Email <span className="muted">(facultatif, utile pour retrouver la carte)</span></label>
-      <input className="input" id="join-email" name="email" type="email" autoComplete="email"/>
+      <label htmlFor="join-email">Email</label>
+      <input className="input" id="join-email" name="email" type="email" required autoComplete="email"/>
     </div>
     <div className="field">
       <label htmlFor="join-phone">Téléphone <span className="muted">(facultatif)</span></label>
@@ -121,6 +121,6 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
     </button> : null}
     {recoveryMessage ? <div className="notice">{recoveryMessage}</div> : null}
     <button className="btn btn-primary" disabled={submitting}>{submitting ? "Création…" : "Créer ma carte"}</button>
-    <p className="muted" style={{fontSize:13}}>Les informations de contact sont facultatives. Le consentement marketing est séparé de la création de la carte.</p>
+    <p className="muted" style={{fontSize:13}}>L’email sert à retrouver ta carte. Le téléphone reste facultatif. Le consentement marketing est séparé de la création de la carte.</p>
   </form>;
 }
