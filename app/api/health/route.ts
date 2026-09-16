@@ -41,7 +41,18 @@ export async function GET() {
         exists(
           select 1 from information_schema.columns
           where table_schema='public' and table_name='loyalty_programs' and column_name='cooldown_seconds'
-        ) as cooldown_seconds
+        ) as cooldown_seconds,
+        (
+          select count(*)::int = 5 from pg_constraint
+          where connamespace='public'::regnamespace and conname = any(array[
+            'product_events_card_same_tenant_fk',
+            'product_events_staff_same_tenant_fk',
+            'audit_logs_staff_same_tenant_fk',
+            'audit_logs_staff_requires_tenant_check',
+            'transactions_reversal_same_tenant_fk'
+          ])
+        ) as tenant_integrity,
+        to_regclass('public.transactions_reversed_once_key') is not null as reversal_once
     `;
 
     const schemaReady = Boolean(
@@ -50,6 +61,8 @@ export async function GET() {
       && schema?.token_version
       && schema?.last_earn_at
       && schema?.cooldown_seconds
+      && schema?.tenant_integrity
+      && schema?.reversal_once
     );
 
     return Response.json({

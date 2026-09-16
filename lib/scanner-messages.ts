@@ -91,6 +91,12 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     network: false,
     sessionExpired: false,
   },
+  STALE_CARD_STATE: {
+    message: "La carte a changé sur un autre appareil. Recharge-la avant de confirmer l’override.",
+    retryable: false,
+    network: false,
+    sessionExpired: false,
+  },
   INSUFFICIENT_BALANCE: {
     message: "Le solde est insuffisant pour utiliser cette récompense.",
     retryable: false,

@@ -88,6 +88,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
       - run: npm run db:setup
+      - name: Replay database setup (idempotency)
+        run: npm run db:setup
       - name: Verify database integrity after setup
         run: npm run db:verify
       - run: npm run test:e2e

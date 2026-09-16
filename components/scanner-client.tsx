@@ -444,11 +444,14 @@ export function ScannerClient() {
     let serverMs = 0;
 
     try {
-      const payload: { token: string; idempotencyKey: string; purchaseAmountCents?: number; overrideReason?: string } = {
+      const payload: { token: string; idempotencyKey: string; purchaseAmountCents?: number; overrideReason?: string; expectedLastEarnAt?: string | null } = {
         token: card.token,
         idempotencyKey,
       };
-      if (reason) payload.overrideReason = reason;
+      if (reason) {
+        payload.overrideReason = reason;
+        payload.expectedLastEarnAt = card.lastEarnAt ?? null;
+      }
       if (kind === "credit" && card.mode === "POINTS" && card.pointsRule === "PER_EURO") {
         const parsed = Number(purchase.replace(",", "."));
         if (!Number.isFinite(parsed) || parsed <= 0) throw new Error("INVALID_AMOUNT");

@@ -23,9 +23,16 @@ export async function POST(req: Request) {
   const token = parseCardToken(body.token);
   const idempotencyKey = body.idempotencyKey;
   const overrideReason = boundedText(body.overrideReason, 240);
+  const hasExpectedLastEarnAt = Object.prototype.hasOwnProperty.call(body, "expectedLastEarnAt");
+  const expectedLastEarnAt = body.expectedLastEarnAt === null
+    ? null
+    : typeof body.expectedLastEarnAt === "string" && Number.isFinite(Date.parse(body.expectedLastEarnAt))
+      ? new Date(body.expectedLastEarnAt).getTime()
+      : undefined;
   if (!token || !isValidIdempotencyKey(idempotencyKey)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   if (body.overrideReason !== undefined && !overrideReason) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   if (overrideReason && !canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (overrideReason && (!hasExpectedLastEarnAt || expectedLastEarnAt === undefined)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   const purchaseAmountCents = Number(body.purchaseAmountCents);
   if (body.purchaseAmountCents !== undefined && (!Number.isInteger(purchaseAmountCents) || purchaseAmountCents <= 0 || purchaseAmountCents > 10_000_000)) return Response.json({ error: "INVALID_AMOUNT" }, { status: 400 });
 
@@ -54,6 +61,8 @@ export async function POST(req: Request) {
       const cooldownRemainingMs = card.last_earn_at
         ? Number(card.cooldown_seconds) * 1000 - (Date.now() - new Date(card.last_earn_at).getTime())
         : 0;
+      const currentLastEarnAt = card.last_earn_at ? new Date(card.last_earn_at).getTime() : null;
+      if (overrideReason && expectedLastEarnAt !== currentLastEarnAt) throw new Error("STALE_CARD_STATE");
       const overrodeCooldown = cooldownRemainingMs > 0 && Boolean(overrideReason);
       if (cooldownRemainingMs > 0 && !overrideReason) {
         throw new Error(`COOLDOWN:${Math.max(1, Math.ceil(cooldownRemainingMs / 1000))}`);
@@ -85,7 +94,7 @@ export async function POST(req: Request) {
     const message = error instanceof Error ? error.message : "ERROR";
     const cooldown = message.startsWith("COOLDOWN:");
     const errorCode = cooldown ? "COOLDOWN" : message;
-    const status = cooldown || message === "DAILY_LIMIT" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : message === "INVALID_AMOUNT" ? 400 : 500;
+    const status = cooldown || message === "DAILY_LIMIT" || message === "STALE_CARD_STATE" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : message === "INVALID_AMOUNT" ? 400 : 500;
     return Response.json({ error: errorCode, remainingSeconds: cooldown ? Number(message.split(":")[1]) : undefined, serverMs: Date.now() - started }, { status });
   }
 }

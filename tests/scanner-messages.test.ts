@@ -13,6 +13,10 @@ describe("scannerErrorInfo", () => {
       retryable: false,
     });
     expect(scannerErrorInfo(new Error("CARD_EXPIRED")).message).toContain("expiré");
+    expect(scannerErrorInfo(new Error("STALE_CARD_STATE"))).toMatchObject({
+      code: "STALE_CARD_STATE",
+      retryable: false,
+    });
   });
 
   it("recognizes browser fetch failures as safe network retries", () => {
