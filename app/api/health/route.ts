@@ -41,7 +41,27 @@ export async function GET() {
         exists(
           select 1 from information_schema.columns
           where table_schema='public' and table_name='loyalty_programs' and column_name='cooldown_seconds'
-        ) as cooldown_seconds
+        ) as cooldown_seconds,
+        exists(
+          select 1 from pg_constraint
+          where connamespace='public'::regnamespace
+            and conname='product_events_card_same_tenant_fk'
+        ) as event_card_tenant_fk,
+        exists(
+          select 1 from pg_constraint
+          where connamespace='public'::regnamespace
+            and conname='product_events_staff_same_tenant_fk'
+        ) as event_staff_tenant_fk,
+        exists(
+          select 1 from pg_constraint
+          where connamespace='public'::regnamespace
+            and conname='audit_logs_staff_same_tenant_fk'
+        ) as audit_staff_tenant_fk,
+        exists(
+          select 1 from pg_constraint
+          where connamespace='public'::regnamespace
+            and conname='audit_logs_staff_requires_tenant_check'
+        ) as audit_staff_tenant_check
     `;
 
     const schemaReady = Boolean(
@@ -50,6 +70,10 @@ export async function GET() {
       && schema?.token_version
       && schema?.last_earn_at
       && schema?.cooldown_seconds
+      && schema?.event_card_tenant_fk
+      && schema?.event_staff_tenant_fk
+      && schema?.audit_staff_tenant_fk
+      && schema?.audit_staff_tenant_check
     );
 
     return Response.json({
