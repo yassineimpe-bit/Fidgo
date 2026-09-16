@@ -4,7 +4,7 @@ Fidgo facture une offre commerciale unique : pas de paliers fonctionnels (STARTE
 
 - **29 € HT / mois**, sans engagement.
 - **290 € HT / an**.
-- **30 jours d'essai gratuit** avant le premier prélèvement, quel que soit le rythme choisi.
+- **30 jours d'essai gratuit à compter de la création du compte**, quel que soit le rythme choisi.
 - Des codes promo (offres fondateurs, remises pilote) sont activables directement dans Stripe grâce à `allow_promotion_codes`, sans créer de nouveau palier.
 
 Le rythme (mensuel/annuel) est choisi à l'inscription (`/signup`) et enregistré dans `subscriptions.billing_interval`.
@@ -21,12 +21,13 @@ Comme pour Apple/Google Wallet, la facturation reste **prête à activer** mais 
 Pré-requis externes :
 1. créer un compte Stripe (ou utiliser le compte existant) ;
 2. créer un produit « Fidgo » avec deux Prices récurrents : mensuel et annuel ;
-3. créer un endpoint de webhook Stripe pointant vers `https://<domaine>/api/billing/webhook`, écoutant au minimum :
+3. configurer le traitement de la TVA/taxation dans Stripe avant d'activer la facturation : les tarifs commerciaux sont exprimés HT et `STRIPE_ENABLED` doit rester à `false` tant que le comportement fiscal des Prices/Checkout n'est pas validé ;
+4. créer un endpoint de webhook Stripe pointant vers `https://<domaine>/api/billing/webhook`, écoutant au minimum :
    - `checkout.session.completed`
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
-4. activer le Customer Portal Stripe (gestion moyen de paiement / résiliation).
+5. activer le Customer Portal Stripe (gestion moyen de paiement / résiliation).
 
 Variables :
 - `STRIPE_ENABLED=true`
@@ -37,10 +38,12 @@ Variables :
 
 ## Parcours
 
-1. `/signup` : le restaurateur choisit mensuel ou annuel. Le compte, le commerce et une ligne `subscriptions` (`status='trial'`) sont créés immédiatement, avant tout appel Stripe.
-2. Si Stripe est configuré, l'API crée une Checkout Session (`mode: subscription`, `trial_period_days: 30`) et redirige le navigateur dessus pour la saisie de la carte. Un échec Stripe à cette étape n'empêche pas la création du compte : l'utilisateur atterrit sur `/dashboard` et pourra relancer le paiement depuis `/dashboard/billing`.
-3. Le webhook Stripe tient `subscriptions` à jour : identifiants externes, statut (`trial`/`active`/`past_due`/`cancelled`), date de fin de période, résiliation programmée.
-4. `/dashboard/billing` permet au propriétaire de démarrer le paiement (`/api/billing/checkout`) s'il n'a pas encore de client Stripe, ou d'ouvrir le Customer Portal (`/api/billing/portal`) pour gérer/résilier une fois le client créé.
+1. `/signup` : le restaurateur choisit mensuel ou annuel. Le compte, le commerce et une ligne `subscriptions` (`status='trial'`) sont créés immédiatement, avant tout appel Stripe. `trial_ends_at` est fixé à J+30 et constitue la source de vérité de la période d'essai.
+2. Si Stripe est configuré, l'API crée une Checkout Session (`mode: subscription`) et lui transmet la date de fin d'essai déjà enregistrée. Relancer Checkout ne redonne donc jamais 30 jours supplémentaires. Stripe exigeant une date de fin d'essai au moins 48 h dans le futur, aucun nouvel essai Stripe n'est ajouté lorsqu'il reste moins de 48 h : on n'étend jamais artificiellement la période gratuite.
+3. Un échec Stripe à l'inscription n'empêche pas la création du compte : l'utilisateur atterrit sur `/dashboard` et pourra relancer le paiement depuis `/dashboard/billing`.
+4. Une souscription Stripe déjà active/trial/past_due bloque la création d'un second abonnement via `/api/billing/checkout`. Après annulation, un nouveau Checkout peut réutiliser le client Stripe existant.
+5. Le webhook Stripe tient `subscriptions` à jour : identifiants externes, rythme réellement souscrit, statut (`trial`/`active`/`past_due`/`cancelled`), date de fin de période, résiliation programmée.
+6. `/dashboard/billing` permet au propriétaire de démarrer le paiement (`/api/billing/checkout`) s'il n'a pas encore de souscription Stripe, ou d'ouvrir le Customer Portal (`/api/billing/portal`) pour gérer/résilier une fois le client créé.
 
 ## Sécurité
 
