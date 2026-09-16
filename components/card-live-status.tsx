@@ -34,7 +34,12 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
   const refresh = useCallback(async () => {
     if (document.visibilityState !== "visible") return;
     try {
-      const response = await fetch(`/api/card/${encodeURIComponent(token)}/status`, { cache: "no-store" });
+      const response = await fetch("/api/card/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+        cache: "no-store",
+      });
       if (!response.ok) return;
       const next = await response.json() as CardStatus;
       setStatus(next);

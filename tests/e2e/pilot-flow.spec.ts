@@ -1,41 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
-
-const origin = "http://127.0.0.1:3000";
-
-function unique(label: string) {
-  return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-async function createMerchant(page: Page, label: string) {
-  const marker = unique(label);
-  await page.goto("/signup");
-  await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
-  await page.getByLabel("Email").fill(`${marker}@example.com`);
-  await page.getByLabel("Mot de passe").fill("Password-test-123!");
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
-}
-
-async function enrollCustomer(page: Page, firstName: string, email: string) {
-  const joinPath = await page.locator("code").filter({ hasText: "/j/" }).textContent();
-  expect(joinPath).toMatch(/^\/j\//);
-  await page.goto(joinPath!);
-  await page.getByLabel(/Prénom/).fill(firstName);
-  await page.getByLabel(/Email/).fill(email);
-  await page.getByRole("button", { name: "Créer ma carte" }).click();
-  await expect(page).toHaveURL(/\/c\//);
-  const cardUrl = page.url();
-  const shortCode = (await page.locator("img[alt='QR code fidélité'] + strong").textContent())?.trim();
-  expect(shortCode).toMatch(/^[A-Z0-9]{6}$/);
-  return { cardUrl, shortCode: shortCode! };
-}
-
-async function openCardInScanner(page: Page, shortCode: string) {
-  await page.goto("/s");
-  await page.getByPlaceholder("Code court ou email").fill(shortCode);
-  await page.getByRole("button", { name: "Chercher" }).click();
-  await expect(page.getByText(/\d+ \/ 10 tampons/)).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import { createMerchant, enrollCustomer, openCardInScanner, origin, unique } from "./helpers";
 
 test("boucle pilote : inscription, crédit, override, auto-refresh et récompense", async ({ page }) => {
   const customerEmail = `${unique("client")}@example.com`;
@@ -76,32 +40,11 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   await page.getByRole("button", { name: "Utiliser récompense" }).click();
   await expect(page.getByText(/utilisée/)).toBeVisible();
   await expect(cardPage.getByText("0 / 10")).toBeVisible({ timeout: 8_000 });
-});
 
-test("isolation tenant : un commerce ne retrouve pas la carte d’un autre", async ({ browser }) => {
-  const first = await browser.newContext();
-  const second = await browser.newContext();
-  const firstPage = await first.newPage();
-  const secondPage = await second.newPage();
-
-  try {
-    await createMerchant(firstPage, "tenant-a");
-    await createMerchant(secondPage, "tenant-b");
-    const foreignEmail = `${unique("foreign")}@example.com`;
-    const foreignCard = await enrollCustomer(secondPage, "Noah", foreignEmail);
-    const foreignToken = foreignCard.cardUrl.split("/c/")[1];
-
-    const scan = await firstPage.request.post("/api/scan", {
-      headers: { origin },
-      data: { token: `LOY1:${foreignToken}` },
-    });
-    expect(scan.status()).toBe(404);
-    await expect(scan.json()).resolves.toMatchObject({ error: "CARD_NOT_FOUND" });
-
-    const lookup = await firstPage.request.get(`/api/lookup?q=${encodeURIComponent(foreignEmail)}`);
-    expect(lookup.status()).toBe(404);
-  } finally {
-    await first.close();
-    await second.close();
-  }
+  // Instrumentation pilote : JOIN_PAGE_VIEW/SCAN_SUCCESS doivent avoir été
+  // enregistrés et agrégés, sans quoi ce compteur resterait à zéro.
+  await page.goto("/dashboard");
+  const scanSuccessMetric = page.locator(".metric", { hasText: "scans réussis" }).locator("strong");
+  await expect(scanSuccessMetric).toBeVisible();
+  await expect(scanSuccessMetric).not.toHaveText("0");
 });

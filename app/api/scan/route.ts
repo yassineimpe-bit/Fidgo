@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   const [card] = await sql`
     select
-      c.id, c.token, c.short_code, c.balance, c.active, c.expires_at,
+      c.id, c.token, c.short_code, c.balance, c.active, c.expires_at, c.last_earn_at,
       u.first_name,
       p.mode, p.points_rule, p.reward_threshold, p.reward_label, p.stamps_per_visit,
       p.points_per_purchase, p.points_per_euro
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
     token: `LOY1:${card.token}`,
     shortCode: card.short_code,
     balance: Number(card.balance),
+    lastEarnAt: card.last_earn_at ? new Date(card.last_earn_at).toISOString() : null,
     firstName: card.first_name,
     mode: card.mode,
     pointsRule: card.points_rule,

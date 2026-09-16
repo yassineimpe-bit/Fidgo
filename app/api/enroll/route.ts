@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { cardToken, shortCode } from "@/lib/ids";
+import { isEmail } from "@/lib/input";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 
@@ -32,12 +33,14 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const slug = String(body.slug || "").trim().slice(0, 60);
-  const email = body.email ? String(body.email).trim().toLowerCase().slice(0, 254) : null;
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
   const phone = body.phone ? String(body.phone).trim().slice(0, 40) : null;
   const firstName = body.firstName ? String(body.firstName).trim().slice(0, 80) : null;
   const marketingConsent = body.marketingConsent === true;
 
-  if (!slug || (email && !/^\S+@\S+\.\S+$/.test(email))) {
+  // V0 : l'email est obligatoire (recuperation de carte, contact commerce).
+  // Le telephone reste facultatif.
+  if (!slug || !isEmail(email)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
