@@ -34,7 +34,7 @@ Le cooldown par défaut est de 120 secondes. Seuls OWNER et MANAGER peuvent le d
 
 ## Instrumentation pilote
 
-`product_events` contient uniquement les événements opérationnels nécessaires au pilote. `SCAN_SUCCESS` stocke la durée QR → fiche mesurée sur le téléphone, sans token de carte, email ni secret. Les transactions restent la source de vérité pour les crédits et récompenses.
+`product_events` contient uniquement les événements opérationnels nécessaires au pilote. Les jalons `CAMERA_START` → `CAMERA_READY` → `QR_DETECTED` → `SCAN_SENT` permettent de localiser une défaillance caméra ou décodage ; `SCAN_SUCCESS` stocke la durée QR → fiche mesurée sur le téléphone. Aucun de ces événements ne contient de token de carte, email ou secret. Les transactions restent la source de vérité pour les crédits et récompenses.
 
 ## Points et tampons
 

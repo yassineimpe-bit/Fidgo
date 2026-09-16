@@ -187,7 +187,7 @@ create table if not exists product_events (
   establishment_id uuid not null references establishments(id) on delete cascade,
   card_id uuid references cards(id) on delete set null,
   staff_user_id uuid references staff_users(id) on delete set null,
-  event_type text not null check (event_type in ('JOIN_PAGE_VIEW','JOIN_SUBMIT','SCAN_SUCCESS','SCAN_FAILED','CREDIT_SUCCESS','REWARD_REDEEMED')),
+  event_type text not null check (event_type in ('JOIN_PAGE_VIEW','JOIN_SUBMIT','CAMERA_START','CAMERA_READY','CAMERA_FAILED','QR_DETECTED','SCAN_SENT','SCAN_SUCCESS','SCAN_FAILED','CREDIT_SUCCESS','REWARD_REDEEMED')),
   duration_ms int check (duration_ms is null or duration_ms between 0 and 60000),
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()

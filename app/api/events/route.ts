@@ -4,7 +4,15 @@ import { boundedInt, boundedText } from "@/lib/input";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin, requestIp } from "@/lib/security";
 
-const STAFF_EVENTS = new Set(["SCAN_SUCCESS", "SCAN_FAILED"]);
+const STAFF_EVENTS = new Set([
+  "CAMERA_START",
+  "CAMERA_READY",
+  "CAMERA_FAILED",
+  "QR_DETECTED",
+  "SCAN_SENT",
+  "SCAN_SUCCESS",
+  "SCAN_FAILED",
+]);
 
 export async function POST(req: Request) {
   const originError = rejectCrossOrigin(req);
@@ -32,7 +40,9 @@ export async function POST(req: Request) {
   const durationMs = boundedInt(body.durationMs, { min: 0, max: 60_000 });
   if (durationMs === null) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   const source = body.source === "manual" ? "manual" : "qr";
-  const errorCode = eventType === "SCAN_FAILED" ? boundedText(body.errorCode, 64) || "ERROR" : null;
+  const errorCode = eventType === "SCAN_FAILED" || eventType === "CAMERA_FAILED"
+    ? boundedText(body.errorCode, 64) || "ERROR"
+    : null;
 
   await sql`
     insert into product_events(establishment_id, staff_user_id, event_type, duration_ms, metadata)

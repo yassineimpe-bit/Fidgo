@@ -2,6 +2,15 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
+import {
+  CAMERA_ISSUE_INFO,
+  REAR_CAMERA_CONSTRAINTS,
+  classifyCameraError,
+  extractLoyaltyQr,
+  isDuplicateQr,
+  stopMediaStream,
+  type CameraIssue,
+} from "@/lib/scanner-camera";
 import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
 
@@ -21,27 +30,6 @@ type CardView = {
   canOverrideCooldown: boolean;
 };
 
-type CameraIssue = "denied" | "no-camera" | "insecure" | "other" | null;
-
-const CAMERA_ISSUE_TEXT: Record<Exclude<CameraIssue, null>, { title: string; detail: string }> = {
-  denied: {
-    title: "Caméra refusée",
-    detail: "Autorise la caméra dans les réglages du navigateur (icône cadenas ou caméra dans la barre d’adresse) puis réessaie.",
-  },
-  "no-camera": {
-    title: "Aucune caméra détectée",
-    detail: "Cet appareil ne semble pas avoir de caméra utilisable. Utilise la saisie du code court ci-dessous.",
-  },
-  insecure: {
-    title: "Connexion non sécurisée",
-    detail: "La caméra exige une connexion HTTPS. Ouvre Retiko via son adresse https:// habituelle.",
-  },
-  other: {
-    title: "Caméra indisponible",
-    detail: "Réessaie, ou utilise le code court ci-dessous en attendant.",
-  },
-};
-
 type Metric = {
   phase: "lookup" | "action";
   action?: "credit" | "redeem";
@@ -59,11 +47,22 @@ function saveMetric(metric: Metric) {
   } catch {}
 }
 
-function recordPilotEvent(eventType: "SCAN_SUCCESS" | "SCAN_FAILED", durationMs: number, source: "qr" | "manual", errorCode?: string) {
+type ScannerEvent =
+  | "CAMERA_START"
+  | "CAMERA_READY"
+  | "CAMERA_FAILED"
+  | "QR_DETECTED"
+  | "SCAN_SENT"
+  | "SCAN_SUCCESS"
+  | "SCAN_FAILED";
+
+function recordPilotEvent(eventType: ScannerEvent, durationMs: number, source: "qr" | "manual", errorCode?: string) {
+  const boundedDurationMs = Math.min(60_000, Math.max(0, Math.round(durationMs)));
   void fetch("/api/events", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ eventType, durationMs, source, errorCode }),
+    body: JSON.stringify({ eventType, durationMs: boundedDurationMs, source, errorCode }),
+    keepalive: true,
   }).catch(() => undefined);
 }
 
@@ -101,6 +100,7 @@ export function ScannerClient() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const busyRef = useRef(false);
   const lastTokenRef = useRef<{ value: string; at: number } | null>(null);
+  const lastInvalidQrAtRef = useRef(0);
   const detectedAtRef = useRef(performance.now());
   const actionKeyRef = useRef<{ kind: "credit" | "redeem"; key: string } | null>(null);
 
@@ -109,7 +109,7 @@ export function ScannerClient() {
   const [error, setError] = useState<ScannerErrorInfo | null>(null);
   const [action, setAction] = useState("");
   const [purchase, setPurchase] = useState("");
-  const [cameraIssue, setCameraIssue] = useState<CameraIssue>(null);
+  const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
   const [manualQuery, setManualQuery] = useState("");
   const [online, setOnline] = useState(true);
   const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
@@ -124,11 +124,15 @@ export function ScannerClient() {
     const networkStarted = performance.now();
     let serverMs = 0;
     try {
-      const response = await fetch("/api/scan", {
+      const scanRequest = fetch("/api/scan", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token: value }),
       });
+      // Le flux métier est lancé avant la télémétrie afin que celle-ci
+      // n'ajoute aucune latence perceptible au scan en caisse.
+      recordPilotEvent("SCAN_SENT", Math.round(networkStarted - detectedAt), source);
+      const response = await scanRequest;
       const networkMs = Math.round(performance.now() - networkStarted);
       const data = await response.json();
       serverMs = Number(data.serverMs || 0);
@@ -175,67 +179,219 @@ export function ScannerClient() {
     const video = videoRef.current;
     if (!video) return;
 
-    if (!window.isSecureContext) {
-      setCameraIssue("insecure");
-      setStatus("Caméra inaccessible");
-      return;
-    }
+    let scanner: QrScanner | null = null;
+    let stream: MediaStream | null = null;
+    let disposed = false;
+    let generation = 0;
+    let starting = false;
+    let restartRequested = false;
+    let feedbackTimer: number | undefined;
 
-    const scanner = new QrScanner(video, async (result) => {
-      const value = result.data.trim();
-      if (!value.startsWith("LOY1:")) return;
+    // WebKit iOS exige playsinline avant l'attachement du MediaStream. Les
+    // attributs sont aussi posés directement pour le mode PWA standalone.
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("muted", "");
+    video.setAttribute("autoplay", "");
+
+    const clearFeedbackTimer = () => {
+      if (feedbackTimer !== undefined) window.clearTimeout(feedbackTimer);
+      feedbackTimer = undefined;
+    };
+
+    const stopCamera = () => {
+      generation += 1;
+      const currentScanner = scanner;
+      const currentStream = stream;
+      scanner = null;
+      stream = null;
+      currentScanner?.destroy();
+      // qr-scanner ne retire pas son overlay au destroy(). Sans ceci, chaque
+      // retour d'arrière-plan PWA empilerait un nouveau viseur dans le DOM.
+      currentScanner?.$overlay?.remove();
+      video.pause();
+      if (video.srcObject) video.srcObject = null;
+      stopMediaStream(currentStream);
+    };
+
+    const reportCameraFailure = (issue: CameraIssue, startedAt: number) => {
+      if (disposed) return;
+      stopCamera();
+      setCameraIssue(issue);
+      setStatus("Caméra inaccessible");
+      recordPilotEvent(
+        "CAMERA_FAILED",
+        Math.round(performance.now() - startedAt),
+        "qr",
+        CAMERA_ISSUE_INFO[issue].telemetryCode,
+      );
+    };
+
+    const onDecode = async (result: QrScanner.ScanResult) => {
       const now = performance.now();
-      if (busyRef.current) return;
-      if (lastTokenRef.current?.value === value && now - lastTokenRef.current.at < 2_000) return;
+      const value = extractLoyaltyQr(result.data);
+
+      if (!value) {
+        if (now - lastInvalidQrAtRef.current < 2_500) return;
+        lastInvalidQrAtRef.current = now;
+        const invalid = scannerErrorInfo(new Error("INVALID_QR"));
+        setError(invalid);
+        setStatus("QR non reconnu");
+        feedback("error");
+        recordPilotEvent("SCAN_FAILED", 0, "qr", "INVALID_QR");
+        clearFeedbackTimer();
+        feedbackTimer = window.setTimeout(() => {
+          if (!busyRef.current) {
+            setError(null);
+            setStatus("Caméra active");
+          }
+        }, 1_500);
+        return;
+      }
+
+      if (busyRef.current || isDuplicateQr(lastTokenRef.current, value, now)) return;
       busyRef.current = true;
       lastTokenRef.current = { value, at: now };
       setStatus("Carte détectée…");
       setError(null);
       try {
-        await loadCardFromToken(value, now);
+        const lookup = loadCardFromToken(value, now);
+        recordPilotEvent("QR_DETECTED", 0, "qr");
+        await lookup;
       } catch (caught) {
         const info = scannerErrorInfo(caught);
         setError(info);
         feedback("error");
         setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Scan refusé");
         if (info.sessionExpired || info.network) busyRef.current = false;
-        else window.setTimeout(() => {
-          setCard(null);
-          setPurchase("");
-          setManualQuery("");
-          setCooldownRemaining(null);
-          setOverrideReason("");
-          actionKeyRef.current = null;
-          busyRef.current = false;
-          setError(null);
-          setStatus("Caméra active");
-        }, 1_300);
-      }
-    }, {
-      preferredCamera: "environment",
-      highlightScanRegion: true,
-      highlightCodeOutline: true,
-      maxScansPerSecond: 12,
-      returnDetailedScanResult: true,
-    });
-    setCameraIssue(null);
-    scanner.start()
-      .then(() => setStatus(navigator.onLine ? "Caméra active" : "Hors ligne"))
-      .catch(async (caught) => {
-        const name = caught instanceof DOMException ? caught.name : "";
-        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-          setCameraIssue("denied");
-        } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-          setCameraIssue("no-camera");
-        } else {
-          const hasCamera = await QrScanner.hasCamera().catch(() => true);
-          setCameraIssue(hasCamera ? "other" : "no-camera");
+        else {
+          clearFeedbackTimer();
+          feedbackTimer = window.setTimeout(() => {
+            setCard(null);
+            setPurchase("");
+            setManualQuery("");
+            setCooldownRemaining(null);
+            setOverrideReason("");
+            actionKeyRef.current = null;
+            busyRef.current = false;
+            setError(null);
+            setStatus("Caméra active");
+          }, 1_300);
         }
-        setStatus("Caméra inaccessible");
-      });
+      }
+    };
+
+    const startCamera = async () => {
+      if (disposed || document.hidden) return;
+      if (starting) {
+        restartRequested = true;
+        return;
+      }
+      if (scanner && stream?.getVideoTracks().some((track) => track.readyState === "live")) return;
+
+      starting = true;
+      restartRequested = false;
+      const attempt = ++generation;
+      const startedAt = performance.now();
+      const mediaDevicesAvailable = Boolean(navigator.mediaDevices?.getUserMedia);
+
+      setCameraIssue(null);
+      setStatus("Initialisation caméra…");
+      recordPilotEvent("CAMERA_START", 0, "qr");
+
+      try {
+        if (!window.isSecureContext || !mediaDevicesAvailable) {
+          reportCameraFailure(classifyCameraError(null, {
+            secureContext: window.isSecureContext,
+            mediaDevicesAvailable,
+          }), startedAt);
+          return;
+        }
+
+        const nextStream = await navigator.mediaDevices.getUserMedia(REAR_CAMERA_CONSTRAINTS);
+        if (disposed || document.hidden || attempt !== generation) {
+          stopMediaStream(nextStream);
+          return;
+        }
+
+        stream = nextStream;
+        video.srcObject = nextStream;
+        const nextScanner = new QrScanner(video, onDecode, {
+          preferredCamera: "environment",
+          calculateScanRegion: (source) => {
+            const size = Math.round(Math.min(source.videoWidth, source.videoHeight) * 0.82);
+            return {
+              x: Math.round((source.videoWidth - size) / 2),
+              y: Math.round((source.videoHeight - size) / 2),
+              width: size,
+              height: size,
+              downScaledWidth: 480,
+              downScaledHeight: 480,
+            };
+          },
+          onDecodeError: (decodeError) => {
+            if (decodeError === QrScanner.NO_QR_CODE_FOUND || disposed) return;
+            reportCameraFailure("decoder-failed", startedAt);
+          },
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+          maxScansPerSecond: 15,
+          returnDetailedScanResult: true,
+        });
+        scanner = nextScanner;
+        await nextScanner.start();
+
+        if (disposed || document.hidden || attempt !== generation) {
+          stopCamera();
+          return;
+        }
+
+        for (const track of nextStream.getVideoTracks()) {
+          track.addEventListener("ended", () => {
+            if (!disposed && !document.hidden && attempt === generation) {
+              reportCameraFailure("start-failed", startedAt);
+            }
+          }, { once: true });
+        }
+        setCameraIssue(null);
+        setStatus(navigator.onLine ? "Caméra prête" : "Hors ligne");
+        recordPilotEvent("CAMERA_READY", Math.round(performance.now() - startedAt), "qr");
+      } catch (caught) {
+        if (disposed || document.hidden || attempt !== generation) return;
+        reportCameraFailure(classifyCameraError(caught, {
+          secureContext: window.isSecureContext,
+          mediaDevicesAvailable,
+        }), startedAt);
+      } finally {
+        starting = false;
+        if (restartRequested && !disposed && !document.hidden) {
+          restartRequested = false;
+          void startCamera();
+        }
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) stopCamera();
+      else void startCamera();
+    };
+    const onPageHide = () => stopCamera();
+    const onPageShow = () => void startCamera();
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    void startCamera();
+
     return () => {
-      scanner.stop();
-      scanner.destroy();
+      disposed = true;
+      clearFeedbackTimer();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+      stopCamera();
     };
   }, [restartTick]);
 
@@ -399,9 +555,9 @@ export function ScannerClient() {
         </div>
         <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} onClick={reset}>Annuler</button>
       </div> : <div>
-        <strong style={{fontSize:20}}>{cameraIssue ? CAMERA_ISSUE_TEXT[cameraIssue].title : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
-        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{cameraIssue ? CAMERA_ISSUE_TEXT[cameraIssue].detail : online ? "La caméra reste ouverte. Aucun bouton Scanner." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
-        {cameraIssue && cameraIssue !== "no-camera" && cameraIssue !== "insecure" && <button className="btn" style={{marginBottom:12}} onClick={retryCamera}>Autoriser la caméra</button>}
+        <strong style={{fontSize:20}}>{cameraIssue ? CAMERA_ISSUE_INFO[cameraIssue].title : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
+        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{cameraIssue ? CAMERA_ISSUE_INFO[cameraIssue].detail : online ? "Cadre le QR dans le viseur : la détection est automatique." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
+        {cameraIssue && CAMERA_ISSUE_INFO[cameraIssue].retryable && <button className="btn" style={{marginBottom:12}} onClick={retryCamera}>Réessayer la caméra</button>}
         <form onSubmit={manualLookup}>
           <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court ou email du client</label>
           <div style={{display:"flex",gap:8}}>

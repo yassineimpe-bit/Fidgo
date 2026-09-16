@@ -16,7 +16,7 @@ Retour : `token`, `short_code`, `balance`. L'email est obligatoire depuis la V0 
 Entrée : `slug`, `email`. La réponse publique est volontairement identique qu'une carte existe ou non. Un email n'est réellement envoyé que si une carte active correspond à l'adresse.
 
 ### `POST /api/events`
-Enregistre `JOIN_PAGE_VIEW` sur la surface publique ou `SCAN_SUCCESS`/`SCAN_FAILED` pour un membre du staff authentifié. Les événements scanner acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
+Enregistre `JOIN_PAGE_VIEW` sur la surface publique. Pour un membre du staff authentifié, le pipeline scanner émet `CAMERA_START`, `CAMERA_READY`, `CAMERA_FAILED`, `QR_DETECTED`, `SCAN_SENT`, `SCAN_SUCCESS` et `SCAN_FAILED`. Ces événements acceptent `durationMs` et `source`, sans token brut ni donnée de contact.
 
 ### `GET /api/card/[token]`
 Retourne uniquement les données nécessaires à l'affichage public de la carte, sans email ni téléphone. Réponse `no-store`.
