@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
+import { databaseConfigured, sql } from "@/lib/db";
 import { signSession, sessionCookie } from "@/lib/auth";
 import { consumeRateLimit, rateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
@@ -16,6 +16,13 @@ const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEe.7jbm1Av7B9VrPX1i8EQnE6ZBqJfFqcO
 export async function POST(request: Request) {
   const origin = requireSameOrigin(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
+
+  if (!databaseConfigured || !process.env.AUTH_SECRET?.trim()) {
+    return NextResponse.json(
+      { error: "SERVICE_UNAVAILABLE" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
 
   const body = await request.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();

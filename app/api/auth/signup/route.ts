@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { sql } from "@/lib/db";
+import { databaseConfigured, sql } from "@/lib/db";
 import { id } from "@/lib/ids";
 import { signSession, sessionCookie } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -14,6 +14,18 @@ function slugify(input: string) {
 export async function POST(request: Request) {
   const origin = requireSameOrigin(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
+
+  // Ne pas laisser le formulaire tenter une connexion localhost ou créer un
+  // compte sans pouvoir ensuite signer la session. En production mal
+  // configurée, on renvoie une indisponibilité explicite au lieu d'un 500
+  // générique après plusieurs secondes.
+  if (!databaseConfigured || !process.env.AUTH_SECRET?.trim()) {
+    return NextResponse.json(
+      { error: "SERVICE_UNAVAILABLE" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
+
   const limited = await rateLimit(request, "signup", 5, 60 * 60);
   if (!limited.allowed) return NextResponse.json({ error: "TOO_MANY_ATTEMPTS" }, { status: 429 });
 
