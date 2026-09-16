@@ -41,4 +41,13 @@ if (process.env.GOOGLE_WALLET_ENABLED === "true") {
   }
 }
 
+if (process.env.STRIPE_ENABLED === "true") {
+  const stripe = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PRICE_MONTHLY", "STRIPE_PRICE_ANNUAL"];
+  const stripeMissing = stripe.filter((key) => !process.env[key]);
+  if (stripeMissing.length) {
+    console.error(`Stripe activé mais variables manquantes: ${stripeMissing.join(", ")}`);
+    process.exit(1);
+  }
+}
+
 console.log("Environnement valide.");
