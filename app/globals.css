@@ -17,6 +17,8 @@ body { margin: 0; background: var(--bg); color: var(--text); }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+:focus-visible { outline: 3px solid #6a8bff; outline-offset: 2px; }
+.scanner-page :focus-visible { outline-color: #fff; }
 .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
 .topbar { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
 .topbar-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -63,6 +65,8 @@ h3 { letter-spacing: -.02em; }
 .section-head { display:flex; justify-content:space-between; gap:16px; align-items:end; margin-bottom:18px; }
 .muted { color: var(--muted); }
 .table-wrap { overflow-x: auto; }
+.empty-state { display: grid; gap: 10px; justify-items: start; padding: 28px 4px; }
+.empty-state p { color: var(--muted); margin: 0; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; }
 th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
