@@ -7,11 +7,12 @@ Les logs contiennent uniquement :
 - nom de l'erreur ;
 - empreinte irréversible du message client ;
 - route et méthode ;
+- chemin normalisé, avec UUID et segments opaques remplacés avant journalisation ;
 - référence technique Next.js lorsqu'elle existe ;
 - version déployée (`VERCEL_GIT_COMMIT_SHA`, tronquée) ;
 - navigateur/appareil via le User-Agent.
 
-Ils ne contiennent pas de mot de passe, JWT, token de carte ou email client.
+Ils ne contiennent pas de mot de passe, JWT, token de carte, lien de récupération ou email client. Les query strings et fragments d'URL sont supprimés avant journalisation.
 
 ## Alertes à configurer avant le pilote
 
