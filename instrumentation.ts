@@ -1,4 +1,5 @@
 import type { Instrumentation } from "next";
+import { redactSensitivePath } from "@/lib/observability";
 
 export function register() {}
 
@@ -8,7 +9,7 @@ export const onRequestError: Instrumentation.onRequestError = async (error, requ
     name: value.name,
     digest: "digest" in value ? String(value.digest || "") : "",
     method: request.method,
-    path: request.path,
+    path: redactSensitivePath(request.path),
     route: context.routePath,
     routeType: context.routeType,
     version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev",
