@@ -2,6 +2,21 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
+const ERROR_MESSAGES: Record<string, string> = {
+  EMAIL_EXISTS: "Un compte existe déjà avec cet email.",
+  INVALID_INPUT: "Merci de vérifier les champs du formulaire.",
+  INVALID_CREDENTIALS: "Email ou mot de passe incorrect.",
+  TOO_MANY_ATTEMPTS: "Trop de tentatives. Réessaie dans quelques minutes.",
+  INVALID_ORIGIN: "Requête refusée. Recharge la page puis réessaie.",
+  SIGNUP_FAILED: "Impossible de créer le compte pour le moment.",
+  LOGIN_FAILED: "Connexion impossible pour le moment.",
+};
+
+function describeError(code: string | undefined) {
+  if (!code) return "Une erreur inattendue est survenue. Réessaie dans un instant.";
+  return `${ERROR_MESSAGES[code] || "Une erreur inattendue est survenue."} (${code})`;
+}
+
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -15,7 +30,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       : { email: form.get("email"), password: form.get("password") };
     const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(data.error || "Erreur"); setLoading(false); return; }
+    if (!res.ok) { setError(describeError(data.error)); setLoading(false); return; }
     router.replace("/dashboard"); router.refresh();
   }
   return (
