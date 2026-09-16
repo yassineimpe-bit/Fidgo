@@ -21,11 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      # Basculer vers https://retiko.fr/api/health dès que le domaine est attaché
-      # au projet Vercel et que le DNS OVH est propagé.
-      HEALTH_URL: https://fidgo-env-probe.vercel.app/api/health
+      # Domaine canonique Retiko. Le smoke doit valider la vraie URL publique,
+      # pas l'alias technique Vercel.
+      HEALTH_URL: https://retiko.fr/api/health
     steps:
-      - name: Wait for Vercel production health
+      - name: Wait for Retiko production health
         shell: bash
         run: |
           set -euo pipefail

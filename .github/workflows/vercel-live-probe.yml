@@ -13,14 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Probe Vercel production
+      - name: Probe Retiko public production
         shell: bash
         run: |
           set +e
           for url in \
-            "https://fidgo-env-probe.vercel.app/" \
-            "https://fidgo-env-probe.vercel.app/api/health" \
-            "https://fidgo-env-probe.vercel.app/j/fidgo-demo"; do
+            "https://retiko.fr/" \
+            "https://retiko.fr/api/health" \
+            "https://www.retiko.fr/"; do
             echo "===== $url ====="
             rm -f /tmp/headers /tmp/body
             code=$(curl --silent --show-error --max-time 20 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$url")
@@ -32,4 +32,15 @@ jobs:
             head -c 1500 /tmp/body 2>/dev/null || true
             echo
           done
+
+          echo "===== www redirect check ====="
+          location=$(curl --silent --show-error --max-time 20 -I https://www.retiko.fr/ \
+            | awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, "", $2); print $2; exit}')
+          echo "location=${location:-<none>}"
+          if [ "$location" != "https://retiko.fr/" ] && [ "$location" != "https://retiko.fr" ]; then
+            echo "::warning::www.retiko.fr is not redirecting to the canonical retiko.fr URL yet. DNS may still be propagating."
+          fi
+
+          # Diagnostic workflow only. The blocking production readiness gate is
+          # production-smoke.yml, which requires database/auth to be healthy.
           exit 0

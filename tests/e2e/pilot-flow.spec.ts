@@ -1,6 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { createMerchant, enrollCustomer, openCardInScanner, origin, unique } from "./helpers";
 
+// Ce scénario traverse volontairement toute la boucle pilote et déclenche
+// plusieurs compilations Next à froid en CI. La limite Playwright par défaut
+// de 30 s rendait le test flaky sans signaler une régression applicative.
+test.setTimeout(60_000);
+
 test("boucle pilote : inscription, crédit, override, auto-refresh et récompense", async ({ page }) => {
   const customerEmail = `${unique("client")}@example.com`;
   await createMerchant(page, "boucle");
