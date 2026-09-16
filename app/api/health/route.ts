@@ -16,7 +16,7 @@ export async function GET() {
   if (!databaseConfigured || !authConfigured) {
     return Response.json({
       ok: false,
-      service: "fidgo",
+      service: "retiko",
       database: databaseConfigured ? "unknown" : "down",
       auth: authConfigured ? "up" : "down",
       wallet: walletState,
@@ -28,7 +28,7 @@ export async function GET() {
     await sql`select 1 as ok`;
     return Response.json({
       ok: true,
-      service: "fidgo",
+      service: "retiko",
       database: "up",
       auth: "up",
       wallet: walletState,
@@ -37,7 +37,7 @@ export async function GET() {
   } catch {
     return Response.json({
       ok: false,
-      service: "fidgo",
+      service: "retiko",
       database: "down",
       auth: "up",
       wallet: walletState,
