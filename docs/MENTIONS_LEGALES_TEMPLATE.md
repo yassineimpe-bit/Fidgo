@@ -30,7 +30,7 @@ L'ensemble des éléments du site et de l'application Retiko (marque, logo, text
 
 ## Données personnelles
 
-Le traitement des données personnelles est décrit dans la [Politique de confidentialité](./POLITIQUE-CONFIDENTIALITE.md).
+Le traitement des données personnelles est décrit dans la [Politique de confidentialité](./PRIVACY_POLICY_TEMPLATE.md).
 
 ## Contact
 
