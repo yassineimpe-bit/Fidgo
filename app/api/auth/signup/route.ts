@@ -6,6 +6,7 @@ import { signSession, sessionCookie } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
+import { billingEnabled, createCheckoutSession, createTrialSubscription, isBillingInterval } from "@/lib/billing";
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   const restaurantName = String(body.restaurantName || "").trim().slice(0, 120);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
+  const billingInterval = isBillingInterval(body.billingInterval) ? body.billingInterval : "monthly";
   if (restaurantName.length < 2 || !isEmail(email) || password.length < 8) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
 
   const baseSlug = slugify(restaurantName) || "commerce";
@@ -44,7 +46,8 @@ export async function POST(request: Request) {
       const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
       const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role,token_version`)[0];
       await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
-      return { establishment, staff };
+      const trialEndsAt = await createTrialSubscription(tx, String(establishment.id), billingInterval);
+      return { establishment, staff, trialEndsAt };
     });
 
     const token = await signSession({
@@ -54,7 +57,23 @@ export async function POST(request: Request) {
       email: String(result.staff.email),
       tokenVersion: Number(result.staff.token_version),
     });
-    const response = NextResponse.json({ ok: true, slug: result.establishment.slug });
+
+    let checkoutUrl: string | null = null;
+    if (billingEnabled()) {
+      try {
+        const session = await createCheckoutSession({
+          establishmentId: String(result.establishment.id),
+          email,
+          interval: billingInterval,
+          trialEndsAt: result.trialEndsAt,
+        });
+        checkoutUrl = session.url;
+      } catch (error) {
+        console.error("STRIPE_CHECKOUT_CREATE_FAILED", error);
+      }
+    }
+
+    const response = NextResponse.json({ ok: true, slug: result.establishment.slug, checkoutUrl });
     response.cookies.set(sessionCookie(token));
     return response;
   } catch (error) {

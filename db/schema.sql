@@ -163,12 +163,16 @@ create table if not exists subscriptions (
   provider text not null default 'stripe',
   external_customer_id text,
   external_subscription_id text,
-  plan text not null default 'STARTER' check (plan in ('STARTER','PRO','PREMIUM')),
+  plan text not null default 'FIDGO' check (plan in ('FIDGO')),
+  billing_interval text not null default 'monthly' check (billing_interval in ('monthly','annual')),
   status text not null default 'trial' check (status in ('trial','active','past_due','cancelled')),
+  trial_ends_at timestamptz,
   current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+create index if not exists subscriptions_status_idx on subscriptions (status, trial_ends_at);
 
 create table if not exists audit_logs (
   id uuid primary key default gen_random_uuid(),

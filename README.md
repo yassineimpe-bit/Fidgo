@@ -25,7 +25,8 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - PWA minimale et instrumentation p50/p95 QR → validation ;
 - événements pilote persistés sans token brut ni coordonnées client ;
 - récupération de carte par email avec jeton à usage unique et réponse anti-énumération ;
-- schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
+- schéma prêt pour Apple Wallet, Google Wallet, campagnes et push ;
+- facturation Stripe (offre unique 29 €/mois ou 290 €/an, 30 jours d'essai) prête à activer via `STRIPE_ENABLED` ;
 - anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
 
 ## Volontairement après validation terrain
