@@ -10,6 +10,9 @@ alter table subscriptions drop constraint if exists subscriptions_billing_interv
 alter table subscriptions add constraint subscriptions_billing_interval_check check (billing_interval in ('monthly','annual'));
 
 alter table subscriptions add column if not exists trial_ends_at timestamptz;
+update subscriptions
+set trial_ends_at = created_at + interval '30 days'
+where status = 'trial' and trial_ends_at is null;
 alter table subscriptions add column if not exists cancel_at_period_end boolean not null default false;
 
 create index if not exists subscriptions_status_idx on subscriptions (status, trial_ends_at);
