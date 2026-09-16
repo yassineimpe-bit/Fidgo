@@ -6,8 +6,21 @@ export function unique(label: string) {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Toutes les requêtes de test partagent la même IP loopback locale. Sans
+ * ceci, `/api/auth/signup` (limité à 5/h/IP) bloque dès que plusieurs specs
+ * créent des commerçants dans la même exécution, avant même que la limite
+ * ait quoi que ce soit à voir avec le comportement testé. Chaque contexte de
+ * test simule donc sa propre IP, comme des visiteurs réels distincts.
+ */
+export async function randomizeClientIp(page: Page) {
+  const ip = `10.${Math.floor(Math.random() * 254) + 1}.${Math.floor(Math.random() * 254) + 1}.${Math.floor(Math.random() * 254) + 1}`;
+  await page.context().setExtraHTTPHeaders({ "x-real-ip": ip });
+}
+
 export async function createMerchant(page: Page, label: string) {
   const marker = unique(label);
+  await randomizeClientIp(page);
   await page.goto("/signup");
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(`${marker}@example.com`);

@@ -8,10 +8,10 @@ if (!process.env.DATABASE_URL) {
 }
 
 const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
-const slug = process.env.DEMO_SLUG || "fidgo-demo";
-const restaurantName = process.env.DEMO_RESTAURANT_NAME || "Fidgo Demo";
+const slug = process.env.DEMO_SLUG || "retiko-demo";
+const restaurantName = process.env.DEMO_RESTAURANT_NAME || "Retiko Demo";
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-const demoEmail = "demo-card@fidgo.local";
+const demoEmail = "demo-card@retiko.local";
 const ownerEmail = process.env.DEMO_OWNER_EMAIL?.trim().toLowerCase() || null;
 const ownerPassword = process.env.DEMO_OWNER_PASSWORD || null;
 const demoSeedIdempotencyKey = "demo-seed-initial-balance-v1";
@@ -29,7 +29,7 @@ try {
 
   await sql`
     insert into loyalty_programs(establishment_id,program_name,mode,reward_threshold,reward_label,stamps_per_visit,cooldown_seconds,card_message,active)
-    values(${establishment.id},'Programme démo','STAMPS',8,'1 produit offert',1,5,'Carte de démonstration Fidgo',true)
+    values(${establishment.id},'Programme démo','STAMPS',8,'1 produit offert',1,5,'Carte de démonstration Retiko',true)
     on conflict(establishment_id) do update set
       program_name=excluded.program_name,
       mode=excluded.mode,
@@ -140,7 +140,7 @@ try {
   }
   card = { ...card, balance: Number(freshCard.balance) };
 
-  console.log("Démo Fidgo prête.");
+  console.log("Démo Retiko prête.");
   console.log(`Inscription : ${appUrl}/j/${establishment.slug}`);
   console.log(`Carte : ${appUrl}/c/${card.token}`);
   console.log(`Code court : ${card.short_code}`);

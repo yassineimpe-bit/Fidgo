@@ -1,15 +1,15 @@
-# Fidgo V0
+# Retiko V0
 ## Cahier des charges pré-pilote consolidé
 
 ### 1. Objectif de la V0
 
-Fidgo doit permettre à un commerce indépendant de lancer un programme de fidélité numérique utilisable par de vrais clients, sans application native obligatoire.
+Retiko doit permettre à un commerce indépendant de lancer un programme de fidélité numérique utilisable par de vrais clients, sans application native obligatoire.
 
 La V0 est validée lorsque :
 
-> **Un restaurateur qui ne connaît pas Fidgo peut créer son compte, configurer son programme, imprimer son QR, installer Fidgo sur son téléphone, inscrire un vrai client, scanner sa carte, créditer un passage, atteindre puis consommer une récompense sans aide nécessaire du produit.**
+> **Un restaurateur qui ne connaît pas Retiko peut créer son compte, configurer son programme, imprimer son QR, installer Retiko sur son téléphone, inscrire un vrai client, scanner sa carte, créditer un passage, atteindre puis consommer une récompense sans aide nécessaire du produit.**
 
-Pendant le pilote, Fidgo sera néanmoins présent au premier service. L’autonomie est un critère de qualité du produit, pas une obligation d’abandonner le commerçant avec une bêta un samedi midi.
+Pendant le pilote, Retiko sera néanmoins présent au premier service. L’autonomie est un critère de qualité du produit, pas une obligation d’abandonner le commerçant avec une bêta un samedi midi.
 
 ---
 
@@ -158,7 +158,7 @@ Le scanner doit fonctionner en situation réelle de service, pas seulement posé
 
 ## Scan QR
 
-Le QR client contient l’identifiant Fidgo prévu par le système.
+Le QR client contient l’identifiant Retiko prévu par le système.
 
 Après détection :
 
@@ -417,7 +417,7 @@ L’interface affiche alors :
 
 Une interaction avec la page peut relancer la période active.
 
-Cela évite qu’un téléphone oublié dans une poche transforme Fidgo en test de charge involontaire.
+Cela évite qu’un téléphone oublié dans une poche transforme Retiko en test de charge involontaire.
 
 ---
 
@@ -429,10 +429,10 @@ Elle ne constitue **pas** une stratégie fiable de récupération long terme, no
 
 ## Même navigateur
 
-Si Fidgo reconnaît localement une carte du commerce :
+Si Retiko reconnaît localement une carte du commerce :
 
 ```text
-Vous avez déjà une carte Fidgo
+Vous avez déjà une carte Retiko
 
 [ Ouvrir ma carte ]
 ```
@@ -521,13 +521,13 @@ Parcours :
 Afficher une checklist :
 
 ```text
-Configuration Fidgo
+Configuration Retiko
 
 ✓ Compte créé
 ✓ Commerce configuré
 ✓ Programme fidélité
 ○ Imprimer mon QR
-○ Installer Fidgo
+○ Installer Retiko
 ○ Faire un test
 ```
 
@@ -669,7 +669,7 @@ On peut ainsi distinguer :
 
 ```text
 12 scans / 40 tickets = intéressant
-12 scans / 300 tickets = personnel n'utilise presque pas Fidgo
+12 scans / 300 tickets = personnel n'utilise presque pas Retiko
 ```
 
 Cette collecte doit être prévue dans l’accord pilote.
@@ -719,7 +719,7 @@ temps total des plages critiques
 
 # 18. Observabilité
 
-Avant le premier pilote, Fidgo doit disposer d’un outil de remontée d’erreurs type Sentry ou équivalent.
+Avant le premier pilote, Retiko doit disposer d’un outil de remontée d’erreurs type Sentry ou équivalent.
 
 Capturer :
 
@@ -764,7 +764,7 @@ En cas de panne :
 2. noter le code court du client
 3. noter l'opération attendue
 4. continuer le service
-5. régulariser dans Fidgo plus tard
+5. régulariser dans Retiko plus tard
 ```
 
 La régularisation passe par :
@@ -796,10 +796,10 @@ Pour les données du programme fidélité :
 ```text
 Commerce = responsable du traitement
 
-Fidgo = sous-traitant
+Retiko = sous-traitant
 ```
 
-Fidgo peut rester responsable de traitement pour ses propres données SaaS :
+Retiko peut rester responsable de traitement pour ses propres données SaaS :
 
 ```text
 compte restaurateur
@@ -913,7 +913,7 @@ peu de hiérarchie
 
 Le premier service est observé directement.
 
-Ensuite Fidgo doit pouvoir fonctionner sans intervention quotidienne.
+Ensuite Retiko doit pouvoir fonctionner sans intervention quotidienne.
 
 ---
 
@@ -947,7 +947,7 @@ feedback commerce
 
 # 25. Ce qui est explicitement hors V0
 
-Pour empêcher Fidgo de se transformer de nouveau en ERP de fidélité avant d’avoir trois utilisateurs :
+Pour empêcher Retiko de se transformer de nouveau en ERP de fidélité avant d’avoir trois utilisateurs :
 
 | Fonctionnalité | Moment |
 |---|---|
@@ -994,4 +994,4 @@ Pour empêcher Fidgo de se transformer de nouveau en ERP de fidélité avant d�
 | **22** | Wallet réel |
 | **23** | roadmap V1 décidée avec les données |
 
-La différence essentielle avec le tout premier cahier des charges est maintenant nette : **on ne construit plus Fidgo pour compléter une liste de fonctionnalités. On construit exactement ce qu’il faut pour survivre une semaine derrière une vraie caisse et apprendre quelque chose de fiable.**
+La différence essentielle avec le tout premier cahier des charges est maintenant nette : **on ne construit plus Retiko pour compléter une liste de fonctionnalités. On construit exactement ce qu’il faut pour survivre une semaine derrière une vraie caisse et apprendre quelque chose de fiable.**

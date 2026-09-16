@@ -14,7 +14,7 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     sessionExpired: false,
   },
   NETWORK_ERROR: {
-    message: "Connexion perdue pendant l’action. Réessaie : Fidgo réutilise la même clé pour éviter un double crédit.",
+    message: "Connexion perdue pendant l’action. Réessaie : Retiko réutilise la même clé pour éviter un double crédit.",
     retryable: true,
     network: true,
     sessionExpired: false,
@@ -38,7 +38,7 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     sessionExpired: false,
   },
   INVALID_QR: {
-    message: "Ce QR code n’est pas une carte Fidgo valide.",
+    message: "Ce QR code n’est pas une carte Retiko valide.",
     retryable: false,
     network: false,
     sessionExpired: false,

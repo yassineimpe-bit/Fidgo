@@ -18,12 +18,13 @@ export async function POST(req: Request) {
 
   // Le message brut peut contenir une valeur saisie par l'utilisateur. Seule
   // son empreinte est envoyée aux logs d'observabilité.
-  console.error("FIDGO_CLIENT_ERROR", {
+  console.error("RETIKO_CLIENT_ERROR", {
     name,
     fingerprint,
     digest,
     path,
     userAgent: boundedText(req.headers.get("user-agent"), 300) || "unknown",
+    version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev",
   });
   return Response.json({ ok: true }, { status: 202 });
 }

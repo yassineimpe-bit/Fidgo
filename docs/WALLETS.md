@@ -1,6 +1,6 @@
 # Apple Wallet et Google Wallet
 
-Fidgo émet maintenant de vrais passes Wallet lorsque les credentials correspondants sont activés. Le QR contenu dans les deux portefeuilles reste `LOY1:<card.token>` : le scanner caisse ne change pas.
+Retiko émet maintenant de vrais passes Wallet lorsque les credentials correspondants sont activés. Le QR contenu dans les deux portefeuilles reste `LOY1:<card.token>` : le scanner caisse ne change pas.
 
 ## Google Wallet
 
@@ -16,7 +16,7 @@ Variables :
 - `GOOGLE_WALLET_ISSUER_ID`
 - `GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64`
 
-Au premier clic sur `/api/wallet/google/[token]`, Fidgo :
+Au premier clic sur `/api/wallet/google/[token]`, Retiko :
 - crée la Loyalty Class du restaurant si nécessaire ;
 - crée/actualise le Loyalty Object de la carte ;
 - génère un JWT signé `savetowallet` ;
@@ -33,7 +33,7 @@ Documentation officielle :
 
 Pré-requis externes :
 1. compte Apple Developer ;
-2. créer un Pass Type Identifier, par exemple `pass.fr.fidgo.loyalty` ;
+2. créer un Pass Type Identifier, par exemple `pass.fr.retiko.loyalty` ;
 3. créer le certificat associé au Pass Type ID ;
 4. exporter le certificat de signature et sa clé privée en PEM ;
 5. récupérer le certificat Apple WWDR en PEM ;
@@ -54,7 +54,7 @@ Variables :
 - état de la récompense ;
 - code court ;
 - QR `LOY1:<token>` ;
-- `webServiceURL` Fidgo et token d'authentification dérivé par HMAC.
+- `webServiceURL` Retiko et token d'authentification dérivé par HMAC.
 
 Le service Apple est exposé sous `/api/wallet/apple/web/v1/...` et implémente :
 - enregistrement appareil + push token ;
@@ -63,7 +63,7 @@ Le service Apple est exposé sous `/api/wallet/apple/web/v1/...` et implémente 
 - téléchargement de la nouvelle version du pass ;
 - endpoint de logs.
 
-Après modification du solde, Fidgo utilise `after()` pour envoyer le push de mise à jour aux appareils Apple enregistrés. Le device récupère ensuite le nouveau `.pkpass` portant le même Pass Type ID et le même serial number.
+Après modification du solde, Retiko utilise `after()` pour envoyer le push de mise à jour aux appareils Apple enregistrés. Le device récupère ensuite le nouveau `.pkpass` portant le même Pass Type ID et le même serial number.
 
 Documentation officielle :
 - https://developer.apple.com/documentation/walletpasses/creating-a-store-card-pass

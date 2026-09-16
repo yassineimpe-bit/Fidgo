@@ -19,7 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     return new Response(new Uint8Array(pass), {
       headers: {
         "content-type": "application/vnd.apple.pkpass",
-        "content-disposition": `attachment; filename="fidgo-${card.shortCode}.pkpass"`,
+        "content-disposition": `attachment; filename="retiko-${card.shortCode}.pkpass"`,
         "cache-control": "no-store",
       },
     });
