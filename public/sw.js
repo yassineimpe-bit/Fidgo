@@ -1,5 +1,15 @@
-const CACHE = "retiko-shell-v2";
-const SHELL = ["/", "/login", "/signup", "/offline", "/icon.svg", "/manifest.webmanifest"];
+const CACHE = "retiko-shell-v3";
+const SHELL = [
+  "/",
+  "/login",
+  "/signup",
+  "/offline",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/manifest.webmanifest",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
