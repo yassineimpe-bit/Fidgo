@@ -8,8 +8,14 @@ export function RestaurantForm({ restaurant }: { restaurant: Restaurant }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
     const f = new FormData(event.currentTarget);
-    const response = await fetch("/api/restaurant", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name:f.get("name"),logoUrl:f.get("logoUrl"),primaryColor:f.get("primaryColor"),address:f.get("address"),phone:f.get("phone"),instagram:f.get("instagram"),website:f.get("website") }) });
-    setBusy(false); setMessage(response.ok ? "Commerce enregistré." : "Impossible d’enregistrer.");
+    try {
+      const response = await fetch("/api/restaurant", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name:f.get("name"),logoUrl:f.get("logoUrl"),primaryColor:f.get("primaryColor"),address:f.get("address"),phone:f.get("phone"),instagram:f.get("instagram"),website:f.get("website") }) });
+      setMessage(response.ok ? "Commerce enregistré." : "Impossible d’enregistrer.");
+    } catch {
+      setMessage("Connexion perdue. Vérifie le réseau puis réessaie.");
+    } finally {
+      setBusy(false);
+    }
   }
   return <form className="card form" onSubmit={submit}>
     <div className="grid grid-2"><div className="field"><label htmlFor="restaurant-name">Nom</label><input className="input" id="restaurant-name" name="name" defaultValue={restaurant.name}/></div><div className="field"><label htmlFor="restaurant-color">Couleur</label><input className="input" id="restaurant-color" name="primaryColor" type="color" defaultValue={restaurant.primary_color || "#111111"}/></div></div>

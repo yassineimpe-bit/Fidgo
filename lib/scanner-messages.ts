@@ -37,6 +37,15 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     network: false,
     sessionExpired: false,
   },
+  // enforceRateLimit() (lib/rate-limit.ts) renvoie ce code sur scan/lookup/
+  // credit/redeem : sans entrée dédiée il tombait sur le message technique
+  // générique au lieu d'annoncer clairement la limite de fréquence.
+  RATE_LIMITED: {
+    message: "Trop de tentatives. Réessayez dans quelques instants.",
+    retryable: true,
+    network: false,
+    sessionExpired: false,
+  },
   INVALID_QR: {
     message: "Ce QR code n’est pas une carte Retiko valide.",
     retryable: false,

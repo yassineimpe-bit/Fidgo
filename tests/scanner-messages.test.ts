@@ -36,6 +36,14 @@ describe("scannerErrorInfo", () => {
     });
   });
 
+  it("shows a clear rate-limit message for the code enforceRateLimit() actually returns", () => {
+    // Bug réel : enforceRateLimit() (lib/rate-limit.ts) renvoie {error:"RATE_LIMITED"}
+    // sur scan/lookup/credit/redeem, mais seul TOO_MANY_ATTEMPTS avait un message dédié.
+    const info = scannerErrorInfo(new Error("RATE_LIMITED"));
+    expect(info.message).toBe("Trop de tentatives. Réessayez dans quelques instants.");
+    expect(info.retryable).toBe(true);
+  });
+
   it("fails unknown backend codes safely without exposing them as the main message", () => {
     const info = scannerErrorInfo(new Error("SOME_INTERNAL_FAILURE"));
     expect(info.code).toBe("SOME_INTERNAL_FAILURE");

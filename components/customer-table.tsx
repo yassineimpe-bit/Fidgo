@@ -35,33 +35,44 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
 
     setBusy(customer.id);
     setMessage("");
-    const response = await fetch(`/api/customers/${customer.id}/adjust`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ newBalance, reason: reason.trim(), idempotencyKey: crypto.randomUUID() }),
-    });
-    const data = await response.json().catch(() => ({}));
-    setBusy(null);
-    if (!response.ok) {
-      setMessage(data.error === "NO_CHANGE" ? "Le solde est déjà à cette valeur." : "Impossible d’ajuster le solde.");
-      return;
+    try {
+      const response = await fetch(`/api/customers/${customer.id}/adjust`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ newBalance, reason: reason.trim(), idempotencyKey: crypto.randomUUID() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error === "NO_CHANGE" ? "Le solde est déjà à cette valeur." : "Impossible d’ajuster le solde.");
+        return;
+      }
+      setRows((current) => current.map((row) => row.id === customer.id ? { ...row, balance: Number(data.balance) } : row));
+      setMessage(`Solde ajusté à ${data.balance}. Le motif et l’opération ont été enregistrés.`);
+    } catch {
+      setMessage("Connexion perdue. Vérifie le réseau puis réessaie.");
+    } finally {
+      setBusy(null);
     }
-    setRows((current) => current.map((row) => row.id === customer.id ? { ...row, balance: Number(data.balance) } : row));
-    setMessage(`Solde ajusté à ${data.balance}. Le motif et l’opération ont été enregistrés.`);
   }
 
   async function erase(customer: Customer) {
     if (!confirm("Effacer les données personnelles, révoquer la carte, les Wallets et les liens de récupération ? Le ledger sera conservé sous forme pseudonymisée.")) return;
     setBusy(customer.id);
-    const response = await fetch(`/api/customers/${customer.id}`, { method: "DELETE" });
-    const data = await response.json();
-    setBusy(null);
-    if (!response.ok) {
-      setMessage(data.error || "Erreur");
-      return;
+    setMessage("");
+    try {
+      const response = await fetch(`/api/customers/${customer.id}`, { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setMessage(data.error || "Erreur");
+        return;
+      }
+      setRows((current) => current.filter((row) => row.id !== customer.id));
+      setMessage("Données personnelles effacées ; carte, Wallets et liens de récupération révoqués. Le ledger est conservé.");
+    } catch {
+      setMessage("Connexion perdue. Vérifie le réseau puis réessaie.");
+    } finally {
+      setBusy(null);
     }
-    setRows((current) => current.filter((row) => row.id !== customer.id));
-    setMessage("Données personnelles effacées ; carte, Wallets et liens de récupération révoqués. Le ledger est conservé.");
   }
 
   if (rows.length === 0) {

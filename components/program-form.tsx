@@ -26,8 +26,16 @@ export function ProgramForm({ program }: { program: Program }) {
     e.preventDefault(); setLoading(true); setMsg("");
     const f = new FormData(e.currentTarget);
     const payload = { programName:f.get("programName"), mode, pointsRule, rewardThreshold:Number(f.get("rewardThreshold")), rewardLabel:f.get("rewardLabel"), stampsPerVisit:Number(f.get("stampsPerVisit")), pointsPerPurchase:Number(f.get("pointsPerPurchase")), pointsPerEuro:Number(f.get("pointsPerEuro")), dailyEarnLimit:Number(f.get("dailyEarnLimit")), cooldownSeconds:Number(f.get("cooldownSeconds")), expiresAfterDays:f.get("expiresAfterDays")?Number(f.get("expiresAfterDays")):null, cardMessage:f.get("cardMessage") };
-    const r = await fetch("/api/program", { method:"PATCH", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
-    setLoading(false); setMsg(r.ok ? "Programme enregistré." : "Impossible d’enregistrer.");
+    try {
+      const r = await fetch("/api/program", { method:"PATCH", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
+      setMsg(r.ok ? "Programme enregistré." : "Impossible d’enregistrer.");
+    } catch {
+      // Sans ce filet, une coupure réseau pendant l'envoi laissait le bouton
+      // bloqué sur "Enregistrement…" indéfiniment.
+      setMsg("Connexion perdue. Vérifie le réseau puis réessaie.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return <form className="form" onSubmit={submit}>
