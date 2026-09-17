@@ -2,6 +2,7 @@ import { JWT } from "google-auth-library";
 import { importPKCS8, SignJWT } from "jose";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
+import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
 import type { WalletCard } from "@/lib/wallet-data";
 import { safeErrorCode } from "@/lib/observability";
 
@@ -23,6 +24,7 @@ function config() {
   const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID;
   const encoded = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64;
   if (!issuerId || !encoded) throw new Error("GOOGLE_WALLET_NOT_CONFIGURED");
+  if (!isValidGoogleIssuerId(issuerId)) throw new Error("GOOGLE_WALLET_BAD_ISSUER_ID");
   let serviceAccount: ServiceAccount;
   try {
     serviceAccount = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as ServiceAccount;
@@ -30,7 +32,7 @@ function config() {
     throw new Error("GOOGLE_WALLET_BAD_CREDENTIALS");
   }
   if (!serviceAccount.client_email || !serviceAccount.private_key) throw new Error("GOOGLE_WALLET_BAD_CREDENTIALS");
-  return { issuerId, serviceAccount };
+  return { issuerId: issuerId.trim(), serviceAccount };
 }
 
 function ids(card: WalletCard) {
@@ -81,7 +83,7 @@ function classBody(card: WalletCard) {
   };
 }
 
-function objectBody(card: WalletCard) {
+export function objectBody(card: WalletCard) {
   const { classId, objectId } = ids(card);
   const base = getAppUrl();
   return {
@@ -89,12 +91,19 @@ function objectBody(card: WalletCard) {
     classId,
     state: "ACTIVE",
     accountName: (card.firstName || "Client Retiko").slice(0, 20),
-    accountId: card.shortCode.slice(0, 20),
-    loyaltyPoints: { label: card.mode === "STAMPS" ? "Tampons" : "Points", balance: { int: card.balance } },
+    accountId: card.shortCode,
+    loyaltyPoints: card.mode === "STAMPS"
+      ? { label: "Tampons", balance: { string: `${card.balance}/${card.rewardThreshold}` } }
+      : { label: "Points", balance: { string: `${card.balance}` } },
+    secondaryLoyaltyPoints: {
+      label: card.rewardLabel,
+      balance: {
+        string: card.balance >= card.rewardThreshold
+          ? "Disponible"
+          : `${card.rewardThreshold - card.balance} restant(s)`,
+      },
+    },
     barcode: { type: "QR_CODE", value: `LOY1:${card.token}`, alternateText: card.shortCode },
-    textModulesData: [
-      { id: "reward", header: "Récompense", body: card.balance >= card.rewardThreshold ? `Disponible : ${card.rewardLabel}` : `${card.rewardThreshold - card.balance} restant(s) avant ${card.rewardLabel}` },
-    ],
     linksModuleData: base ? { uris: [{ uri: `${base}/c/${card.token}`, description: "Voir ma carte Retiko" }] } : undefined,
   };
 }
@@ -104,20 +113,20 @@ export async function ensureGoogleWalletObject(card: WalletCard) {
   const classGet = await walletFetch(`/loyaltyClass/${encodeURIComponent(classId)}`);
   if (classGet.status === 404) {
     const created = await walletFetch("/loyaltyClass", { method: "POST", body: JSON.stringify(classBody(card)) });
-    if (!created.ok) throw new Error(`GOOGLE_CLASS_${created.status}:${await created.text()}`);
+    if (!created.ok) throw new Error(`GOOGLE_CLASS_CREATE_${created.status}`);
   } else if (!classGet.ok) {
-    throw new Error(`GOOGLE_CLASS_${classGet.status}:${await classGet.text()}`);
+    throw new Error(`GOOGLE_CLASS_GET_${classGet.status}`);
   }
 
   const objectGet = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`);
   if (objectGet.status === 404) {
     const created = await walletFetch("/loyaltyObject", { method: "POST", body: JSON.stringify(objectBody(card)) });
-    if (!created.ok) throw new Error(`GOOGLE_OBJECT_${created.status}:${await created.text()}`);
+    if (!created.ok) throw new Error(`GOOGLE_OBJECT_CREATE_${created.status}`);
   } else if (objectGet.ok) {
     const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card)) });
-    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_PATCH_${updated.status}:${await updated.text()}`);
+    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_PATCH_${updated.status}`);
   } else {
-    throw new Error(`GOOGLE_OBJECT_${objectGet.status}:${await objectGet.text()}`);
+    throw new Error(`GOOGLE_OBJECT_GET_${objectGet.status}`);
   }
 
   await sql`
