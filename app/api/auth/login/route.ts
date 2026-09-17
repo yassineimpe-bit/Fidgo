@@ -5,6 +5,7 @@ import { signSession, sessionCookie } from "@/lib/auth";
 import { consumeRateLimit, rateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
+import { safeErrorCode } from "@/lib/observability";
 
 /**
  * Hash factice (mot de passe aleatoire, meme cout que la production) compare
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // Meme logique que /api/auth/signup : ne jamais laisser une exception
     // (base injoignable, schema desynchronise) remonter sans corps JSON.
-    console.error("LOGIN_FAILED", error);
+    console.error("LOGIN_FAILED", { code: safeErrorCode(error, "LOGIN_FAILED") });
     return NextResponse.json({ error: "LOGIN_FAILED" }, { status: 500 });
   }
 }

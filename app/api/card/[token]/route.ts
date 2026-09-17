@@ -14,15 +14,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   if (!token) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   const rows = await sql`
-    select c.token, c.short_code, c.balance, cu.first_name,
+    select c.token, c.short_code, c.balance, c.expires_at, cu.first_name,
       e.name as establishment_name, p.mode, p.reward_threshold, p.reward_label
     from cards c
     join customers cu on cu.id = c.customer_id
     join establishments e on e.id = c.establishment_id
     join loyalty_programs p on p.establishment_id = e.id
     where c.token = ${token} and c.active = true and cu.deleted_at is null
+      and e.status = 'active' and p.active = true
     limit 1
   `;
-  if (!rows[0]) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  if (!rows[0] || (rows[0].expires_at && new Date(rows[0].expires_at) < new Date())) {
+    return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+  }
+  delete rows[0].expires_at;
   return NextResponse.json(rows[0], { headers: { "cache-control": "no-store" } });
 }

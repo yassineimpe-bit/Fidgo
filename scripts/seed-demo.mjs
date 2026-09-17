@@ -142,10 +142,8 @@ try {
 
   console.log("Démo Retiko prête.");
   console.log(`Inscription : ${appUrl}/j/${establishment.slug}`);
-  console.log(`Carte : ${appUrl}/c/${card.token}`);
-  console.log(`Code court : ${card.short_code}`);
   console.log(`Solde : ${card.balance}/8`);
-  if (ownerEmail && ownerPassword) console.log(`Owner : ${ownerEmail}`);
+  if (ownerEmail && ownerPassword) console.log("Owner créé.");
   else console.log("Owner non créé : définir DEMO_OWNER_EMAIL et DEMO_OWNER_PASSWORD pour activer le login de démo.");
 } finally {
   await sql.end({ timeout: 5 });

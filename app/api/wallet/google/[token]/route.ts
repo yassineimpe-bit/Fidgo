@@ -1,6 +1,7 @@
 import { googleWalletEnabled, googleWalletSaveLink } from "@/lib/google-wallet";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { walletCardByToken } from "@/lib/wallet-data";
+import { safeErrorCode } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -18,8 +19,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const url = await googleWalletSaveLink(card);
     return Response.redirect(url, 302);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "GOOGLE_WALLET_ERROR";
-    console.error("Google Wallet issue failed", message);
+    console.error("Google Wallet issue failed", { code: safeErrorCode(error, "GOOGLE_WALLET_ERROR") });
     return Response.json({ error: "GOOGLE_WALLET_UNAVAILABLE" }, { status: 503 });
   }
 }

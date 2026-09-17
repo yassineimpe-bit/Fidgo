@@ -14,6 +14,10 @@
 - effacement des données personnelles avec désactivation de carte ;
 - conservation du ledger pseudonymisé pour intégrité et antifraude.
 
+La cartographie technique détaillée, les effets exacts de l'effacement et la
+politique de purge proposée figurent dans `DATA_LIFECYCLE.md`. Les durées qui y
+sont indiquées restent à valider avant toute planification automatique.
+
 ## Répartition des rôles pour le programme fidélité
 
 Pour les données des consommateurs traitées dans le cadre du programme de fidélité :

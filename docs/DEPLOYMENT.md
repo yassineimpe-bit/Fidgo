@@ -28,6 +28,24 @@ npm run bootstrap:demo
 
 Le seed est idempotent et vérifie l'intégrité du ledger de la carte de démonstration.
 
+La migration `012_data_lifecycle.sql` protège le ledger contre les hard-deletes
+et répare les anciennes suppressions logiques. Avant production : l'appliquer
+sur une branche Neon temporaire, rejouer `npm run db:setup`, puis exécuter
+`npm run db:verify`. Cette PR ne l'applique pas en production.
+
+La maintenance de rétention reste manuelle pendant le pilote :
+
+```bash
+# Observation uniquement
+npm run data:purge
+
+# Après validation des volumes et durées, une seule tranche de 5 000 lignes/table
+npm run data:purge -- --execute
+```
+
+Ne jamais automatiser cette commande avant validation de la politique décrite
+dans `docs/DATA_LIFECYCLE.md`.
+
 ## 2. Domaine `retiko.fr` + Vercel
 
 Le domaine définitif est `retiko.fr`, enregistré chez OVHcloud. Il doit être attaché au projet Vercel avant toute impression de QR, activation publique des liens de récupération et émission Wallet réelle.

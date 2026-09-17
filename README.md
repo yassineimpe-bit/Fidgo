@@ -58,4 +58,4 @@ npm run dev
 
 Puis ouvrir `/signup`.
 
-Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/PILOT.md`.
+Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/DATA_LIFECYCLE.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/PILOT.md`.

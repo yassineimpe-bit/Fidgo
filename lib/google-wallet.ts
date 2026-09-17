@@ -3,6 +3,7 @@ import { importPKCS8, SignJWT } from "jose";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import type { WalletCard } from "@/lib/wallet-data";
+import { safeErrorCode } from "@/lib/observability";
 
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 const WALLET_API = "https://walletobjects.googleapis.com/walletobjects/v1";
@@ -152,7 +153,7 @@ export async function syncGoogleWallet(card: WalletCard) {
   try {
     await ensureGoogleWalletObject(card);
   } catch (error) {
-    const message = error instanceof Error ? error.message.slice(0, 1000) : "GOOGLE_WALLET_SYNC_FAILED";
-    await sql`update wallet_passes set status='error',last_error=${message},updated_at=now() where card_id=${card.cardId} and provider='GOOGLE'`;
+    const code = safeErrorCode(error, "GOOGLE_WALLET_SYNC_FAILED");
+    await sql`update wallet_passes set status='error',last_error=${code},updated_at=now() where card_id=${card.cardId} and provider='GOOGLE'`;
   }
 }
