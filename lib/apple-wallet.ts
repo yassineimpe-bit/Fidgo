@@ -1,5 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { connect } from "node:http2";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { PKPass } from "passkit-generator";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
@@ -42,19 +44,24 @@ function rgb(hex: string) {
   return `rgb(${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)})`;
 }
 
+// Lu depuis le disque plutot que via un fetch HTTP vers l'app elle-meme :
+// un aller-retour reseau vers sa propre instance est un point de panne
+// inutile (auto-appel serverless, cold start, absence de NEXT_PUBLIC_APP_URL
+// en previw) pour un fichier statique deja present dans le bundle.
+let cachedWalletImage: Buffer | null = null;
 async function walletImage() {
-  const base = getAppUrl();
-  if (!base) throw new Error("APP_URL is required");
-  const response = await fetch(`${base}/wallet-logo.png`, { cache: "force-cache" });
-  if (!response.ok) throw new Error("APPLE_WALLET_LOGO_UNAVAILABLE");
-  return Buffer.from(await response.arrayBuffer());
+  if (!cachedWalletImage) {
+    cachedWalletImage = await readFile(join(process.cwd(), "public", "wallet-logo.png"));
+  }
+  return cachedWalletImage;
 }
 
 export async function buildApplePass(card: WalletCard) {
   const cfg = config();
+  const appUrl = getAppUrl();
+  if (!appUrl) throw new Error("APP_URL is required");
   const image = await walletImage();
   const authToken = appleAuthenticationToken(card.token);
-  const appUrl = getAppUrl();
 
   const pass = new PKPass(
     { "icon.png": image, "icon@2x.png": image, "icon@3x.png": image, "logo.png": image, "logo@2x.png": image, "logo@3x.png": image },
