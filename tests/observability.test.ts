@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { redactSensitivePath, safeErrorCode, sanitizeAuditText } from "../lib/observability";
+import { describe, expect, it, vi } from "vitest";
+import { redactSensitivePath, safeErrorCode, sanitizeAuditText, withApiErrorHandling } from "../lib/observability";
 
 describe("observability path redaction", () => {
   it("redacts long opaque card and recovery tokens", () => {
@@ -33,5 +33,38 @@ describe("observability path redaction", () => {
     expect(safeErrorCode(suspiciousCode, "PROVIDER_FAILED")).toMatch(/^PROVIDER_FAILED_[a-f0-9]{8}$/);
     expect(safeErrorCode(new Error("Bearer secret-value-for-provider"), "UNKNOWN"))
       .toMatch(/^UNKNOWN_[a-f0-9]{8}$/);
+  });
+});
+
+describe("withApiErrorHandling", () => {
+  it("passes through a successful response untouched", async () => {
+    const handler = withApiErrorHandling("TEST_ROUTE", async () => Response.json({ ok: true }));
+    const response = await handler();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it("turns an uncaught exception into a generic JSON 500 without leaking the raw message", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const handler = withApiErrorHandling("TEST_ROUTE", async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:5432 password=hunter2");
+    });
+    const response = await handler();
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toMatch(/application\/json/);
+    const body = await response.json();
+    expect(body).toEqual({ error: "SERVER_ERROR" });
+    expect(consoleError).toHaveBeenCalledWith("TEST_ROUTE_FAILED", expect.objectContaining({ code: expect.any(String) }));
+    const loggedCode = consoleError.mock.calls[0][1].code;
+    expect(loggedCode).not.toContain("hunter2");
+    consoleError.mockRestore();
+  });
+
+  it("forwards arguments to the wrapped handler (route params, request, ...)", async () => {
+    const handler = withApiErrorHandling("TEST_ROUTE", async (req: Request, ctx: { id: string }) => {
+      return Response.json({ url: req.url, id: ctx.id });
+    });
+    const response = await handler(new Request("http://localhost/api/test"), { id: "abc" });
+    expect(await response.json()).toEqual({ url: "http://localhost/api/test", id: "abc" });
   });
 });

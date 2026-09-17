@@ -1,8 +1,9 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageProgram } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleGet(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
@@ -80,3 +81,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     },
   });
 }
+
+export const GET = withApiErrorHandling("CUSTOMER_EXPORT", handleGet);

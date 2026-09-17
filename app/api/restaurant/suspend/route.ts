@@ -4,6 +4,7 @@ import { clearedSessionCookie, getSession } from "@/lib/auth";
 import { notifyAppleWalletRevocation } from "@/lib/apple-wallet";
 import { sql } from "@/lib/db";
 import { canSuspendEstablishment } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
 
@@ -12,7 +13,7 @@ import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
  * Une réouverture exige une intervention administrateur et une réémission des
  * accès/cartes ; aucune suppression physique du ledger n'est proposée.
  */
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -86,3 +87,5 @@ export async function POST(req: Request) {
   response.cookies.set(clearedSessionCookie());
   return response;
 }
+
+export const POST = withApiErrorHandling("RESTAURANT_SUSPEND", handlePost);

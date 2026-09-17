@@ -1,9 +1,10 @@
 import { hashCardRecoveryToken, isValidCardRecoveryToken } from "@/lib/card-recovery";
 import { sql } from "@/lib/db";
+import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
 
@@ -60,3 +61,5 @@ export async function POST(req: Request) {
     throw error;
   }
 }
+
+export const POST = withApiErrorHandling("RECOVERY_CONSUME", handlePost);

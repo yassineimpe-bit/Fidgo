@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { boundedText } from "@/lib/input";
-import { redactSensitivePath } from "@/lib/observability";
+import { redactSensitivePath, withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin, requestIp } from "@/lib/security";
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const rate = await consumeRateLimit(`client-error:${requestIp(req)}`, 20, 60 * 60);
@@ -30,3 +30,9 @@ export async function POST(req: Request) {
   });
   return Response.json({ ok: true }, { status: 202 });
 }
+
+/**
+ * Ce endpoint reçoit les erreurs client (voir app/error.tsx) : une base
+ * injoignable ici ne doit pas générer une seconde erreur non gérée.
+ */
+export const POST = withApiErrorHandling("CLIENT_ERRORS", handlePost);

@@ -6,7 +6,7 @@ import { isEmail } from "@/lib/input";
 import { getAppUrl } from "@/lib/app-url";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
-import { safeErrorCode } from "@/lib/observability";
+import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 
 const GENERIC_RESPONSE = {
   ok: true,
@@ -104,7 +104,7 @@ async function processRecoveryRequest(slug: string, email: string) {
   }
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
 
@@ -131,3 +131,10 @@ export async function POST(req: Request) {
 
   return Response.json(GENERIC_RESPONSE, { status: 202, headers: PRIVATE_HEADERS });
 }
+
+/**
+ * `consumeRateLimit` interroge la base de façon synchrone avant la réponse :
+ * une panne à cet instant ne doit pas faire fuiter une 500 brute (le flag
+ * étant coupé en environnement de test, ce chemin n'était pas exercé).
+ */
+export const POST = withApiErrorHandling("RECOVERY_REQUEST", handlePost);

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { clearedSessionCookie, getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { withApiErrorHandling } from "@/lib/observability";
 import { requireSameOrigin } from "@/lib/security";
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const origin = requireSameOrigin(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
 
@@ -26,3 +27,5 @@ export async function POST(request: Request) {
   response.cookies.set(clearedSessionCookie());
   return response;
 }
+
+export const POST = withApiErrorHandling("AUTH_LOGOUT", handlePost);

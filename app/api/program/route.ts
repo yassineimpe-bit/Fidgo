@@ -2,16 +2,19 @@ import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { boundedInt, boundedNumber, boundedText } from "@/lib/input";
 import { canManageProgram } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
 
-export async function GET() {
+async function handleGet() {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const [program] = await sql`select * from loyalty_programs where establishment_id = ${session.establishmentId}`;
   return Response.json(program, { headers: { "cache-control": "no-store" } });
 }
 
-export async function PATCH(req: Request) {
+export const GET = withApiErrorHandling("PROGRAM_GET", handleGet);
+
+async function handlePatch(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -54,3 +57,5 @@ export async function PATCH(req: Request) {
   });
   return Response.json(program, { headers: { "cache-control": "no-store" } });
 }
+
+export const PATCH = withApiErrorHandling("PROGRAM_PATCH", handlePatch);

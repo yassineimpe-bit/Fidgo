@@ -2,10 +2,13 @@ import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canReverse, isValidIdempotencyKey } from "@/lib/loyalty";
+import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-export async function POST(req: Request) {
+const KNOWN_REVERSE_ERRORS = new Set(["TRANSACTION_NOT_FOUND", "ALREADY_REVERSED", "NEGATIVE_BALANCE", "CANNOT_REVERSE_REVERSAL"]);
+
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -39,7 +42,11 @@ export async function POST(req: Request) {
     return Response.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";
+    const known = KNOWN_REVERSE_ERRORS.has(message);
+    if (!known) console.error("TRANSACTION_REVERSE_FAILED", { code: safeErrorCode(error, "TRANSACTION_REVERSE_FAILED") });
     const status = message === "TRANSACTION_NOT_FOUND" ? 404 : message === "ALREADY_REVERSED" || message === "NEGATIVE_BALANCE" || message === "CANNOT_REVERSE_REVERSAL" ? 409 : 500;
-    return Response.json({ error: message }, { status });
+    return Response.json({ error: known ? message : "TRANSACTION_REVERSE_FAILED" }, { status });
   }
 }
+
+export const POST = withApiErrorHandling("TRANSACTION_REVERSE", handlePost);

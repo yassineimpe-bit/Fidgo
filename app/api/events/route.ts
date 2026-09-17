@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { boundedInt, boundedText } from "@/lib/input";
+import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin, requestIp } from "@/lib/security";
 
@@ -14,7 +15,7 @@ const STAFF_EVENTS = new Set([
   "SCAN_FAILED",
 ]);
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const body = await req.json().catch(() => ({}));
@@ -50,3 +51,5 @@ export async function POST(req: Request) {
   `;
   return Response.json({ ok: true }, { status: 202 });
 }
+
+export const POST = withApiErrorHandling("EVENTS", handlePost);

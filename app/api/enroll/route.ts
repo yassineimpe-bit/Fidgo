@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { cardToken, shortCode } from "@/lib/ids";
 import { isEmail } from "@/lib/input";
+import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 
@@ -27,7 +28,7 @@ async function existingCustomerId(establishmentId: string, email: string | null,
   return existing ? String(existing.id) : null;
 }
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
 
@@ -103,3 +104,5 @@ export async function POST(req: Request) {
 
   return Response.json({ error: "ENROLL_RETRY" }, { status: 503 });
 }
+
+export const POST = withApiErrorHandling("ENROLL", handlePost);

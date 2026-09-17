@@ -2,11 +2,14 @@ import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canScan, isValidIdempotencyKey, parseCardToken } from "@/lib/loyalty";
+import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-export async function POST(req: Request) {
+const KNOWN_REDEEM_ERRORS = new Set(["INSUFFICIENT_BALANCE", "CARD_NOT_FOUND", "CARD_EXPIRED"]);
+
+async function handlePost(req: Request) {
   const started = Date.now();
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
@@ -55,7 +58,12 @@ export async function POST(req: Request) {
     return Response.json({ ...payload, serverMs: Date.now() - started });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";
+    const known = KNOWN_REDEEM_ERRORS.has(message);
+    if (!known) console.error("REDEEM_FAILED", { code: safeErrorCode(error, "REDEEM_FAILED") });
+    const errorCode = known ? message : "REDEEM_FAILED";
     const status = message === "INSUFFICIENT_BALANCE" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : 500;
-    return Response.json({ error: message, serverMs: Date.now() - started }, { status });
+    return Response.json({ error: errorCode, serverMs: Date.now() - started }, { status });
   }
 }
+
+export const POST = withApiErrorHandling("REDEEM", handlePost);

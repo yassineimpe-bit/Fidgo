@@ -5,10 +5,12 @@ import { boundedText } from "@/lib/input";
 import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken, type LoyaltyMode, type PointsRule } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
-import { sanitizeAuditText } from "@/lib/observability";
+import { safeErrorCode, sanitizeAuditText, withApiErrorHandling } from "@/lib/observability";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-export async function POST(req: Request) {
+const KNOWN_CREDIT_ERRORS = new Set(["CARD_NOT_FOUND", "CARD_EXPIRED", "DAILY_LIMIT", "STALE_CARD_STATE", "INVALID_AMOUNT"]);
+
+async function handlePost(req: Request) {
   const started = Date.now();
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
@@ -94,8 +96,15 @@ export async function POST(req: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";
     const cooldown = message.startsWith("COOLDOWN:");
-    const errorCode = cooldown ? "COOLDOWN" : message;
+    const known = cooldown || KNOWN_CREDIT_ERRORS.has(message);
+    // Une erreur non reconnue (base injoignable, contrainte inattendue) ne doit
+    // jamais renvoyer error.message brut au client : seul un code générique
+    // sort ici, le détail va en log serveur via safeErrorCode.
+    if (!known) console.error("CREDIT_FAILED", { code: safeErrorCode(error, "CREDIT_FAILED") });
+    const errorCode = cooldown ? "COOLDOWN" : known ? message : "CREDIT_FAILED";
     const status = cooldown || message === "DAILY_LIMIT" || message === "STALE_CARD_STATE" ? 409 : message === "CARD_NOT_FOUND" ? 404 : message === "CARD_EXPIRED" ? 410 : message === "INVALID_AMOUNT" ? 400 : 500;
     return Response.json({ error: errorCode, remainingSeconds: cooldown ? Number(message.split(":")[1]) : undefined, serverMs: Date.now() - started }, { status });
   }
 }
+
+export const POST = withApiErrorHandling("CREDIT", handlePost);

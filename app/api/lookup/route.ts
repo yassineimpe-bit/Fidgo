@@ -1,10 +1,11 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canScan } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS } from "@/lib/security";
 
-export async function GET(req: Request) {
+async function handleGet(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   // Cette route renvoie un token de carte : reservee aux roles qui scannent.
@@ -33,3 +34,5 @@ export async function GET(req: Request) {
     ? Response.json(row, { headers: PRIVATE_HEADERS })
     : Response.json({ error: "NOT_FOUND" }, { status: 404 });
 }
+
+export const GET = withApiErrorHandling("LOOKUP", handleGet);

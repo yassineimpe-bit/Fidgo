@@ -3,9 +3,10 @@ import { getSession } from "@/lib/auth";
 import { notifyAppleWalletRevocation } from "@/lib/apple-wallet";
 import { sql } from "@/lib/db";
 import { canManageProgram } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handleDelete(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -102,3 +103,5 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
   return Response.json({ ok: true }, { headers: PRIVATE_HEADERS });
 }
+
+export const DELETE = withApiErrorHandling("CUSTOMER_DELETE", handleDelete);

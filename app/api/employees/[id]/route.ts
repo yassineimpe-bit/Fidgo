@@ -1,9 +1,10 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageStaff } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+async function handlePatch(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
 
@@ -48,3 +49,5 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     throw error;
   }
 }
+
+export const PATCH = withApiErrorHandling("EMPLOYEE_PATCH", handlePatch);

@@ -5,10 +5,12 @@ import { boundedInt, boundedText } from "@/lib/input";
 import { canManageProgram, isValidIdempotencyKey } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
-import { sanitizeAuditText } from "@/lib/observability";
+import { safeErrorCode, sanitizeAuditText, withApiErrorHandling } from "@/lib/observability";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+const KNOWN_ADJUST_ERRORS = new Set(["CARD_NOT_FOUND", "NO_CHANGE"]);
+
+async function handlePost(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
 
@@ -78,7 +80,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return Response.json(payload, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";
+    const known = KNOWN_ADJUST_ERRORS.has(message);
+    if (!known) console.error("CARD_ADJUST_FAILED", { code: safeErrorCode(error, "CARD_ADJUST_FAILED") });
     const status = message === "CARD_NOT_FOUND" ? 404 : message === "NO_CHANGE" ? 409 : 500;
-    return Response.json({ error: message }, { status });
+    return Response.json({ error: known ? message : "CARD_ADJUST_FAILED" }, { status });
   }
 }
+
+export const POST = withApiErrorHandling("CARD_ADJUST", handlePost);

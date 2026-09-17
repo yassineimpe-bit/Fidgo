@@ -1,7 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { withApiErrorHandling } from "@/lib/observability";
 
-export async function GET(req: Request) {
+async function handleGet(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const url = new URL(req.url);
@@ -22,3 +23,5 @@ export async function GET(req: Request) {
   `;
   return Response.json(rows, { headers: { "cache-control": "no-store" } });
 }
+
+export const GET = withApiErrorHandling("HISTORY", handleGet);

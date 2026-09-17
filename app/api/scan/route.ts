@@ -1,10 +1,11 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageProgram, canScan, parseCardToken } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
-export async function POST(req: Request) {
+async function handlePost(req: Request) {
   const started = Date.now();
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
@@ -56,3 +57,9 @@ export async function POST(req: Request) {
     serverMs: Date.now() - started,
   }, { headers: { "cache-control": "no-store" } });
 }
+
+/**
+ * Une base injoignable ou un timeout réseau au moment du scan ne doit jamais
+ * remonter en page vide/500 sans corps au commerçant en plein service.
+ */
+export const POST = withApiErrorHandling("SCAN", handlePost);

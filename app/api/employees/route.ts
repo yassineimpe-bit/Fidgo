@@ -2,9 +2,10 @@ import bcrypt from "bcryptjs";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageStaff } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
 
-export async function GET() {
+async function handleGet() {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
@@ -17,7 +18,9 @@ export async function GET() {
   return Response.json(rows, { headers: { "cache-control": "no-store" } });
 }
 
-export async function POST(req: Request) {
+export const GET = withApiErrorHandling("EMPLOYEES_GET", handleGet);
+
+async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -54,3 +57,5 @@ export async function POST(req: Request) {
     throw error;
   }
 }
+
+export const POST = withApiErrorHandling("EMPLOYEES_POST", handlePost);

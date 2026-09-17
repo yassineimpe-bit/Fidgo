@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageProgram } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
 
 /**
@@ -22,7 +23,7 @@ function safeHttpsUrl(input: unknown, max = 500): string | null {
   }
 }
 
-export async function GET() {
+async function handleGet() {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const [restaurant] = await sql`
@@ -32,7 +33,9 @@ export async function GET() {
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });
 }
 
-export async function PATCH(req: Request) {
+export const GET = withApiErrorHandling("RESTAURANT_GET", handleGet);
+
+async function handlePatch(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
   const session = await getSession();
@@ -62,3 +65,5 @@ export async function PATCH(req: Request) {
   });
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });
 }
+
+export const PATCH = withApiErrorHandling("RESTAURANT_PATCH", handlePatch);

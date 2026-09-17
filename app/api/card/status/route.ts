@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
  * laisse le token brut dans les journaux d'acces et les caches intermediaires
  * a chaque poll (toutes les 3 s tant que la carte reste visible).
  */
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const body = await request.json().catch(() => ({}));
   const token = parseCardToken(body.token);
   if (!token) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
@@ -46,3 +47,9 @@ export async function POST(request: Request) {
     updatedAt: new Date(card.updated_at).toISOString(),
   }, { headers: { "cache-control": "no-store" } });
 }
+
+/**
+ * Le client rafraîchit sa carte toutes les 3 s : une base indisponible ne
+ * doit jamais transformer ce polling silencieux en réponse HTML/vide.
+ */
+export const POST = withApiErrorHandling("CARD_STATUS", handlePost);
