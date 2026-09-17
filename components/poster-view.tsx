@@ -36,7 +36,7 @@ export function PosterView({ name, logoUrl, primaryColor, rewardThreshold, rewar
   const brandTextColor = contrastTextColor(brandColor);
   const cssVars = { "--poster-brand-color": brandColor, "--poster-text-color": brandTextColor } as CSSProperties;
 
-  return <main>
+  return <main className="poster-page">
     <div className="no-print" style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
         <a className="btn" href="/dashboard">Retour</a>

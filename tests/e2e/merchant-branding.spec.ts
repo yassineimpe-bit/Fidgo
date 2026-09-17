@@ -11,6 +11,18 @@ function hexToRgb(hex: string) {
   return `rgb(${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)})`;
 }
 
+// 1mm = 96/25.4 px, unité CSS absolue indépendante du DPI réel de
+// l'imprimante : c'est ce que le moteur de rendu du navigateur utilise pour
+// convertir `width:210mm` en pixels, print ou pas. Tolérance de 3px pour les
+// arrondis de sous-pixel du moteur de rendu.
+const MM_TO_PX = 96 / 25.4;
+const SIZE_TOLERANCE_PX = 3;
+
+function expectMm(actualPx: number, expectedMm: number, label: string) {
+  const expectedPx = expectedMm * MM_TO_PX;
+  expect(Math.abs(actualPx - expectedPx), `${label} : attendu ~${expectedPx.toFixed(1)}px (${expectedMm}mm), obtenu ${actualPx.toFixed(1)}px`).toBeLessThanOrEqual(SIZE_TOLERANCE_PX);
+}
+
 /**
  * Parcours complet du commerçant fictif demandé par la mission branding :
  * inscription -> couleur + programme -> affiche -> inscription client brandée
@@ -116,6 +128,70 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
     // Remet le format par défaut pour ne pas influencer une capture d'écran ultérieure.
     await merchantPage.getByRole("button", { name: "A4 · vitrine / mur" }).click();
     await merchantPage.getByRole("button", { name: "Minimal" }).click();
+  });
+
+  test("affiche à l'impression : chaque format garde ses dimensions physiques réelles (jamais étiré en 100vh)", async () => {
+    // Régression : `@media print { .poster { width:auto; min-height:100vh } }`
+    // écrasait les dimensions réelles des formats réduits — les boutons
+    // changeaient l'aperçu écran sans rien garantir à l'impression. On ne
+    // teste pas une vraie imprimante ici (impossible depuis ce test), mais
+    // les dimensions CSS effectivement calculées sous `media: print`.
+    //
+    // `.no-print` passe à `display:none` sous `media: print` : les boutons de
+    // contrôle deviennent alors inactionnables. On revient donc en media
+    // "screen" pour cliquer, puis en "print" pour mesurer, à chaque étape.
+    await merchantPage.goto("/dashboard/poster");
+
+    const formats: { button: RegExp | string; expectClass: RegExp; widthMm: number; minHeightMm: number }[] = [
+      { button: "A4 · vitrine / mur", expectClass: /poster--a4/, widthMm: 210, minHeightMm: 297 },
+      { button: /A5/, expectClass: /poster--a5/, widthMm: 148, minHeightMm: 210 },
+      { button: /Chevalet/, expectClass: /poster--chevalet/, widthMm: 105, minHeightMm: 148 },
+    ];
+    const viewportHeightPx = merchantPage.viewportSize()?.height ?? 0;
+
+    for (const format of formats) {
+      await merchantPage.emulateMedia({ media: "screen" });
+      await merchantPage.getByRole("button", { name: format.button }).click();
+      await expect(merchantPage.locator(".poster")).toHaveClass(format.expectClass);
+
+      await merchantPage.emulateMedia({ media: "print" });
+      const box = await merchantPage.locator(".poster").boundingBox();
+      expect(box, `bounding box du format ${format.expectClass}`).not.toBeNull();
+      expectMm(box!.width, format.widthMm, `largeur ${format.expectClass}`);
+      // min-height : le contenu peut être plus grand, jamais plus petit —
+      // et surtout jamais gonflé à 100vh comme avant le correctif.
+      expect(box!.height, `hauteur ${format.expectClass}`).toBeGreaterThanOrEqual(format.minHeightMm * MM_TO_PX - SIZE_TOLERANCE_PX);
+      if (format.minHeightMm < 290) {
+        // Un format réduit ne doit pas se retrouver aussi haut qu'un plein écran.
+        expect(box!.height, `${format.expectClass} ne doit pas être étiré à 100vh`).toBeLessThan(viewportHeightPx);
+      }
+      // Les contrôles ne doivent jamais apparaître sur le support imprimé.
+      // (Pas de vérification de débordement horizontal ici : en media print,
+      // le support fait la largeur réelle du papier — 210mm pour l'A4 par
+      // exemple — qui dépasse volontairement un viewport mobile. Le
+      // débordement n'a de sens qu'à l'écran, déjà couvert par
+      // mobile-viewport.spec.ts et les autres tests de ce fichier.)
+      await expect(merchantPage.locator(".no-print").first()).toBeHidden();
+      await expect(merchantPage.locator(".poster img[alt*='QR code']")).toBeVisible();
+    }
+
+    // Les deux templates doivent rester lisibles et complets à l'impression.
+    await merchantPage.emulateMedia({ media: "screen" });
+    await merchantPage.getByRole("button", { name: "Contrasté" }).click();
+    await merchantPage.emulateMedia({ media: "print" });
+    await expect(merchantPage.locator(".poster")).toHaveClass(/poster--contrasted/);
+    await expect(merchantPage.locator(".poster")).toHaveCSS("background-color", hexToRgb(BRAND_COLOR));
+    await expect(merchantPage.locator(".poster")).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(merchantPage.locator(".poster img[alt*='QR code']")).toBeVisible();
+
+    await merchantPage.emulateMedia({ media: "screen" });
+    await merchantPage.getByRole("button", { name: "Minimal" }).click();
+    await merchantPage.emulateMedia({ media: "print" });
+    await expect(merchantPage.locator(".poster")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(merchantPage.locator(".poster img[alt*='QR code']")).toBeVisible();
+
+    await merchantPage.emulateMedia({ media: null });
+    await merchantPage.getByRole("button", { name: "A4 · vitrine / mur" }).click();
   });
 
   test("inscription client : la page /j/[slug] est brandée et reste lisible", async () => {

@@ -132,8 +132,17 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 @media print {
   body { background:white; }
   .no-print { display:none !important; }
-  .poster { width:auto; min-height:100vh; box-shadow:none; }
-  .poster--a5, .poster--chevalet { min-height:100vh; }
+  /* Le format sélectionné doit rester physiquement fidèle à l'impression :
+     un A5/chevalet imprimé ne doit jamais être étiré à la taille de la
+     feuille. `.poster-page` (le conteneur, pas `.poster` lui-même) centre le
+     support choisi sur la feuille — imprimée en A4 par défaut par la
+     plupart des imprimantes/pilotes, sans qu'on prétende piloter le format
+     physique papier depuis la sélection DOM. */
+  .poster-page { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+  .poster { margin:0 auto; box-shadow:none; }
+  .poster--a4 { width:210mm; min-height:297mm; }
+  .poster--a5 { width:148mm; min-height:210mm; }
+  .poster--chevalet { width:105mm; min-height:148mm; }
   /* Un fond de couleur pleine ne doit pas disparaître à l'impression
      (comportement par défaut de la plupart des navigateurs). */
   .poster--contrasted { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
