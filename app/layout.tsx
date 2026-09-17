@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { ClientObservability } from "@/components/client-observability";
@@ -6,6 +6,16 @@ import { ClientObservability } from "@/components/client-observability";
 // Les nonces CSP sont générés à chaque requête. Le rendu dynamique garantit
 // que chaque balise script reçoit le nonce correspondant à son en-tête HTTP.
 export const dynamic = "force-dynamic";
+
+// Sans viewportFit:"cover", iOS ne détend jamais le viewport sous l'encoche
+// ou la barre d'accueil : tous les env(safe-area-inset-*) déjà posés dans
+// globals.css (scanner, topbar) restaient à 0 et n'avaient aucun effet réel.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#020203",
+};
 
 export const metadata: Metadata = {
   title: { default: "Retiko", template: "%s · Retiko" },

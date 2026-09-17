@@ -43,6 +43,17 @@ export async function enrollCustomer(page: Page, firstName: string, email: strin
   return { cardUrl, shortCode: shortCode! };
 }
 
+/**
+ * En dessous de 820px, Déconnexion se trouve dans le menu mobile (voir
+ * mobile-nav-menu.tsx) plutôt que directement dans l'en-tête.
+ */
+export async function logout(page: Page) {
+  const directLogout = page.getByRole("button", { name: "Déconnexion" });
+  const menuToggle = page.getByRole("button", { name: "Ouvrir le menu" });
+  if (await menuToggle.isVisible().catch(() => false)) await menuToggle.click();
+  await directLogout.click();
+}
+
 export async function openCardInScanner(page: Page, shortCode: string) {
   await page.goto("/s");
   await page.getByPlaceholder("Code court ou email").fill(shortCode);

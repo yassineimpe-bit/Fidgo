@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, origin, randomizeClientIp, unique } from "./helpers";
+import { createMerchant, logout, origin, randomizeClientIp, unique } from "./helpers";
 
 test("auth : signup, logout puis login redonnent accès au dashboard", async ({ page }) => {
   const marker = unique("auth");
@@ -15,7 +15,7 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByRole("button", { name: "Créer mon espace" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.getByRole("button", { name: "Déconnexion" }).click();
+  await logout(page);
   await expect(page).toHaveURL(/\/login$/);
 
   // La session est bien révoquée : /dashboard redirige vers /login sans cookie valide.
