@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import QRCode from "qrcode";
+import { contrastTextColor, normalizeHexColor } from "@/lib/brand-color";
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
@@ -29,9 +30,14 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   const walletHttps = wallet.appUrlConfigured && wallet.appUrlHttps;
   const appleEnabled = walletHttps && wallet.apple.configured;
   const googleEnabled = walletHttps && wallet.google.configured;
+  // Un commerçant peut choisir une couleur claire (blanc, jaune pâle...) :
+  // .loyalty-card impose color:white par défaut, ce qui rendrait alors le
+  // texte illisible sur son propre fond. On recalcule systématiquement.
+  const brandColor = normalizeHexColor(card.primary_color, "#111111");
+  const brandTextColor = contrastTextColor(brandColor);
 
   return <main className="auth-wrap"><section style={{width:"min(480px,100%)"}}>
-    <div className="loyalty-card" style={{background:card.primary_color||"#111111"}}>
+    <div className="loyalty-card" style={{background:brandColor,color:brandTextColor}}>
       <div><div style={{display:"flex",alignItems:"center",gap:12}}>{card.logo_url&&<Image src={String(card.logo_url)} alt={`Logo ${card.name}`} width={52} height={52} unoptimized style={{objectFit:"contain",borderRadius:12,background:"white"}}/>}<div><strong style={{fontSize:22}}>{card.name}</strong><div style={{opacity:.8}}>{card.program_name}</div></div></div>
       <div style={{marginTop:30}}><CardLiveStatus token={String(card.token)} initialBalance={Number(card.balance)} initialThreshold={Number(card.reward_threshold)} initialUpdatedAt={new Date(card.updated_at).toISOString()} mode={card.mode === "POINTS" ? "POINTS" : "STAMPS"} rewardLabel={String(card.reward_label)}/></div></div>
       <div style={{display:"grid",placeItems:"center",gap:10}}><Image className="qr" src={qr} alt="QR code fidélité" width={220} height={220} unoptimized/><strong style={{letterSpacing:".16em"}}>{card.short_code}</strong></div>

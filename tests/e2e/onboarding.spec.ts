@@ -23,6 +23,6 @@ test("onboarding : étape suivante et empty states avant toute activité", async
 
   // L'affiche QR doit rester utilisable sans NEXT_PUBLIC_APP_URL explicite.
   await page.goto("/dashboard/poster");
-  await expect(page.getByRole("img", { name: "QR inscription fidélité" })).toBeVisible();
-  await expect(page.getByText(/Scanne pour créer ta carte fidélité/)).toBeVisible();
+  await expect(page.getByRole("img", { name: /QR code d'inscription/ })).toBeVisible();
+  await expect(page.getByText(/Votre fidélité, directement sur votre téléphone/)).toBeVisible();
 });
