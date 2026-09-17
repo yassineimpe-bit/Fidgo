@@ -82,22 +82,31 @@ La récupération email est P0 pour le pilote. Elle ne doit être activée qu'ap
 
 Configuration cible :
 
-- domaine expéditeur : `retiko.fr` ;
-- adresse recommandée : `Retiko <noreply@retiko.fr>` ;
+- sous-domaine transactionnel recommandé : `send.retiko.fr` ;
+- adresse expéditrice : `Retiko <cartes@send.retiko.fr>` ;
+- adresse de réponse surveillée : `contact@retiko.fr` ;
 - `RESEND_API_KEY` en secret Vercel Production ;
-- `EMAIL_FROM=Retiko <noreply@retiko.fr>` ;
+- `EMAIL_FROM=Retiko <cartes@send.retiko.fr>` ;
+- `EMAIL_REPLY_TO=contact@retiko.fr` ;
 - `CARD_RECOVERY_ENABLED=true` uniquement après vérification DNS et test d'envoi réel.
 
 Procédure :
 
-1. ajouter `retiko.fr` dans Resend ;
-2. recopier dans OVH les enregistrements SPF/DKIM demandés par Resend ;
-3. attendre le statut vérifié ;
-4. créer une clé API dédiée à la production ;
-5. l'ajouter à Vercel sans jamais la commiter ;
-6. envoyer un lien de récupération réel ;
-7. vérifier réception, expiration à 15 minutes et usage unique ;
-8. activer `CARD_RECOVERY_ENABLED=true`.
+1. ajouter `send.retiko.fr` dans Resend ;
+2. recopier dans OVH les enregistrements SPF et DKIM exactement fournis par Resend, sans remplacer le SPF existant de l'apex `retiko.fr` ;
+3. publier une politique DMARC pour `retiko.fr` (commencer par `p=none` avec rapports, puis durcir après observation) ;
+4. attendre le statut **Verified** dans Resend et vérifier SPF, DKIM et DMARC avec un outil DNS externe ;
+5. créer une clé API Resend dédiée à la production et limitée à l'envoi ;
+6. ajouter les trois variables email dans Vercel Production, sans jamais commiter la clé ;
+7. exécuter `npm run env:check` avec le contrat Production ;
+8. envoyer un lien de récupération réel vers au moins Gmail et iCloud ;
+9. vérifier l'expéditeur, le bouton mobile, la réponse vers `contact@retiko.fr`, l'expiration à 15 minutes et l'usage unique ;
+10. activer `CARD_RECOVERY_ENABLED=true` et créer un nouveau déploiement.
+
+Le code envoie une clé d'idempotence stable à Resend, applique un timeout et
+des retries bornés uniquement aux erreurs réseau, `429` et `5xx`. Un nouveau
+lien reste inactif tant que Resend n'a pas confirmé l'envoi : une panne email
+n'invalide donc pas le dernier lien déjà livré.
 
 La réponse publique à une demande de récupération reste identique qu'une carte existe ou non.
 

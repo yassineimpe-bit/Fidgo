@@ -438,6 +438,7 @@ Prérequis :
 retiko.fr
 → Resend
 → EMAIL_FROM
+→ EMAIL_REPLY_TO
 → CARD_RECOVERY_ENABLED=true
 ```
 

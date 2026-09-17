@@ -1,0 +1,127 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  EmailDeliveryError,
+  recoveryEmailConfigured,
+  sendCardRecoveryEmail,
+} from "@/lib/email";
+
+const env = {
+  NODE_ENV: "production",
+  RESEND_API_KEY: "re_test_secret",
+  EMAIL_FROM: "Retiko <cartes@send.retiko.fr>",
+  EMAIL_REPLY_TO: "contact@retiko.fr",
+};
+
+const input = {
+  to: "Client@Example.com",
+  restaurantName: "Le Comptoir",
+  recoveryUrl: `https://retiko.fr/recover/${"a".repeat(43)}`,
+  idempotencyKey: `card-recovery-${"b".repeat(64)}`,
+};
+
+describe("Resend card recovery email", () => {
+  it("requires a monitored reply-to address in addition to the transport", () => {
+    expect(recoveryEmailConfigured(env)).toBe(true);
+    expect(recoveryEmailConfigured({ ...env, EMAIL_REPLY_TO: "" })).toBe(false);
+  });
+
+  it("sends an accessible multipart message with a stable idempotency key", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ id: "resend-message-123" }));
+
+    const result = await sendCardRecoveryEmail(
+      { ...input, restaurantName: "Café <script>alert(1)</script>\r\nBCC: victim@example.com" },
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    );
+
+    expect(result).toEqual({ messageId: "resend-message-123" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://api.resend.com/emails");
+    expect(new Headers(request?.headers).get("idempotency-key")).toBe(input.idempotencyKey);
+
+    const payload = JSON.parse(String(request?.body));
+    expect(payload).toMatchObject({
+      from: env.EMAIL_FROM,
+      to: ["client@example.com"],
+      reply_to: env.EMAIL_REPLY_TO,
+    });
+    expect(payload.subject).not.toContain("\r");
+    expect(payload.subject).not.toContain("\n");
+    expect(payload.text).toContain(input.recoveryUrl);
+    expect(payload.html).toContain('<html lang="fr" dir="ltr">');
+    expect(payload.html).toContain("<title>Retrouvez votre carte de fidélité</title>");
+    expect(payload.html).toContain("<h1");
+    expect(payload.html).toContain("Ouvrir ma carte de fidélité");
+    expect(payload.html).toContain("Café &lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(payload.html).not.toContain("<script>alert(1)</script>");
+  });
+
+  it("retries only transient provider errors and honors Retry-After", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { "retry-after": "0" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ id: "resend-after-retry" }));
+    const sleep = vi.fn(async () => undefined);
+
+    await expect(sendCardRecoveryEmail(input, env, {
+      fetchImpl: fetchImpl as typeof fetch,
+      sleep,
+    })).resolves.toEqual({ messageId: "resend-after-retry" });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenNthCalledWith(1, 0);
+    expect(sleep).toHaveBeenNthCalledWith(2, 500);
+  });
+
+  it("does not retry permanent provider rejections", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(null, { status: 401 }));
+    const sleep = vi.fn(async () => undefined);
+
+    await expect(sendCardRecoveryEmail(input, env, {
+      fetchImpl: fetchImpl as typeof fetch,
+      sleep,
+    })).rejects.toMatchObject({ code: "EMAIL_SEND_401" } satisfies Partial<EmailDeliveryError>);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("retries network failures without changing the idempotency key", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("socket reset"))
+      .mockResolvedValueOnce(Response.json({ id: "resend-network-retry" }));
+    const sleep = vi.fn(async () => undefined);
+
+    await expect(sendCardRecoveryEmail(input, env, {
+      fetchImpl: fetchImpl as typeof fetch,
+      sleep,
+    })).resolves.toEqual({ messageId: "resend-network-retry" });
+
+    const firstHeaders = new Headers(fetchImpl.mock.calls[0][1]?.headers);
+    const secondHeaders = new Headers(fetchImpl.mock.calls[1][1]?.headers);
+    expect(firstHeaders.get("idempotency-key")).toBe(secondHeaders.get("idempotency-key"));
+  });
+
+  it("aborts a stalled provider call after the bounded timeout", async () => {
+    const fetchImpl = vi.fn<typeof fetch>((_url, request) => new Promise((_resolve, reject) => {
+      request?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    }));
+
+    await expect(sendCardRecoveryEmail(input, env, {
+      fetchImpl,
+      timeoutMs: 5,
+      maxAttempts: 1,
+    })).rejects.toMatchObject({ code: "EMAIL_SEND_TIMEOUT" } satisfies Partial<EmailDeliveryError>);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects insecure production recovery URLs before contacting Resend", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(sendCardRecoveryEmail(
+      { ...input, recoveryUrl: `http://retiko.fr/recover/${"a".repeat(43)}` },
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    )).rejects.toMatchObject({ code: "EMAIL_INVALID_RECOVERY_URL" } satisfies Partial<EmailDeliveryError>);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});

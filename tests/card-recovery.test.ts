@@ -48,6 +48,12 @@ describe("card recovery tokens", () => {
       CARD_RECOVERY_ENABLED: "true",
       RESEND_API_KEY: "re_test",
       EMAIL_FROM: "Fidgo <cards@example.com>",
+    })).toBe(false);
+    expect(cardRecoveryEnabled({
+      CARD_RECOVERY_ENABLED: "true",
+      RESEND_API_KEY: "re_test",
+      EMAIL_FROM: "Fidgo <cards@example.com>",
+      EMAIL_REPLY_TO: "support@example.com",
     })).toBe(true);
   });
 });

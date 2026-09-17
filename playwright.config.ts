@@ -29,6 +29,7 @@ export default defineConfig({
       CARD_RECOVERY_ENABLED: "true",
       RESEND_API_KEY: "re_test_dummy_key",
       EMAIL_FROM: "Fidgo <cards@fidgo.test>",
+      EMAIL_REPLY_TO: "support@fidgo.test",
     },
   },
 });
