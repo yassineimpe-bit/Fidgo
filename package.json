@@ -15,6 +15,7 @@
     "db:setup": "node scripts/db-setup.mjs",
     "db:seed:demo": "node scripts/seed-demo.mjs",
     "db:verify": "node scripts/verify-db-integrity.mjs",
+    "data:purge": "node scripts/purge-data-lifecycle.mjs",
     "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify"
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 import { appleWalletEnabled, buildApplePass } from "@/lib/apple-wallet";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { walletCardByToken } from "@/lib/wallet-data";
+import { safeErrorCode } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -24,8 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "APPLE_WALLET_ERROR";
-    console.error("Apple Wallet issue failed", message);
+    console.error("Apple Wallet issue failed", { code: safeErrorCode(error, "APPLE_WALLET_ERROR") });
     return Response.json({ error: "APPLE_WALLET_UNAVAILABLE" }, { status: 503 });
   }
 }

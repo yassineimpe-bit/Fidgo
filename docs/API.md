@@ -68,13 +68,16 @@ Liste l'équipe ou crée un accès `EMPLOYEE`/`VIEWER`.
 Désactive/réactive un employé non privilégié. Une session existante devient alors inutilisable à la requête suivante.
 
 ### `GET /api/customers/[id]/export`
-OWNER/MANAGER. Exporte les données client, carte et transactions en JSON pour traitement RGPD.
+OWNER/MANAGER. Exporte en JSON versionné les données rattachées au client : profil, carte sans token d'accès, transactions, états Wallet sans credential, historique des liens de récupération sans hash, événements produit et audits associés. La ressource doit appartenir au tenant courant et ne doit pas être supprimée ; sinon la route répond `404`. Réponse `no-store`.
 
 ### `DELETE /api/customers/[id]`
-OWNER/MANAGER. Efface prénom/email/téléphone/consentement, marque le client supprimé et désactive la carte. Le ledger reste pseudonymisé pour préserver l'intégrité comptable/fraude.
+OWNER/MANAGER. Sous verrou transactionnel, efface prénom/email/téléphone/consentement, marque le client supprimé, révoque et renouvelle les identifiants de carte, invalide les liens de récupération, révoque les Wallets et détache les données techniques superflues. Le ledger et ses UUID restent pseudonymisés pour préserver l'intégrité comptable et anti-fraude. Une suppression répétée répond `404`.
 
 ### `POST /api/customers/[id]/adjust`
 OWNER/MANAGER. Entrée : `newBalance`, `reason`, `idempotencyKey`. Verrouille la carte, ajoute une transaction `adjust` et un audit `CARD_ADJUSTED`, puis synchronise les Wallets activés.
+
+### `POST /api/restaurant/suspend`
+OWNER seulement. Suspension conservatrice de l'établissement, protégée par same-origin, rate limit et confirmation exacte du slug avec la phrase `SUSPENDRE`. Désactive immédiatement le staff et invalide ses sessions, révoque les cartes, liens de récupération et Wallets, puis conserve clients, transactions et configuration pour le ledger et une éventuelle procédure contrôlée. Cette route ne réalise aucune suppression définitive.
 
 ## Erreurs sensibles
 

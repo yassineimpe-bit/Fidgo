@@ -51,7 +51,7 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
   }
 
   async function erase(customer: Customer) {
-    if (!confirm("Effacer les données personnelles de ce client et désactiver sa carte ?")) return;
+    if (!confirm("Effacer les données personnelles, révoquer la carte, les Wallets et les liens de récupération ? Le ledger sera conservé sous forme pseudonymisée.")) return;
     setBusy(customer.id);
     const response = await fetch(`/api/customers/${customer.id}`, { method: "DELETE" });
     const data = await response.json();
@@ -61,7 +61,7 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
       return;
     }
     setRows((current) => current.filter((row) => row.id !== customer.id));
-    setMessage("Données personnelles effacées et carte désactivée.");
+    setMessage("Données personnelles effacées ; carte, Wallets et liens de récupération révoqués. Le ledger est conservé.");
   }
 
   if (rows.length === 0) {

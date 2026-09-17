@@ -5,6 +5,7 @@ import { boundedInt, boundedText } from "@/lib/input";
 import { canManageProgram, isValidIdempotencyKey } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
+import { sanitizeAuditText } from "@/lib/observability";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id: customerId } = await params;
   const body = await req.json().catch(() => ({}));
   const newBalance = boundedInt(body.newBalance, { min: 0, max: 1_000_000 });
-  const reason = boundedText(body.reason, 240);
+  const reason = sanitizeAuditText(boundedText(body.reason, 240));
   const idempotencyKey = body.idempotencyKey;
   if (newBalance === null || !reason || !isValidIdempotencyKey(idempotencyKey)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });

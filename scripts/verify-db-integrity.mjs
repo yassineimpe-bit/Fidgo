@@ -17,6 +17,11 @@ const expectedTenantConstraints = [
   "audit_logs_staff_requires_tenant_check",
   "transactions_reversal_same_tenant_fk",
 ];
+const expectedLifecycleTriggers = [
+  "establishments_no_hard_delete",
+  "customers_no_hard_delete",
+  "cards_no_hard_delete",
+];
 
 try {
   const [summary] = await sql`
@@ -69,6 +74,34 @@ try {
         having count(*) > 1
         limit 1
       ) as duplicate_reversals
+      ,(
+        select count(*)::int from customers
+        where deleted_at is not null and (
+          email is not null or phone is not null or first_name is not null
+          or marketing_consent or marketing_consent_at is not null
+        )
+      ) as deleted_customer_pii
+      ,(
+        select count(*)::int from cards c join customers u on u.id=c.customer_id
+        where u.deleted_at is not null and c.active
+      ) as active_deleted_customer_cards
+      ,(
+        select count(*)::int
+        from wallet_passes wp
+        join cards c on c.id=wp.card_id
+        join customers u on u.id=c.customer_id
+        join establishments e on e.id=c.establishment_id
+        where wp.status='active' and (not c.active or u.deleted_at is not null or e.status <> 'active')
+      ) as active_orphan_wallets
+      ,(
+        select count(*)::int
+        from card_recovery_tokens r
+        join cards c on c.id=r.card_id
+        join customers u on u.id=c.customer_id
+        join establishments e on e.id=c.establishment_id
+        where r.used_at is null and r.expires_at > now()
+          and (not c.active or u.deleted_at is not null or e.status <> 'active')
+      ) as active_orphan_recovery_tokens
   `;
 
   const constraints = await sql`
@@ -78,6 +111,12 @@ try {
   `;
   const presentConstraints = new Set(constraints.map((row) => row.conname));
   const missingConstraints = expectedTenantConstraints.filter((name) => !presentConstraints.has(name));
+  const triggers = await sql`
+    select tgname from pg_trigger
+    where not tgisinternal and tgname = any(${expectedLifecycleTriggers})
+  `;
+  const presentTriggers = new Set(triggers.map((row) => row.tgname));
+  const missingTriggers = expectedLifecycleTriggers.filter((name) => !presentTriggers.has(name));
 
   const failures = [];
   if (Number(summary.negative_balances) > 0) failures.push(`${summary.negative_balances} solde(s) négatif(s)`);
@@ -88,6 +127,11 @@ try {
   if (Number(tenantData.audit_staff_mismatches) > 0) failures.push(`${tenantData.audit_staff_mismatches} audit_log(s) avec acteur hors tenant ou tenant absent`);
   if (Number(tenantData.reversal_tenant_mismatches) > 0) failures.push(`${tenantData.reversal_tenant_mismatches} annulation(s) liée(s) à un autre tenant`);
   if (Number(tenantData.duplicate_reversals) > 0) failures.push("transaction(s) annulée(s) plusieurs fois");
+  if (Number(tenantData.deleted_customer_pii) > 0) failures.push(`${tenantData.deleted_customer_pii} client(s) effacé(s) contiennent encore des données personnelles`);
+  if (Number(tenantData.active_deleted_customer_cards) > 0) failures.push(`${tenantData.active_deleted_customer_cards} carte(s) active(s) pour un client effacé`);
+  if (Number(tenantData.active_orphan_wallets) > 0) failures.push(`${tenantData.active_orphan_wallets} Wallet(s) actif(s) sur une ressource révoquée`);
+  if (Number(tenantData.active_orphan_recovery_tokens) > 0) failures.push(`${tenantData.active_orphan_recovery_tokens} lien(s) recovery actif(s) sur une ressource révoquée`);
+  if (missingTriggers.length > 0) failures.push(`gardes hard-delete manquantes: ${missingTriggers.join(", ")}`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
   console.log(`Soldes négatifs : ${summary.negative_balances}`);
@@ -98,6 +142,11 @@ try {
   console.log(`Audits staff cross-tenant/tenant absent : ${tenantData.audit_staff_mismatches}`);
   console.log(`Annulations cross-tenant : ${tenantData.reversal_tenant_mismatches}`);
   console.log(`Transactions annulées plusieurs fois : ${tenantData.duplicate_reversals || 0}`);
+  console.log(`Clients effacés avec PII résiduelle : ${tenantData.deleted_customer_pii}`);
+  console.log(`Cartes actives de clients effacés : ${tenantData.active_deleted_customer_cards}`);
+  console.log(`Wallets actifs incohérents : ${tenantData.active_orphan_wallets}`);
+  console.log(`Recovery tokens actifs incohérents : ${tenantData.active_orphan_recovery_tokens}`);
+  console.log(`Gardes hard-delete : ${expectedLifecycleTriggers.length - missingTriggers.length}/${expectedLifecycleTriggers.length}`);
 
   if (failures.length > 0) {
     console.error(`Intégrité DB invalide : ${failures.join(" ; ")}`);

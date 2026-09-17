@@ -59,7 +59,13 @@ create table if not exists customers (
   marketing_consent_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  deleted_at timestamptz
+  deleted_at timestamptz,
+  constraint customers_erased_pii_check check (
+    deleted_at is null or (
+      email is null and phone is null and first_name is null
+      and marketing_consent = false and marketing_consent_at is null
+    )
+  )
 );
 create unique index if not exists customers_estab_email_key on customers (establishment_id, lower(email)) where email is not null and deleted_at is null;
 create unique index if not exists customers_estab_phone_key on customers (establishment_id, phone) where phone is not null and deleted_at is null;
@@ -181,6 +187,7 @@ create table if not exists audit_logs (
   created_at timestamptz not null default now()
 );
 create index if not exists audit_logs_estab_idx on audit_logs (establishment_id, created_at desc);
+create index if not exists audit_logs_retention_idx on audit_logs (created_at);
 
 create table if not exists product_events (
   id uuid primary key default gen_random_uuid(),
@@ -194,9 +201,38 @@ create table if not exists product_events (
 );
 create index if not exists product_events_estab_type_idx on product_events (establishment_id, event_type, created_at desc);
 create index if not exists product_events_card_idx on product_events (card_id, created_at desc) where card_id is not null;
+create index if not exists product_events_retention_idx on product_events (created_at);
 
 create table if not exists rate_limits (
   key_hash text primary key,
   hits int not null default 0,
   window_started_at timestamptz not null default now()
 );
+create index if not exists rate_limits_retention_idx on rate_limits (window_started_at);
+create index if not exists wallet_passes_revoked_retention_idx on wallet_passes (updated_at) where status = 'revoked';
+
+-- Le produit expose uniquement des effacements/anonymisations et une
+-- suspension. Une suppression SQL directe détruirait le ledger via les
+-- anciennes cascades ; ces gardes l'interdisent explicitement.
+create or replace function prevent_retiko_hard_delete()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'Hard delete forbidden on %. Use lifecycle anonymization/suspension.', tg_table_name
+    using errcode = '55000';
+end;
+$$;
+
+do $$ begin
+  create trigger establishments_no_hard_delete before delete on establishments
+    for each row execute function prevent_retiko_hard_delete();
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create trigger customers_no_hard_delete before delete on customers
+    for each row execute function prevent_retiko_hard_delete();
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create trigger cards_no_hard_delete before delete on cards
+    for each row execute function prevent_retiko_hard_delete();
+exception when duplicate_object then null; end $$;

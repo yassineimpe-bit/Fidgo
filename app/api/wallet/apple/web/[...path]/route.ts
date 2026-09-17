@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { sql } from "@/lib/db";
-import { applePassTypeIdentifier, buildApplePass } from "@/lib/apple-wallet";
-import { walletCardById } from "@/lib/wallet-data";
+import { applePassTypeIdentifier, buildApplePass, buildRevokedApplePass } from "@/lib/apple-wallet";
+import { walletCardById, walletCardForRevocationById } from "@/lib/wallet-data";
 
 export const runtime = "nodejs";
 
@@ -23,13 +23,18 @@ async function authorizedWalletPass(serialNumber: string, passTypeIdentifier: st
   if (!authorization.startsWith("ApplePass ")) return null;
   const supplied = authorization.slice("ApplePass ".length).trim();
   const [walletPass] = await sql`
-    select id,card_id,authentication_token_hash
+    select id,card_id,authentication_token_hash,status
     from wallet_passes
-    where provider='APPLE' and serial_number=${serialNumber} and external_id=${passTypeIdentifier} and status='active'
+    where provider='APPLE' and serial_number=${serialNumber} and external_id=${passTypeIdentifier} and status in ('active','revoked')
     limit 1
   `;
   if (!walletPass || !hashEquals(tokenHash(supplied), String(walletPass.authentication_token_hash || ""))) return null;
-  return walletPass;
+  return {
+    id: String(walletPass.id),
+    cardId: String(walletPass.card_id),
+    status: String(walletPass.status),
+    suppliedToken: supplied,
+  };
 }
 
 function registrationPath(parts: string[]) {
@@ -52,7 +57,7 @@ export async function POST(request: Request, context: Context) {
   const parsed = registrationPath(path);
   if (!parsed) return new Response(null, { status: 404 });
   const walletPass = await authorizedWalletPass(parsed.serial, parsed.passType, request);
-  if (!walletPass) return new Response(null, { status: 401 });
+  if (!walletPass || walletPass.status !== "active") return new Response(null, { status: 401 });
   const body = await request.json().catch(() => ({})) as { pushToken?: unknown };
   const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
   if (!pushToken || pushToken.length > 512) return new Response(null, { status: 400 });
@@ -84,9 +89,14 @@ export async function GET(request: Request, context: Context) {
     const serial = path[3];
     const walletPass = await authorizedWalletPass(serial, passType, request);
     if (!walletPass) return new Response(null, { status: 401 });
-    const card = await walletCardById(String(walletPass.card_id));
+    const revoked = walletPass.status === "revoked";
+    const card = revoked
+      ? await walletCardForRevocationById(walletPass.cardId)
+      : await walletCardById(walletPass.cardId);
     if (!card) return new Response(null, { status: 404 });
-    const pass = await buildApplePass(card);
+    const pass = revoked
+      ? await buildRevokedApplePass(card, String(walletPass.suppliedToken))
+      : await buildApplePass(card);
     return new Response(new Uint8Array(pass), { headers: { "content-type": "application/vnd.apple.pkpass", "cache-control": "no-store" } });
   }
 
@@ -102,14 +112,14 @@ export async function GET(request: Request, context: Context) {
           from apple_wallet_registrations r
           join wallet_passes wp on wp.id=r.wallet_pass_id
           join cards c on c.id=wp.card_id
-          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status='active'
+          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status in ('active','revoked')
         `
       : await sql`
           select wp.serial_number,extract(epoch from c.updated_at)::bigint as update_tag
           from apple_wallet_registrations r
           join wallet_passes wp on wp.id=r.wallet_pass_id
           join cards c on c.id=wp.card_id
-          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status='active' and c.updated_at > to_timestamp(${since})
+          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status in ('active','revoked') and c.updated_at > to_timestamp(${since})
         `;
     if (!rows.length) return new Response(null, { status: 204 });
     const serialNumbers = rows.map((row) => String(row.serial_number));

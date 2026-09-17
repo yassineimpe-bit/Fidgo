@@ -5,7 +5,10 @@ import type { WalletCard } from "../lib/wallet-data";
 // buildApplePass() ecrit un enregistrement wallet_passes : sql() est mocke
 // pour garder ce test hors base de donnees, comme le reste de la suite
 // unitaire (la vraie ecriture est couverte cote e2e/API).
-vi.mock("@/lib/db", () => ({ sql: Object.assign(async () => [], { begin: async (fn: unknown) => (fn as (tx: unknown) => unknown)(async () => []) }) }));
+vi.mock("@/lib/db", () => {
+  const tx = async (strings: TemplateStringsArray) => String(strings[0]).includes("select c.id") ? [{ id: "active" }] : [];
+  return { sql: Object.assign(async () => [], { begin: async (fn: unknown) => (fn as (transaction: typeof tx) => unknown)(tx) }) };
+});
 
 let certs: TestAppleCertChain;
 
@@ -68,7 +71,7 @@ describe("buildApplePass", () => {
     process.env.NEXT_PUBLIC_APP_URL = "https://retiko.fr";
     delete process.env.VERCEL_ENV;
 
-    const { buildApplePass } = await import("../lib/apple-wallet");
+    const { appleAuthenticationToken, buildApplePass, buildRevokedApplePass } = await import("../lib/apple-wallet");
     const buffer = await buildApplePass(fixtureCard);
 
     expect(buffer.subarray(0, 2).toString("ascii")).toBe("PK");
@@ -100,5 +103,12 @@ describe("buildApplePass", () => {
     expect(passJson.storeCard.secondaryFields[0]).toMatchObject({ key: "reward", value: "4 restant(s)" });
     expect(passJson.storeCard.auxiliaryFields[0]).toMatchObject({ key: "code", value: fixtureCard.shortCode });
     expect(passJson.barcodes[0]).toMatchObject({ format: "PKBarcodeFormatQR", message: `LOY1:${fixtureCard.token}` });
+
+    const revokedBuffer = await buildRevokedApplePass(fixtureCard, appleAuthenticationToken(fixtureCard.token));
+    const revokedFiles = readStoredZip(revokedBuffer);
+    const revokedJson = JSON.parse(revokedFiles["pass.json"].toString("utf8"));
+    expect(revokedJson.voided).toBe(true);
+    expect(revokedJson.storeCard.primaryFields[0]).toMatchObject({ key: "status", value: "Désactivée" });
+    expect(revokedJson.barcodes).toBeUndefined();
   });
 });

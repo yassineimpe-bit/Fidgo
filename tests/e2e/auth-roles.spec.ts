@@ -79,6 +79,12 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
     const listTeam = await employeePage.request.get("/api/employees");
     expect(listTeam.status()).toBe(403);
 
+    const suspend = await employeePage.request.post("/api/restaurant/suspend", {
+      headers: { origin },
+      data: { confirmation: "SUSPENDRE", confirmationSlug: "injected" },
+    });
+    expect(suspend.status()).toBe(403);
+
     const reverse = await employeePage.request.post("/api/transactions/reverse", {
       headers: { origin },
       data: { transactionId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() },
@@ -141,6 +147,11 @@ test("rôle : un MANAGER administre le pilote mais ne peut pas modifier OWNER/MA
       data: { active: false },
     });
     expect(touchSelf.status()).toBe(409);
+    const suspendAsManager = await managerPage.request.post("/api/restaurant/suspend", {
+      headers: { origin },
+      data: { confirmation: "SUSPENDRE", confirmationSlug: "injected" },
+    });
+    expect(suspendAsManager.status()).toBe(403);
 
     // Une rétrogradation en base s'applique à la session existante dès la
     // requête suivante, même si le JWT contient encore l'ancien rôle.

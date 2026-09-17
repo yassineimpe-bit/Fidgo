@@ -66,3 +66,13 @@ export async function walletCardById(cardId: string): Promise<WalletCard | null>
   if (card.expiresAt && new Date(card.expiresAt) < new Date()) return null;
   return card;
 }
+
+/**
+ * Lecture réservée à l'émission de la mise à jour Apple `voided`.
+ * Elle accepte volontairement une carte inactive ou un établissement suspendu,
+ * mais reste adressée par UUID interne et n'est jamais exposée publiquement.
+ */
+export async function walletCardForRevocationById(cardId: string): Promise<WalletCard | null> {
+  const rows = await sql.unsafe(`${SELECT_CARD} where c.id=$1 limit 1`, [cardId]);
+  return rows[0] ? mapWalletCard(rows[0] as Record<string, unknown>) : null;
+}

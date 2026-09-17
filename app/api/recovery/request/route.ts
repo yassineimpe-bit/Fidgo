@@ -6,19 +6,12 @@ import { isEmail } from "@/lib/input";
 import { getAppUrl } from "@/lib/app-url";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
+import { safeErrorCode } from "@/lib/observability";
 
 const GENERIC_RESPONSE = {
   ok: true,
   message: "Si cette adresse est associée à une carte, vous allez recevoir un lien pour la retrouver.",
 };
-
-function errorCode(error: unknown, fallback: string) {
-  if (error instanceof Error) return error.message.slice(0, 120);
-  if (typeof error === "object" && error && "code" in error) {
-    return String((error as { code?: unknown }).code).slice(0, 120);
-  }
-  return fallback;
-}
 
 async function auditDeliveryFailure(establishmentId: string, cardId: string, code: string) {
   try {
@@ -74,7 +67,7 @@ async function processRecoveryRequest(slug: string, email: string) {
       });
       messageId = delivered.messageId;
     } catch (error) {
-      const code = errorCode(error, "EMAIL_SEND_FAILED");
+      const code = safeErrorCode(error, "EMAIL_SEND_FAILED");
       console.error("Card recovery email delivery failed", { code });
       await auditDeliveryFailure(establishmentId, cardId, code);
       return;
@@ -106,7 +99,7 @@ async function processRecoveryRequest(slug: string, email: string) {
       `;
     });
   } catch (error) {
-    const code = errorCode(error, "CARD_RECOVERY_BACKGROUND_FAILED");
+    const code = safeErrorCode(error, "CARD_RECOVERY_BACKGROUND_FAILED");
     console.error("Card recovery background processing failed", { code });
   }
 }

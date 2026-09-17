@@ -10,3 +10,4 @@ export function canManageProgram(role:StaffRole):boolean{return role==="OWNER"||
 export function canManageStaff(role:StaffRole):boolean{return role==="OWNER"||role==="MANAGER";}
 export function canScan(role:StaffRole):boolean{return role!=="VIEWER";}
 export function canReverse(role:StaffRole):boolean{return role==="OWNER"||role==="MANAGER";}
+export function canSuspendEstablishment(role:StaffRole):boolean{return role==="OWNER";}

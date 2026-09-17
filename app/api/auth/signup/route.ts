@@ -6,6 +6,7 @@ import { signSession, sessionCookie } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
+import { safeErrorCode } from "@/lib/observability";
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
     // jamais remonter comme une page d'erreur Next.js sans corps JSON : le
     // client ne saurait plus rien afficher. On journalise le detail cote
     // serveur (visible dans les logs Vercel) et on renvoie un code stable.
-    console.error("SIGNUP_FAILED", error);
+    console.error("SIGNUP_FAILED", { code: safeErrorCode(error, "SIGNUP_FAILED") });
     return NextResponse.json({ error: "SIGNUP_FAILED" }, { status: 500 });
   }
 }

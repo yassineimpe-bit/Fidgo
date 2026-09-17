@@ -52,7 +52,19 @@ export async function GET() {
             'transactions_reversal_same_tenant_fk'
           ])
         ) as tenant_integrity,
-        to_regclass('public.transactions_reversed_once_key') is not null as reversal_once
+        to_regclass('public.transactions_reversed_once_key') is not null as reversal_once,
+        (
+          select count(*)::int = 3 from pg_trigger
+          where not tgisinternal and tgname = any(array[
+            'establishments_no_hard_delete',
+            'customers_no_hard_delete',
+            'cards_no_hard_delete'
+          ])
+        ) as lifecycle_guards,
+        exists(
+          select 1 from pg_constraint
+          where connamespace='public'::regnamespace and conname='customers_erased_pii_check'
+        ) as erased_pii_check
     `;
 
     const schemaReady = Boolean(
@@ -63,6 +75,8 @@ export async function GET() {
       && schema?.cooldown_seconds
       && schema?.tenant_integrity
       && schema?.reversal_once
+      && schema?.lifecycle_guards
+      && schema?.erased_pii_check
     );
 
     return Response.json({

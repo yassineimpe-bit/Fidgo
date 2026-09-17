@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken } from "../lib/loyalty";
+import { canManageProgram, canScan, canSuspendEstablishment, computeEarnDelta, isValidIdempotencyKey, parseCardToken } from "../lib/loyalty";
 
 describe("loyalty core", () => {
   it("extracts secure LOY1 tokens", () => { const token = "abcdefghijklmnopqrstuv"; expect(parseCardToken(`LOY1:${token}`)).toBe(token); expect(parseCardToken("https://example.com")).toBeNull(); });
@@ -9,4 +9,5 @@ describe("loyalty core", () => {
   it("uses fixed purchase points in PER_PURCHASE mode", () => { expect(computeEarnDelta({ mode:"POINTS", pointsRule:"PER_PURCHASE", stampsPerVisit:1, pointsPerEuro:5, pointsPerPurchase:10, rewardThreshold:100 }, { purchaseAmountCents:9000 })).toBe(10); });
   it("validates bounded idempotency keys", () => { expect(isValidIdempotencyKey("12345678-abcd")).toBe(true); expect(isValidIdempotencyKey("tiny")).toBe(false); expect(isValidIdempotencyKey("x".repeat(129))).toBe(false); });
   it("enforces role boundaries", () => { expect(canManageProgram("OWNER")).toBe(true); expect(canManageProgram("MANAGER")).toBe(true); expect(canManageProgram("EMPLOYEE")).toBe(false); expect(canScan("EMPLOYEE")).toBe(true); expect(canScan("VIEWER")).toBe(false); });
+  it("reserves establishment suspension to the owner", () => { expect(canSuspendEstablishment("OWNER")).toBe(true); expect(canSuspendEstablishment("MANAGER")).toBe(false); expect(canSuspendEstablishment("EMPLOYEE")).toBe(false); });
 });

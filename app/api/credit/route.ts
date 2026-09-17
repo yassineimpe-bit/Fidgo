@@ -5,6 +5,7 @@ import { boundedText } from "@/lib/input";
 import { canManageProgram, canScan, computeEarnDelta, isValidIdempotencyKey, parseCardToken, type LoyaltyMode, type PointsRule } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
+import { sanitizeAuditText } from "@/lib/observability";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
 export async function POST(req: Request) {
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const token = parseCardToken(body.token);
   const idempotencyKey = body.idempotencyKey;
-  const overrideReason = boundedText(body.overrideReason, 240);
+  const overrideReason = sanitizeAuditText(boundedText(body.overrideReason, 240));
   const hasExpectedLastEarnAt = Object.prototype.hasOwnProperty.call(body, "expectedLastEarnAt");
   const expectedLastEarnAt = body.expectedLastEarnAt === null
     ? null
