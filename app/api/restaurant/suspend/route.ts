@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { clearedSessionCookie, getSession } from "@/lib/auth";
 import { notifyAppleWalletRevocation } from "@/lib/apple-wallet";
 import { sql } from "@/lib/db";
+import { notifyGoogleWalletRevocation } from "@/lib/google-wallet";
 import { canSuspendEstablishment } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -81,7 +82,7 @@ async function handlePost(req: Request) {
 
   if (!cardIds) return Response.json({ error: "CONFIRMATION_MISMATCH" }, { status: 409, headers: PRIVATE_HEADERS });
   if (cardIds.length) {
-    after(() => Promise.allSettled(cardIds.map((cardId) => notifyAppleWalletRevocation(cardId))));
+    after(() => Promise.allSettled(cardIds.flatMap((cardId) => [notifyAppleWalletRevocation(cardId), notifyGoogleWalletRevocation(cardId)])));
   }
   const response = NextResponse.json({ ok: true, status: "suspended" }, { headers: PRIVATE_HEADERS });
   response.cookies.set(clearedSessionCookie());
