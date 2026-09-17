@@ -21,5 +21,6 @@ QR commerce
 
 Après le pilote :
 
-- 290 € HT/an, offre principale ;
-- 29 € HT/mois, alternative.
+- Retiko Flex : 24,99 € HT/mois sans engagement ;
+- Retiko 12 : 19,99 € HT/mois avec engagement 12 mois ;
+- paiement annuel : 210 € HT/an.

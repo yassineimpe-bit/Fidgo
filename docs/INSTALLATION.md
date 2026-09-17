@@ -35,11 +35,19 @@ DATABASE_URL='postgres://...' npm run test:e2e
 
 Ils couvrent la boucle inscription → crédit → récompense, le polling de la carte et l'isolation entre deux commerces.
 
+Pour rejouer localement tout le gate automatisé pilote avec une seule commande :
+
+```bash
+DATABASE_URL='postgres://fidgo:fidgo@127.0.0.1:5432/fidgo_test' npm run pilot:check
+```
+
+`pilot:check` exécute également le scénario de 30 opérations et `db:verify` avant/après les E2E. Il refuse volontairement les hôtes distants, les environnements production et les bases dont le nom ne contient pas `test`.
+
 ## Déploiement Vercel
 
 1. Créer PostgreSQL en région UE.
 2. Définir `DATABASE_URL`, `AUTH_SECRET` et `NEXT_PUBLIC_APP_URL`.
-3. Exécuter `npm run db:setup`, notamment pour les migrations `006_pilot_v0.sql` et `007_product_events.sql`.
+3. Exécuter `npm run db:setup` afin d'appliquer le schéma et toutes les migrations versionnées jusqu'à `012_data_lifecycle.sql`.
 4. Déployer sur Vercel, région `fra1`.
 5. Vérifier `/api/health`.
 6. Tester `/s` sur Safari iPhone et Chrome Android en HTTPS.

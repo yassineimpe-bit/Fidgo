@@ -11,9 +11,10 @@ export function EmployeeManager({ initial }: { initial: Employee[] }) {
 
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setBusy(true);
     setMessage("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       const response = await fetch("/api/employees", {
         method: "POST",
@@ -23,7 +24,7 @@ export function EmployeeManager({ initial }: { initial: Employee[] }) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) { setMessage(data.error || "Erreur"); return; }
       setRows((previous) => [...previous, data]);
-      event.currentTarget.reset();
+      formElement.reset();
       setMessage("Employé créé.");
     } catch {
       setMessage("Connexion perdue. Vérifie le réseau puis réessaie.");

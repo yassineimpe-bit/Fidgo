@@ -30,10 +30,11 @@ Pilote initial : **30 jours gratuits, sans carte bancaire demandée au démarrag
 
 Tarif public :
 
-- **290 € HT/an**, offre principale et mise en avant ;
-- **29 € HT/mois**, alternative secondaire.
+- **Retiko Flex : 24,99 € HT/mois**, sans engagement ;
+- **Retiko 12 : 19,99 € HT/mois**, avec engagement 12 mois ;
+- **210 € HT/an** en paiement annuel.
 
-L'offre annuelle équivaut à 24,17 € HT/mois et représente environ deux mois offerts par rapport au mensuel.
+Le paiement annuel équivaut à 17,50 € HT/mois.
 
 ## Paiement
 
