@@ -41,6 +41,14 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
         body: JSON.stringify({ token }),
         cache: "no-store",
       });
+      if (response.status === 404) {
+        // La carte a été révoquée (établissement suspendu, carte effacée/expirée)
+        // pendant que cet onglet restait ouvert : recharger refait passer par
+        // notFound() côté serveur plutôt que de laisser un solde figé paraître
+        // toujours valide.
+        window.location.reload();
+        return;
+      }
       if (!response.ok) return;
       const next = await response.json() as CardStatus;
       setStatus((previous) => {
