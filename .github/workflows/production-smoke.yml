@@ -6,6 +6,9 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Stagger away from the top of the hour to reduce shared-runner contention.
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
@@ -18,14 +21,24 @@ jobs:
   smoke:
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
       # Domaine canonique Retiko. Le smoke doit valider la vraie URL publique,
       # pas l'alias technique Vercel.
+      PUBLIC_URL: https://retiko.fr
       HEALTH_URL: https://retiko.fr/api/health
     steps:
+      - name: Check public Retiko shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 15 \
+            --retry 2 --retry-delay 2 \
+            --output /dev/null "$PUBLIC_URL/"
+
       - name: Wait for Retiko production health
         shell: bash
         run: |
