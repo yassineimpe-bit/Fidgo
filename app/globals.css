@@ -98,6 +98,24 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 .poster img { width:110mm; height:110mm; }
 .poster h1 { font-size:42pt; }
 .poster p { font-size:18pt; }
+/* Formats : chaque support garde les mêmes proportions papier à l'écran et à
+   l'impression, avec un QR proportionnellement plus grand sur les formats
+   réduits pour rester scannable de près. */
+.poster--a5 { width:148mm; min-height:210mm; padding:16mm; }
+.poster--a5 img { width:70mm; height:70mm; }
+.poster--a5 h1 { font-size:26pt; }
+.poster--a5 p { font-size:13pt; }
+.poster--chevalet { width:105mm; min-height:148mm; padding:10mm; }
+.poster--chevalet img { width:48mm; height:48mm; }
+.poster--chevalet h1 { font-size:16pt; }
+.poster--chevalet p { font-size:10pt; }
+/* Templates : Minimal reste blanc avec la couleur du commerce en accent ;
+   Contrasté bascule la couleur du commerce en fond plein (texte recalculé
+   automatiquement pour rester lisible, voir lib/brand-color.ts). */
+.poster--contrasted { background:var(--poster-brand-color, #111111); color:var(--poster-text-color, #ffffff); }
+.poster--contrasted .poster-footer { opacity:.75; }
+.poster--minimal .poster-accent { color:var(--poster-brand-color, #111111); }
+.poster-logo { background:white; border-radius:12px; }
 @media (max-width: 820px) {
   .hero-grid,.grid-2,.grid-3,.grid-4 { grid-template-columns: minmax(0, 1fr); }
   .hero { padding-top:54px; }
@@ -108,9 +126,24 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spa
 @media screen and (max-width: 860px) {
   .poster { width: 100%; max-width: 210mm; min-height: auto; padding: 28px 20px; }
   .poster img { width: min(110mm, 62vw); height: min(110mm, 62vw); }
+  .poster--a5, .poster--chevalet { max-width: 100%; }
+  .poster--a5 img, .poster--chevalet img { width: min(70mm, 50vw); height: min(70mm, 50vw); }
 }
 @media print {
   body { background:white; }
   .no-print { display:none !important; }
-  .poster { width:auto; min-height:100vh; box-shadow:none; }
+  /* Le format sélectionné doit rester physiquement fidèle à l'impression :
+     un A5/chevalet imprimé ne doit jamais être étiré à la taille de la
+     feuille. `.poster-page` (le conteneur, pas `.poster` lui-même) centre le
+     support choisi sur la feuille — imprimée en A4 par défaut par la
+     plupart des imprimantes/pilotes, sans qu'on prétende piloter le format
+     physique papier depuis la sélection DOM. */
+  .poster-page { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; }
+  .poster { margin:0 auto; box-shadow:none; }
+  .poster--a4 { width:210mm; min-height:297mm; }
+  .poster--a5 { width:148mm; min-height:210mm; }
+  .poster--chevalet { width:105mm; min-height:148mm; }
+  /* Un fond de couleur pleine ne doit pas disparaître à l'impression
+     (comportement par défaut de la plupart des navigateurs). */
+  .poster--contrasted { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
 }
