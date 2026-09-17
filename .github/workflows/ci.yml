@@ -36,6 +36,19 @@ jobs:
           GOOGLE_WALLET_ENABLED: "false"
           CARD_RECOVERY_ENABLED: "false"
         run: npm run env:check
+      - name: Validate enabled Resend recovery contract
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://retiko:retiko@db.example.test:5432/retiko?sslmode=require
+          AUTH_SECRET: retiko-ci-production-secret-at-least-32-bytes
+          NEXT_PUBLIC_APP_URL: https://retiko.fr
+          APPLE_WALLET_ENABLED: "false"
+          GOOGLE_WALLET_ENABLED: "false"
+          CARD_RECOVERY_ENABLED: "true"
+          RESEND_API_KEY: re_ci_placeholder
+          EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
+          EMAIL_REPLY_TO: contact@retiko.fr
+        run: npm run env:check
       - name: Reject technical Vercel URL as canonical production URL
         env:
           NODE_ENV: production

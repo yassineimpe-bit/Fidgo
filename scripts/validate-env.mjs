@@ -7,6 +7,11 @@ function fail(message) {
   process.exit(1);
 }
 
+function emailAddress(value) {
+  const match = value.match(/^(?:[^<>\r\n]+\s*)?<([^<>\s@]+@[^<>\s@]+)>$|^([^<>\s@]+@[^<>\s@]+)$/i);
+  return (match?.[1] || match?.[2] || "").toLowerCase();
+}
+
 const required = ["DATABASE_URL", "AUTH_SECRET", "NEXT_PUBLIC_APP_URL"];
 const missing = required.filter((key) => !envValue(key));
 if (missing.length) fail(`Variables manquantes: ${missing.join(", ")}`);
@@ -69,16 +74,30 @@ if (envValue("GOOGLE_WALLET_ENABLED") === "true") {
 }
 
 if (envValue("CARD_RECOVERY_ENABLED") === "true") {
-  const recovery = ["RESEND_API_KEY", "EMAIL_FROM"];
+  const recovery = ["RESEND_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO"];
   const recoveryMissing = recovery.filter((key) => !envValue(key));
   if (recoveryMissing.length) fail(`Récupération email activée mais variables manquantes: ${recoveryMissing.join(", ")}`);
 
+  if (!envValue("RESEND_API_KEY").startsWith("re_")) {
+    fail("RESEND_API_KEY doit être une clé Resend valide commençant par re_.");
+  }
+
+  const fromAddress = emailAddress(envValue("EMAIL_FROM"));
+  const replyAddress = emailAddress(envValue("EMAIL_REPLY_TO"));
+  if (!fromAddress) fail("EMAIL_FROM doit être une adresse email valide, avec un nom d'expéditeur optionnel.");
+  if (!replyAddress) fail("EMAIL_REPLY_TO doit être une adresse email valide et surveillée.");
+  if (/^(?:no-?reply)@/i.test(replyAddress)) {
+    fail("EMAIL_REPLY_TO doit être une boîte surveillée, pas une adresse noreply.");
+  }
+
   if (process.env.NODE_ENV === "production") {
-    const from = envValue("EMAIL_FROM");
-    const match = from.match(/(?:<)?[^<>\s@]+@([^<>\s]+)>?$/i);
-    const host = match?.[1]?.toLowerCase();
-    if (!host || (host !== "retiko.fr" && !host.endsWith(".retiko.fr"))) {
+    const fromHost = fromAddress.split("@")[1];
+    const replyHost = replyAddress.split("@")[1];
+    if (fromHost !== "retiko.fr" && !fromHost.endsWith(".retiko.fr")) {
       fail("EMAIL_FROM doit utiliser retiko.fr ou un sous-domaine vérifié de retiko.fr en production.");
+    }
+    if (replyHost !== "retiko.fr" && !replyHost.endsWith(".retiko.fr")) {
+      fail("EMAIL_REPLY_TO doit utiliser retiko.fr ou un sous-domaine de retiko.fr en production.");
     }
   }
 }

@@ -7,7 +7,8 @@ type RecoveryEnv = Record<string, string | undefined>;
 export function cardRecoveryEnabled(env: RecoveryEnv = process.env) {
   return env.CARD_RECOVERY_ENABLED === "true"
     && Boolean(env.RESEND_API_KEY?.trim())
-    && Boolean(env.EMAIL_FROM?.trim());
+    && Boolean(env.EMAIL_FROM?.trim())
+    && Boolean(env.EMAIL_REPLY_TO?.trim());
 }
 
 export function hashCardRecoveryToken(token: string) {

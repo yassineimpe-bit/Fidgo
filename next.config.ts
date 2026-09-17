@@ -16,6 +16,16 @@ const nextConfig: NextConfig = {
       { source: "/(.*)", headers: securityHeaders },
       // Les pages carte portent un secret dans l'URL : jamais de cache partage.
       { source: "/c/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
+      // Le jeton de récupération est un secret à usage unique : ne jamais le
+      // mettre en cache, l'envoyer comme referrer ou l'indexer.
+      {
+        source: "/recover/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        ],
+      },
     ];
   },
 };
