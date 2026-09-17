@@ -1,5 +1,6 @@
 import { createPrivateKey, X509Certificate } from "node:crypto";
 import { getAppUrl, type AppUrlEnv } from "@/lib/app-url";
+import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
 
 export type WalletProviderStatus = {
   enabled: boolean;
@@ -61,7 +62,7 @@ function validateApple(env: EnvLike) {
 function validateGoogle(env: EnvLike) {
   const invalid: string[] = [];
   const issuerId = env.GOOGLE_WALLET_ISSUER_ID;
-  if (issuerId && !/^\d+$/.test(issuerId.trim())) invalid.push("GOOGLE_WALLET_ISSUER_ID");
+  if (issuerId && !isValidGoogleIssuerId(issuerId)) invalid.push("GOOGLE_WALLET_ISSUER_ID");
 
   const encoded = env.GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64;
   if (encoded) {
