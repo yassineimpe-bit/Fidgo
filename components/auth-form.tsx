@@ -29,17 +29,25 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     const payload = mode === "signup"
       ? { restaurantName: form.get("restaurantName"), email: form.get("email"), password: form.get("password") }
       : { email: form.get("email"), password: form.get("password") };
-    const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(describeError(data.error)); setLoading(false); return; }
-    router.replace("/dashboard"); router.refresh();
+    try {
+      const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(describeError(data.error)); return; }
+      router.replace("/dashboard"); router.refresh();
+    } catch {
+      // Une perte réseau pendant l'envoi ne doit jamais laisser le bouton
+      // bloqué sur "Chargement…" sans explication.
+      setError("Connexion impossible. Vérifie le réseau puis réessaie.");
+    } finally {
+      setLoading(false);
+    }
   }
   return (
     <form className="form" onSubmit={submit}>
       {mode === "signup" && <div className="field"><label htmlFor="restaurantName">Nom du commerce</label><input className="input" id="restaurantName" name="restaurantName" required maxLength={120} /></div>}
       <div className="field"><label htmlFor={`${mode}-email`}>Email</label><input className="input" id={`${mode}-email`} name="email" type="email" required autoComplete="email" /></div>
       <div className="field"><label htmlFor={`${mode}-password`}>Mot de passe</label><input className="input" id={`${mode}-password`} name="password" type="password" minLength={8} required autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div>
-      {error && <div className="notice error">{error}</div>}
+      {error && <div className="notice error" role="alert">{error}</div>}
       <button className="btn btn-primary" disabled={loading}>{loading ? "Chargement…" : mode === "signup" ? "Créer mon espace" : "Se connecter"}</button>
     </form>
   );

@@ -63,3 +63,27 @@ export function safeErrorCode(error: unknown, fallback: string): string {
   const fingerprint = (hash >>> 0).toString(16).padStart(8, "0");
   return `${fallback}_${fingerprint}`.slice(0, 80);
 }
+
+/**
+ * Filet de sécurité pour les routes API : une panne infra (base injoignable,
+ * pool épuisé, timeout réseau) survenant avant ou après la logique métier ne
+ * doit jamais atteindre le client sous forme de page vide / réponse non-JSON.
+ * Les erreurs métier attendues (CARD_NOT_FOUND, COOLDOWN, ...) sont déjà
+ * gérées par les catch internes de chaque route et ne remontent pas ici.
+ */
+export function withApiErrorHandling<A extends unknown[]>(
+  routeName: string,
+  handler: (...args: A) => Promise<Response>,
+): (...args: A) => Promise<Response> {
+  return async (...args: A) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      console.error(`${routeName}_FAILED`, { code: safeErrorCode(error, `${routeName}_FAILED`) });
+      // Header inlined (plutôt qu'importé de lib/security) : ce module est
+      // aussi importé côté client (sanitizeAuditText), et lib/security tire
+      // node:crypto, ce que le bundle navigateur ne peut pas résoudre.
+      return Response.json({ error: "SERVER_ERROR" }, { status: 500, headers: { "cache-control": "no-store" } });
+    }
+  };
+}

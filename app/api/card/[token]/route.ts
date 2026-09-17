@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
+import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
-export async function GET(request: Request, { params }: { params: Promise<{ token: string }> }) {
+async function handleGet(request: Request, { params }: { params: Promise<{ token: string }> }) {
   // Route publique : sans limite, elle sert de sonde gratuite pour valider des
   // tokens en masse et de vecteur de DoS sur la base.
   const limited = await enforceRateLimit(request, "card-public", 60, 60);
@@ -30,3 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   delete rows[0].expires_at;
   return NextResponse.json(rows[0], { headers: { "cache-control": "no-store" } });
 }
+
+/**
+ * Page carte client publique : une base injoignable ou un timeout réseau ne
+ * doit jamais afficher une page cassée au client en dehors de toute session.
+ */
+export const GET = withApiErrorHandling("CARD_PUBLIC", handleGet);
