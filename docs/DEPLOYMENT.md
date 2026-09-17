@@ -29,9 +29,10 @@ npm run bootstrap:demo
 Le seed est idempotent et vérifie l'intégrité du ledger de la carte de démonstration.
 
 La migration `012_data_lifecycle.sql` protège le ledger contre les hard-deletes
-et répare les anciennes suppressions logiques. Avant production : l'appliquer
-sur une branche Neon temporaire, rejouer `npm run db:setup`, puis exécuter
-`npm run db:verify`. Cette PR ne l'applique pas en production.
+et répare les anciennes suppressions logiques. Elle fait partie du schéma exigé
+par `/api/health`. Pour toute nouvelle base : la tester d'abord sur une branche
+Neon temporaire, créer un point de restauration avant production, l'appliquer
+puis exécuter `npm run db:verify`.
 
 La maintenance de rétention reste manuelle pendant le pilote :
 

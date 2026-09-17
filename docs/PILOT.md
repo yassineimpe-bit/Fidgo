@@ -1,12 +1,19 @@
 # Checklist pilote terrain Retiko
 
+## Trois niveaux de validation
+
+- **Automatisé** : sur une PostgreSQL locale dédiée dont le nom contient `test`, lancer `npm run pilot:check`. Cette commande refuse Neon et tout environnement déclaré production, puis exécute types, lint, unitaires, build, migrations, E2E, rush de 30 opérations et `db:verify`.
+- **Production smoke** : vérifier le workflow GitHub `production-smoke`. Il contrôle la surface publique et `/api/health` sans créer de commerce, client ou transaction.
+- **Physique** : Safari iPhone, PWA iOS, Chrome Android et PWA Android restent obligatoires pour la caméra réelle, les permissions, le retour d'arrière-plan et la mesure terrain. L'automatisation ne remplace pas ce niveau.
+
 ## Avant le commerce
 
 - utiliser `https://retiko.fr` sur tous les QR imprimés ;
 - vérifier `/api/health` sur la production HTTPS ;
 - créer le restaurant ;
 - choisir tampons ou points ;
-- créer un accès employé scanner ;
+- créer un accès **Employé scanner** depuis Dashboard → Équipe, avec un identifiant distinct du compte Owner ;
+- se déconnecter du compte Owner sur l'appareil caisse, connecter cet employé et vérifier l'accès à `/s` avant l'installation PWA ;
 - imprimer l'affiche `/dashboard/poster` ;
 - ouvrir la PWA `/s` sur l'appareil caisse ;
 - tester Safari iOS, PWA iOS, Chrome Android et PWA Android ;
@@ -15,7 +22,9 @@
 
 ## Test technique
 
-Effectuer 30 passages en conditions réelles et relever `/s/stats`.
+Sur l'appareil caisse, ouvrir `/s/stats`, effacer les anciennes mesures, puis effectuer 30 passages en conditions réelles et relever `/s/stats`. Le compteur « actions validées » doit afficher au moins 30 : le p95 pilote porte sur **détection QR → validation du crédit/redeem**, pas seulement sur l'ouverture de la fiche client.
+
+Le scénario E2E `pilot-rush.spec.ts` vérifie séparément 30 scans/crédits et le ledger sur base locale de test. Il ne mesure ni caméra ni réseau mobile et ne doit jamais être lancé contre les données d'un commerçant.
 
 - p95 < 2,5 s : GO ;
 - 2,5 à 3,0 s : optimiser ;

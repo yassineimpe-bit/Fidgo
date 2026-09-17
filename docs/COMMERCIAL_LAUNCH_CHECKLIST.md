@@ -26,8 +26,9 @@
 
 - [ ] promesse commerciale claire
 - [ ] démo en moins de 5 minutes
-- [ ] offre annuelle 290 € HT/an prête
-- [ ] offre mensuelle 29 € HT/mois prête
+- [ ] Retiko Flex à 24,99 € HT/mois sans engagement prêt
+- [ ] Retiko 12 à 19,99 € HT/mois avec engagement 12 mois prêt
+- [ ] offre annuelle à 210 € HT/an prête
 - [ ] pilote 30 jours gratuit prêt
 - [ ] fiche / support commercial prêt
 - [ ] 50 prospects qualifiés

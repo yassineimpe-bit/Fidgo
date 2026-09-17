@@ -4,7 +4,10 @@ Ce document couvre le premier vrai service d'un commerce pilote, minute par minu
 
 ## Avant service
 
+- [ ] `npm run pilot:check` vert sur une PostgreSQL locale dédiée `*test*` ; aucune URL Neon/production n'est acceptée par cette commande.
+- [ ] Workflow GitHub `production-smoke` vert sur le SHA actuellement déployé.
 - [ ] Compte créé et connexion vérifiée (`/login`).
+- [ ] Accès **Employé scanner** créé dans Dashboard → Équipe ; connexion séparée vérifiée sur `/s` sans partager le mot de passe Owner.
 - [ ] Commerce configuré : nom, logo, couleur (`/dashboard/settings`).
 - [ ] Programme fidélité configuré : mode, seuil, récompense (`/dashboard/program`).
 - [ ] Affiche QR imprimée (`/dashboard/poster`).
@@ -13,6 +16,7 @@ Ce document couvre le premier vrai service d'un commerce pilote, minute par minu
 - [ ] Une carte de test créée depuis le QR (avec un email dont l'équipe a accès) et présentée au scanner avec succès.
 - [ ] Réseau testé sur l'appareil caisse à l'endroit exact où le scan aura lieu (Wi-Fi commerce, pas seulement le 4G du bureau).
 - [ ] Recherche par code court testée manuellement (utile si la caméra ou la lumière pose problème en service).
+- [ ] Anciennes mesures effacées dans `/s/stats` juste avant le rush pour isoler les 30 opérations de ce service.
 
 ## Pendant service
 
@@ -39,3 +43,5 @@ Noter, à chaud si possible :
 - bugs critiques : tout ce qui a bloqué un crédit, une récompense ou une inscription légitime.
 
 Ce relevé sert à décider, service après service, si le pilote passe à l'échelle ou doit d'abord être corrigé.
+
+Le test est complet seulement si les trois niveaux sont verts : automatisé, smoke production, puis physique. Les tests Chromium simulent les erreurs caméra et sécurisent le ledger ; ils ne valident pas les permissions Safari/PWA, la mise au point ou la lumière du commerce.
