@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getWalletRuntimeStatus } from "../lib/wallet-status";
+import { generateTestAppleCertChain, type TestAppleCertChain } from "./helpers/apple-certs";
 
 function googleServiceAccountBase64() {
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -12,6 +13,27 @@ function googleServiceAccountBase64() {
 }
 
 describe("wallet runtime status", () => {
+  let appleCerts: TestAppleCertChain;
+  beforeAll(() => { appleCerts = generateTestAppleCertChain(); });
+  afterAll(() => appleCerts.cleanup());
+
+  it("reports Apple configured when every signing input is present and parsable", () => {
+    const status = getWalletRuntimeStatus({
+      NEXT_PUBLIC_APP_URL: "https://retiko.fr",
+      APPLE_WALLET_ENABLED: "true",
+      APPLE_PASS_TYPE_IDENTIFIER: "pass.fr.retiko",
+      APPLE_TEAM_IDENTIFIER: "TEAM123456",
+      APPLE_WWDR_CERT_BASE64: appleCerts.wwdr,
+      APPLE_SIGNER_CERT_BASE64: appleCerts.signerCert,
+      APPLE_SIGNER_KEY_BASE64: appleCerts.signerKey,
+      AUTH_SECRET: "0123456789abcdef0123456789abcdef",
+    });
+    expect(status.apple.missing).toEqual([]);
+    expect(status.apple.invalid).toEqual([]);
+    expect(status.apple.configured).toBe(true);
+  });
+
+
   it("reports disabled providers without exposing values", () => {
     const status = getWalletRuntimeStatus({ NEXT_PUBLIC_APP_URL: "https://fidgo.test" });
     expect(status.appUrlHttps).toBe(true);
