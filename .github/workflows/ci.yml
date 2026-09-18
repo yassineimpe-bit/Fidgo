@@ -49,6 +49,22 @@ jobs:
           EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
           EMAIL_REPLY_TO: contact@retiko.fr
         run: npm run env:check
+      - name: Validate enabled Stripe billing contract
+        env:
+          NODE_ENV: production
+          DATABASE_URL: postgres://retiko:retiko@db.example.test:5432/retiko?sslmode=require
+          AUTH_SECRET: retiko-ci-production-secret-at-least-32-bytes
+          NEXT_PUBLIC_APP_URL: https://retiko.fr
+          APPLE_WALLET_ENABLED: "false"
+          GOOGLE_WALLET_ENABLED: "false"
+          CARD_RECOVERY_ENABLED: "false"
+          STRIPE_ENABLED: "true"
+          STRIPE_SECRET_KEY: sk_test_ci_placeholder
+          STRIPE_WEBHOOK_SECRET: whsec_ci_placeholder
+          STRIPE_PRICE_FLEX_MONTHLY: price_ci_flex
+          STRIPE_PRICE_RETIKO12_MONTHLY: price_ci_retiko12
+          STRIPE_PRICE_ANNUAL: price_ci_annual
+        run: npm run env:check
       - name: Reject technical Vercel URL as canonical production URL
         env:
           NODE_ENV: production
@@ -106,3 +122,5 @@ jobs:
       - name: Verify database integrity after setup
         run: npm run db:verify
       - run: npm run test:e2e
+      - name: Verify database integrity after E2E
+        run: npm run db:verify

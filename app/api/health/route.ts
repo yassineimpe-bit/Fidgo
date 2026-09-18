@@ -30,6 +30,7 @@ export async function GET() {
       select
         to_regclass('public.card_recovery_tokens') is not null as recovery_table,
         to_regclass('public.product_events') is not null as product_events_table,
+        to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
         exists(
           select 1 from information_schema.columns
           where table_schema='public' and table_name='staff_users' and column_name='token_version'
@@ -42,6 +43,10 @@ export async function GET() {
           select 1 from information_schema.columns
           where table_schema='public' and table_name='loyalty_programs' and column_name='cooldown_seconds'
         ) as cooldown_seconds,
+        exists(
+          select 1 from information_schema.columns
+          where table_schema='public' and table_name='subscriptions' and column_name='trial_ends_at'
+        ) as billing_trial_end,
         (
           select count(*)::int = 5 from pg_constraint
           where connamespace='public'::regnamespace and conname = any(array[
@@ -70,9 +75,11 @@ export async function GET() {
     const schemaReady = Boolean(
       schema?.recovery_table
       && schema?.product_events_table
+      && schema?.stripe_webhook_events_table
       && schema?.token_version
       && schema?.last_earn_at
       && schema?.cooldown_seconds
+      && schema?.billing_trial_end
       && schema?.tenant_integrity
       && schema?.reversal_once
       && schema?.lifecycle_guards

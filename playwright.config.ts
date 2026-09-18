@@ -30,6 +30,12 @@ export default defineConfig({
       RESEND_API_KEY: "re_test_dummy_key",
       EMAIL_FROM: "Fidgo <cards@fidgo.test>",
       EMAIL_REPLY_TO: "support@fidgo.test",
+      STRIPE_ENABLED: "true",
+      STRIPE_SECRET_KEY: "sk_test_e2e_placeholder",
+      STRIPE_WEBHOOK_SECRET: "whsec_retiko_e2e",
+      STRIPE_PRICE_FLEX_MONTHLY: "price_e2e_flex",
+      STRIPE_PRICE_RETIKO12_MONTHLY: "price_e2e_retiko12",
+      STRIPE_PRICE_ANNUAL: "price_e2e_annual",
     },
   },
 });

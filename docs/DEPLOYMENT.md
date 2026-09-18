@@ -34,6 +34,11 @@ par `/api/health`. Pour toute nouvelle base : la tester d'abord sur une branche
 Neon temporaire, créer un point de restauration avant production, l'appliquer
 puis exécuter `npm run db:verify`.
 
+La migration `013_stripe_billing_v2.sql` doit être appliquée et vérifiée avant
+de déployer le code de facturation. Elle ne doit jamais être exécutée par un
+build Vercel et n'active pas Stripe : `STRIPE_ENABLED=false` reste la valeur
+sûre jusqu'à la validation opérationnelle décrite dans `docs/BILLING.md`.
+
 La maintenance de rétention reste manuelle pendant le pilote :
 
 ```bash

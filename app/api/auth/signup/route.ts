@@ -7,6 +7,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
+import { createPilotSubscription } from "@/lib/billing";
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -45,6 +46,10 @@ export async function POST(request: Request) {
       const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
       const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role,token_version`)[0];
       await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
+      // L'essai est un état local. Aucun appel Stripe n'est effectué pendant
+      // l'inscription : une panne ou un flag désactivé ne peut donc pas créer
+      // un commerce à moitié initialisé.
+      await createPilotSubscription(tx, String(establishment.id));
       return { establishment, staff };
     });
 

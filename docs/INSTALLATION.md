@@ -47,7 +47,7 @@ DATABASE_URL='postgres://fidgo:fidgo@127.0.0.1:5432/fidgo_test' npm run pilot:ch
 
 1. Créer PostgreSQL en région UE.
 2. Définir `DATABASE_URL`, `AUTH_SECRET` et `NEXT_PUBLIC_APP_URL`.
-3. Exécuter `npm run db:setup` afin d'appliquer le schéma et toutes les migrations versionnées jusqu'à `012_data_lifecycle.sql`.
+3. Exécuter `npm run db:setup` afin d'appliquer le schéma et toutes les migrations versionnées jusqu'à `013_stripe_billing_v2.sql`.
 4. Déployer sur Vercel, région `fra1`.
 5. Vérifier `/api/health`.
 6. Tester `/s` sur Safari iPhone et Chrome Android en HTTPS.
