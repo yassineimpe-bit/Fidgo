@@ -103,6 +103,13 @@ try {
           and (not c.active or u.deleted_at is not null or e.status <> 'active')
       ) as active_orphan_recovery_tokens
   `;
+  const [billingData] = await sql`
+    select
+      (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
+      (select count(*)::int from stripe_webhook_events we join subscriptions s on s.external_subscription_id=we.external_subscription_id where we.establishment_id is not null and we.establishment_id<>s.establishment_id) as webhook_tenant_mismatches,
+      (select count(*)::int from (select external_customer_id from subscriptions where external_customer_id is not null group by external_customer_id having count(*)>1) duplicates) as duplicate_stripe_customers,
+      (select count(*)::int from (select external_subscription_id from subscriptions where external_subscription_id is not null group by external_subscription_id having count(*)>1) duplicates) as duplicate_stripe_subscriptions
+  `;
 
   const constraints = await sql`
     select conname
@@ -131,6 +138,10 @@ try {
   if (Number(tenantData.active_deleted_customer_cards) > 0) failures.push(`${tenantData.active_deleted_customer_cards} carte(s) active(s) pour un client effacé`);
   if (Number(tenantData.active_orphan_wallets) > 0) failures.push(`${tenantData.active_orphan_wallets} Wallet(s) actif(s) sur une ressource révoquée`);
   if (Number(tenantData.active_orphan_recovery_tokens) > 0) failures.push(`${tenantData.active_orphan_recovery_tokens} lien(s) recovery actif(s) sur une ressource révoquée`);
+  if (Number(billingData.establishments_without_subscription) > 0) failures.push(`${billingData.establishments_without_subscription} commerce(s) sans état de facturation`);
+  if (Number(billingData.webhook_tenant_mismatches) > 0) failures.push(`${billingData.webhook_tenant_mismatches} webhook(s) Stripe lié(s) au mauvais tenant`);
+  if (Number(billingData.duplicate_stripe_customers) > 0) failures.push(`${billingData.duplicate_stripe_customers} client(s) Stripe dupliqué(s)`);
+  if (Number(billingData.duplicate_stripe_subscriptions) > 0) failures.push(`${billingData.duplicate_stripe_subscriptions} abonnement(s) Stripe dupliqué(s)`);
   if (missingTriggers.length > 0) failures.push(`gardes hard-delete manquantes: ${missingTriggers.join(", ")}`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
@@ -146,6 +157,10 @@ try {
   console.log(`Cartes actives de clients effacés : ${tenantData.active_deleted_customer_cards}`);
   console.log(`Wallets actifs incohérents : ${tenantData.active_orphan_wallets}`);
   console.log(`Recovery tokens actifs incohérents : ${tenantData.active_orphan_recovery_tokens}`);
+  console.log(`Commerces sans état de facturation : ${billingData.establishments_without_subscription}`);
+  console.log(`Webhooks Stripe cross-tenant : ${billingData.webhook_tenant_mismatches}`);
+  console.log(`Clients Stripe dupliqués : ${billingData.duplicate_stripe_customers}`);
+  console.log(`Abonnements Stripe dupliqués : ${billingData.duplicate_stripe_subscriptions}`);
   console.log(`Gardes hard-delete : ${expectedLifecycleTriggers.length - missingTriggers.length}/${expectedLifecycleTriggers.length}`);
 
   if (failures.length > 0) {

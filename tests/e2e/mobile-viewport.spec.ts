@@ -8,6 +8,7 @@ const DASHBOARD_PAGES = [
   "/dashboard/employees",
   "/dashboard/program",
   "/dashboard/settings",
+  "/dashboard/billing",
   "/dashboard/wallet",
   "/dashboard/poster",
 ];
@@ -37,7 +38,7 @@ test("menu mobile : tous les écrans restent atteignables sans taper une URL", a
   await expect(page.getByRole("link", { name: "Clients" })).toBeHidden();
 
   await page.getByRole("button", { name: "Ouvrir le menu" }).click();
-  for (const label of ["Dashboard", "Clients", "Programme", "Transactions", "Équipe", "Commerce", "Wallet", "Affiche QR"]) {
+  for (const label of ["Dashboard", "Clients", "Programme", "Transactions", "Équipe", "Commerce", "Facturation", "Wallet", "Affiche QR"]) {
     await expect(page.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: "Déconnexion" })).toBeVisible();
@@ -67,7 +68,7 @@ test("desktop : la navigation complète reste visible sans menu hamburger", asyn
   await page.setViewportSize({ width: 1200, height: 800 });
   await createMerchant(page, "navdesktop");
 
-  for (const label of ["Dashboard", "Clients", "Programme", "Transactions", "Équipe", "Commerce", "Wallet", "Affiche QR"]) {
+  for (const label of ["Dashboard", "Clients", "Programme", "Transactions", "Équipe", "Commerce", "Facturation", "Wallet", "Affiche QR"]) {
     await expect(page.getByRole("link", { name: label, exact: true })).toBeVisible();
   }
   await expect(page.getByRole("button", { name: /menu/i })).toBeHidden();

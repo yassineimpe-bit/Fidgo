@@ -25,14 +25,14 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 - PWA minimale et instrumentation p50/p95 QR → validation ;
 - événements pilote persistés sans token brut ni coordonnées client ;
 - récupération de carte par email avec jeton à usage unique et réponse anti-énumération ;
-- schéma prêt pour Apple Wallet, Google Wallet, campagnes, push et Stripe ;
+- Stripe Checkout/Portal et synchronisation webhook prêts derrière un feature flag désactivé ;
 - anti-bruteforce PostgreSQL et contrôle d'origine sur les mutations.
 
 ## Volontairement après validation terrain
 
 - émission réelle Apple Wallet / Google Wallet ;
 - Web Push et campagnes ;
-- Stripe avancé / plans multiples ;
+- activation opérationnelle Stripe après validation fiscale et contractuelle ;
 - multi-sites ;
 - analytics avancées.
 
@@ -58,4 +58,4 @@ npm run dev
 
 Puis ouvrir `/signup`.
 
-Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/DATA_LIFECYCLE.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/PILOT.md`.
+Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/DATA_LIFECYCLE.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/BILLING.md`, `docs/PILOT.md`.

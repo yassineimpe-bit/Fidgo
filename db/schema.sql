@@ -169,12 +169,30 @@ create table if not exists subscriptions (
   provider text not null default 'stripe',
   external_customer_id text,
   external_subscription_id text,
-  plan text not null default 'STARTER' check (plan in ('STARTER','PRO','PREMIUM')),
-  status text not null default 'trial' check (status in ('trial','active','past_due','cancelled')),
+  plan text not null default 'PILOT' check (plan in ('PILOT','FLEX','RETIKO_12','ANNUAL')),
+  billing_interval text check (billing_interval is null or billing_interval in ('monthly','annual')),
+  status text not null default 'trial' check (status in ('trial','active','past_due','canceled','unpaid')),
+  trial_ends_at timestamptz,
   current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
+  stripe_last_event_created bigint,
+  stripe_last_event_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+create unique index if not exists subscriptions_external_customer_unique on subscriptions (external_customer_id) where external_customer_id is not null;
+create unique index if not exists subscriptions_external_subscription_unique on subscriptions (external_subscription_id) where external_subscription_id is not null;
+create index if not exists subscriptions_status_idx on subscriptions (status, trial_ends_at);
+
+create table if not exists stripe_webhook_events (
+  event_id text primary key,
+  event_type text not null,
+  event_created bigint not null,
+  establishment_id uuid references establishments(id) on delete set null,
+  external_subscription_id text,
+  processed_at timestamptz not null default now()
+);
+create index if not exists stripe_webhook_events_retention_idx on stripe_webhook_events (processed_at);
 
 create table if not exists audit_logs (
   id uuid primary key default gen_random_uuid(),

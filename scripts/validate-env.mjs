@@ -48,11 +48,32 @@ try {
   fail(error instanceof Error ? error.message : "NEXT_PUBLIC_APP_URL invalide.");
 }
 
-for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED"]) {
+for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED", "STRIPE_ENABLED"]) {
   const value = envValue(flag);
   if (value && value !== "true" && value !== "false") {
     fail(`${flag} doit valoir true ou false.`);
   }
+}
+
+if (envValue("STRIPE_ENABLED") === "true") {
+  const stripe = [
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_PRICE_FLEX_MONTHLY",
+    "STRIPE_PRICE_RETIKO12_MONTHLY",
+    "STRIPE_PRICE_ANNUAL",
+  ];
+  const stripeMissing = stripe.filter((key) => !envValue(key));
+  if (stripeMissing.length) fail(`Stripe activé mais variables manquantes: ${stripeMissing.join(", ")}`);
+  if (!envValue("STRIPE_SECRET_KEY").startsWith("sk_")) fail("STRIPE_SECRET_KEY doit commencer par sk_.");
+  if (!envValue("STRIPE_WEBHOOK_SECRET").startsWith("whsec_")) fail("STRIPE_WEBHOOK_SECRET doit commencer par whsec_.");
+  const priceIds = [
+    envValue("STRIPE_PRICE_FLEX_MONTHLY"),
+    envValue("STRIPE_PRICE_RETIKO12_MONTHLY"),
+    envValue("STRIPE_PRICE_ANNUAL"),
+  ];
+  if (priceIds.some((value) => !value.startsWith("price_"))) fail("Chaque Price ID Stripe doit commencer par price_.");
+  if (new Set(priceIds).size !== priceIds.length) fail("Les trois Price IDs Stripe doivent être distincts.");
 }
 
 if (envValue("APPLE_WALLET_ENABLED") === "true") {

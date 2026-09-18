@@ -79,6 +79,19 @@ OWNER/MANAGER. Entrée : `newBalance`, `reason`, `idempotencyKey`. Verrouille la
 ### `POST /api/restaurant/suspend`
 OWNER seulement. Suspension conservatrice de l'établissement, protégée par same-origin, rate limit et confirmation exacte du slug avec la phrase `SUSPENDRE`. Désactive immédiatement le staff et invalide ses sessions, révoque les cartes, liens de récupération et Wallets, puis conserve clients, transactions et configuration pour le ledger et une éventuelle procédure contrôlée. Cette route ne réalise aucune suppression définitive.
 
+## Facturation Stripe optionnelle
+
+Ces routes sont inactives lorsque `STRIPE_ENABLED` n'est pas `true`. Leur indisponibilité ne bloque aucune route de fidélité.
+
+### `POST /api/billing/checkout`
+OWNER seulement. Entrée : `{ plan: "FLEX" | "RETIKO_12" | "ANNUAL" }`. Tout Price ID envoyé par le navigateur est rejeté; le serveur choisit la variable d'environnement correspondant à l'offre. Retourne uniquement l'URL de la Checkout Session Stripe hébergée.
+
+### `POST /api/billing/portal`
+OWNER seulement. Ouvre le Customer Portal du client Stripe déjà rattaché au commerce courant. L'identifiant client est toujours relu dans le tenant de la session.
+
+### `POST /api/billing/webhook`
+Endpoint Stripe sans session web. Exige une signature `stripe-signature` valide sur le corps brut. Les événements sont traités de façon idempotente et ne peuvent pas réaffecter un customer ou un abonnement Stripe à un autre établissement.
+
 ## Erreurs sensibles
 
 - `401 UNAUTHORIZED` : session absente/invalide.
