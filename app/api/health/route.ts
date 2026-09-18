@@ -1,4 +1,5 @@
 import { databaseConfigured, sql } from "@/lib/db";
+import { healthSchemaIsReady } from "@/lib/health-schema";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
@@ -72,19 +73,7 @@ export async function GET() {
         ) as erased_pii_check
     `;
 
-    const schemaReady = Boolean(
-      schema?.recovery_table
-      && schema?.product_events_table
-      && schema?.stripe_webhook_events_table
-      && schema?.token_version
-      && schema?.last_earn_at
-      && schema?.cooldown_seconds
-      && schema?.billing_trial_end
-      && schema?.tenant_integrity
-      && schema?.reversal_once
-      && schema?.lifecycle_guards
-      && schema?.erased_pii_check
-    );
+    const schemaReady = healthSchemaIsReady(schema, process.env.STRIPE_ENABLED === "true");
 
     return Response.json({
       ok: schemaReady,

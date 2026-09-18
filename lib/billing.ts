@@ -156,7 +156,28 @@ export function mapStripeStatus(status: Stripe.Subscription.Status): Subscriptio
   }
 }
 
+export async function billingSchemaSupportsV2(query: typeof sql = sql) {
+  const [schema] = await query`
+    select exists(
+      select 1 from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'subscriptions'
+        and column_name = 'trial_ends_at'
+    ) as billing_v2
+  `;
+  return Boolean(schema?.billing_v2);
+}
+
 export async function createPilotSubscription(tx: typeof sql, establishmentId: string) {
+  if (!await billingSchemaSupportsV2(tx)) {
+    const [legacySubscription] = await tx`
+      insert into subscriptions (establishment_id)
+      values (${establishmentId})
+      on conflict (establishment_id) do nothing
+      returning id, null::timestamptz as trial_ends_at
+    `;
+    return legacySubscription ?? null;
+  }
   const [subscription] = await tx`
     insert into subscriptions (establishment_id, plan, status, trial_ends_at)
     values (${establishmentId}, 'PILOT', 'trial', now() + (${BILLING_TRIAL_DAYS}::int * interval '1 day'))
@@ -167,6 +188,17 @@ export async function createPilotSubscription(tx: typeof sql, establishmentId: s
 }
 
 export async function getSubscription(establishmentId: string) {
+  if (!await billingSchemaSupportsV2()) {
+    const [legacyRow] = await sql`
+      select provider, external_customer_id, external_subscription_id, plan,
+             null::text as billing_interval, status, null::timestamptz as trial_ends_at,
+             current_period_end, false as cancel_at_period_end
+      from subscriptions
+      where establishment_id = ${establishmentId}
+      limit 1
+    `;
+    return legacyRow ?? null;
+  }
   const [row] = await sql`
     select provider, external_customer_id, external_subscription_id, plan,
            billing_interval, status, trial_ends_at, current_period_end,

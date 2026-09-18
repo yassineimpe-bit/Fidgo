@@ -6,6 +6,7 @@ import {
   type BillingStripeClient,
   checkoutPlanFromRequest,
   checkoutTrialEnd,
+  createPilotSubscription,
   createBillingPortalSession,
   createCheckoutSession,
   getBillingRuntimeStatus,
@@ -46,6 +47,22 @@ describe("configuration Stripe v2", () => {
     expect(planFromStripePriceId("price_retiko12", configuredEnv)).toBe("RETIKO_12");
     expect(planFromStripePriceId("price_annual", configuredEnv)).toBe("ANNUAL");
     expect(planFromStripePriceId("price_attacker", configuredEnv)).toBeNull();
+  });
+});
+
+describe("compatibilité avant migration 013", () => {
+  it("crée l'état pilote avec le schéma historique lorsque Stripe reste désactivé", async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce([{ billing_v2: false }])
+      .mockResolvedValueOnce([{ id: "sub_legacy", trial_ends_at: null }]);
+    const subscription = await createPilotSubscription(
+      query as unknown as Parameters<typeof createPilotSubscription>[0],
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(subscription).toMatchObject({ id: "sub_legacy", trial_ends_at: null });
+    const legacyInsert = Array.from(query.mock.calls[1][0] as readonly string[]).join(" ");
+    expect(legacyInsert).toContain("insert into subscriptions (establishment_id)");
+    expect(legacyInsert).not.toContain("'PILOT'");
   });
 });
 
