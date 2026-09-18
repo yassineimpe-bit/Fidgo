@@ -976,36 +976,35 @@ engagement fidélité
 
 Tarification publique retenue :
 
-## Offre annuelle principale
+## Retiko Flex
 
 ```text
-290 € HT / an
+24,99 € HT / mois
+```
+
+Sans engagement.
+
+## Retiko 12
+
+```text
+19,99 € HT / mois
+```
+
+Avec engagement commercial de 12 mois. Un simple Price Stripe mensuel ne
+garantit pas techniquement cet engagement : le mécanisme contractuel et la
+configuration du Customer Portal doivent être validés avant activation.
+
+## Offre annuelle
+
+```text
+210 € HT / an
 ```
 
 Équivalent :
 
 ```text
-24,17 € HT / mois
+17,50 € HT / mois
 ```
-
-Par rapport au mensuel à 29 € :
-
-```text
-58 € économisés par an
-≈ 2 mois offerts
-```
-
-**L’offre annuelle est l’offre mise en avant par défaut dans l’application et dans le discours commercial.**
-
-## Offre mensuelle secondaire
-
-```text
-29 € HT / mois
-```
-
-Elle reste disponible afin de ne pas bloquer un commerçant qui refuse un engagement annuel.
-
-Le mensuel ne doit pas être présenté comme l’offre principale.
 
 Les éventuelles offres « fondateur » doivent rester limitées aux premiers pilotes et ne doivent pas dégrader durablement le prix public.
 
@@ -1026,8 +1025,9 @@ rappels avant fin d'essai
 ↓
 choix de l'offre
 ↓
-290 € HT / an recommandé
-ou 29 € HT / mois
+Retiko Flex à 24,99 € HT / mois sans engagement
+ou Retiko 12 à 19,99 € HT / mois avec engagement commercial de 12 mois
+ou offre annuelle à 210 € HT / an
 ↓
 Stripe Checkout
 ↓
@@ -1199,7 +1199,7 @@ Stripe n’a pas besoin d’être activé avant le tout premier pilote gratuit, 
 | **12** | RGPD + accord pilote |
 | **13** | Démo commerciale < 5 min |
 | **14** | Landing page orientée commerces de proximité |
-| **15** | Tarification annuelle 290 € / mensuelle 29 € présentée |
+| **15** | Tarification Flex 24,99 €, Retiko 12 19,99 € et annuelle 210 € présentée |
 | **16** | Liste initiale de 50 prospects |
 | **17** | Répétition commerciale |
 | **18** | Prospection physique Corrèze |
