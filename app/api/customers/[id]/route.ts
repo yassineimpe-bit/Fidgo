@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { notifyAppleWalletRevocation } from "@/lib/apple-wallet";
 import { sql } from "@/lib/db";
+import { notifyGoogleWalletRevocation } from "@/lib/google-wallet";
 import { canManageProgram } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
@@ -99,7 +100,7 @@ async function handleDelete(req: Request, { params }: { params: Promise<{ id: st
 
   if (!result) return Response.json({ error: "NOT_FOUND" }, { status: 404, headers: PRIVATE_HEADERS });
   if (result.cardIds.length) {
-    after(() => Promise.allSettled(result.cardIds.map((cardId) => notifyAppleWalletRevocation(cardId))));
+    after(() => Promise.allSettled(result.cardIds.flatMap((cardId) => [notifyAppleWalletRevocation(cardId), notifyGoogleWalletRevocation(cardId)])));
   }
   return Response.json({ ok: true }, { headers: PRIVATE_HEADERS });
 }

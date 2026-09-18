@@ -5,10 +5,11 @@ import type { WalletCard } from "../lib/wallet-data";
 
 const mocks = vi.hoisted(() => ({
   authorize: vi.fn(async () => ({ access_token: "test-oauth-token" })),
-  sql: vi.fn(async (...args: unknown[]) => {
+  sql: vi.fn(async (...args: unknown[]): Promise<Array<Record<string, unknown>>> => {
     void args;
     return [];
   }),
+  walletCardForRevocationById: vi.fn(async (): Promise<WalletCard | null> => null),
 }));
 
 vi.mock("google-auth-library", () => ({
@@ -18,6 +19,7 @@ vi.mock("google-auth-library", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({ sql: mocks.sql }));
+vi.mock("@/lib/wallet-data", () => ({ walletCardForRevocationById: mocks.walletCardForRevocationById }));
 
 const fixtureCard: WalletCard = {
   cardId: "11111111-1111-1111-1111-111111111111",
@@ -56,6 +58,8 @@ beforeEach(() => {
   configureGoogle();
   mocks.authorize.mockClear();
   mocks.sql.mockClear();
+  mocks.walletCardForRevocationById.mockReset();
+  mocks.walletCardForRevocationById.mockResolvedValue(null);
   vi.unstubAllGlobals();
 });
 
@@ -143,5 +147,42 @@ describe("Google Wallet background sync", () => {
     expect(errorWrite).toBeTruthy();
     expect(errorWrite?.[1]).toBe("GOOGLE_OBJECT_PATCH_503");
     expect(JSON.stringify(errorWrite)).not.toContain("sensitive provider response");
+  });
+});
+
+describe("Google Wallet revocation sync", () => {
+  it("deactivates the Google Wallet object when a card is revoked, mirroring the Apple 'voided' pass", async () => {
+    // Bug reproduit : avant ce correctif, notifyGoogleWalletRevocation()
+    // n'existait pas. Une carte révoquée (établissement suspendu, client
+    // effacé) laissait donc l'objet Google Wallet du client visible et
+    // affiché comme actif pour toujours, alors que le pass Apple équivalent
+    // passe correctement à "Désactivée" via notifyAppleWalletRevocation().
+    mocks.sql.mockImplementationOnce(async () => [{ id: "wallet-pass-1" }]);
+    mocks.walletCardForRevocationById.mockResolvedValueOnce(fixtureCard);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(ok()));
+
+    const { notifyGoogleWalletRevocation } = await import("../lib/google-wallet");
+    await notifyGoogleWalletRevocation(fixtureCard.cardId);
+
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const [patchUrl, patchInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(patchUrl).toContain("/loyaltyObject/");
+    expect(patchInit.method).toBe("PATCH");
+    const patchedBody = JSON.parse(String(patchInit.body)) as { state?: string };
+    expect(patchedBody.state).toBe("INACTIVE");
+
+    const finalUpdate = mocks.sql.mock.calls.at(-1);
+    expect(Array.from(finalUpdate?.[0] as readonly string[]).join("")).toContain("last_synced_at=now()");
+  });
+
+  it("never calls the Google API when no active Google pass is on record for the card", async () => {
+    mocks.sql.mockImplementationOnce(async () => []);
+    vi.stubGlobal("fetch", vi.fn());
+
+    const { notifyGoogleWalletRevocation } = await import("../lib/google-wallet");
+    await notifyGoogleWalletRevocation(fixtureCard.cardId);
+
+    expect(mocks.walletCardForRevocationById).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

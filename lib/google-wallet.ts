@@ -3,7 +3,7 @@ import { importPKCS8, SignJWT } from "jose";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
-import type { WalletCard } from "@/lib/wallet-data";
+import { walletCardForRevocationById, type WalletCard } from "@/lib/wallet-data";
 import { safeErrorCode } from "@/lib/observability";
 
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
@@ -83,13 +83,13 @@ function classBody(card: WalletCard) {
   };
 }
 
-export function objectBody(card: WalletCard) {
+export function objectBody(card: WalletCard, state: "ACTIVE" | "INACTIVE" = "ACTIVE") {
   const { classId, objectId } = ids(card);
   const base = getAppUrl();
   return {
     id: objectId,
     classId,
-    state: "ACTIVE",
+    state,
     accountName: (card.firstName || "Client Retiko").slice(0, 20),
     accountId: card.shortCode,
     loyaltyPoints: card.mode === "STAMPS"
@@ -164,5 +164,33 @@ export async function syncGoogleWallet(card: WalletCard) {
   } catch (error) {
     const code = safeErrorCode(error, "GOOGLE_WALLET_SYNC_FAILED");
     await sql`update wallet_passes set status='error',last_error=${code},updated_at=now() where card_id=${card.cardId} and provider='GOOGLE'`;
+  }
+}
+
+/**
+ * Contrepartie Google de notifyAppleWalletRevocation() : sans cet appel, une
+ * carte révoquée (établissement suspendu, client effacé) laisse un objet
+ * Google Wallet visible et actif dans le portefeuille du client alors que le
+ * pass Apple équivalent affiche déjà "Désactivée". On bascule ici l'objet
+ * existant sur state=INACTIVE, ce qui le grise dans Google Wallet.
+ */
+export async function notifyGoogleWalletRevocation(cardId: string) {
+  if (!googleWalletEnabled()) return;
+  const [walletPass] = await sql`
+    select id from wallet_passes
+    where card_id=${cardId} and provider='GOOGLE' and status='revoked'
+    limit 1
+  `;
+  if (!walletPass) return;
+  const card = await walletCardForRevocationById(cardId);
+  if (!card) return;
+  try {
+    const { objectId } = ids(card);
+    const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card, "INACTIVE")) });
+    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_REVOKE_${updated.status}`);
+    await sql`update wallet_passes set last_synced_at=now(),last_error=null,updated_at=now() where id=${walletPass.id}`;
+  } catch (error) {
+    const code = safeErrorCode(error, "GOOGLE_WALLET_REVOKE_FAILED");
+    await sql`update wallet_passes set last_error=${code},updated_at=now() where id=${walletPass.id}`;
   }
 }
