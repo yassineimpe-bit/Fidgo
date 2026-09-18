@@ -35,9 +35,12 @@ Neon temporaire, créer un point de restauration avant production, l'appliquer
 puis exécuter `npm run db:verify`.
 
 La migration `013_stripe_billing_v2.sql` doit être appliquée et vérifiée avant
-de déployer le code de facturation. Elle ne doit jamais être exécutée par un
-build Vercel et n'active pas Stripe : `STRIPE_ENABLED=false` reste la valeur
-sûre jusqu'à la validation opérationnelle décrite dans `docs/BILLING.md`.
+d'activer la facturation. Le code reste compatible avec le schéma précédent
+tant que `STRIPE_ENABLED=false`, afin qu'un déploiement applicatif ne casse ni
+le healthcheck ni le signup pendant la préparation de la migration. Celle-ci
+ne doit jamais être exécutée par un build Vercel et n'active pas Stripe :
+`STRIPE_ENABLED=false` reste la valeur sûre jusqu'à la validation opérationnelle
+décrite dans `docs/BILLING.md`.
 
 La maintenance de rétention reste manuelle pendant le pilote :
 
