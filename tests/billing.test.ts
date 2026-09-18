@@ -86,6 +86,8 @@ describe("entrée Checkout", () => {
     expect(params.line_items).toEqual([{ price: "price_retiko12", quantity: 1 }]);
     expect(params.subscription_data?.metadata).toMatchObject({ retikoPlan: "RETIKO_12" });
     expect(params.subscription_data?.trial_end).toBe(checkoutTrialEnd(trialEndsAt));
+    expect(params.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000) + 30 * 60);
+    expect(params.expires_at).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31 * 60);
     expect(options).toEqual({ idempotencyKey: "retiko-checkout-test" });
     expect(JSON.stringify(params)).not.toContain("sk_test_placeholder");
   });

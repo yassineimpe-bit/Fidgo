@@ -177,11 +177,17 @@ create table if not exists subscriptions (
   cancel_at_period_end boolean not null default false,
   stripe_last_event_created bigint,
   stripe_last_event_id text,
+  legacy_plan text,
+  stripe_checkout_session_id text,
+  stripe_checkout_plan text check (stripe_checkout_plan is null or stripe_checkout_plan in ('FLEX','RETIKO_12','ANNUAL')),
+  stripe_checkout_pending_at timestamptz,
+  stripe_checkout_claim_token text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create unique index if not exists subscriptions_external_customer_unique on subscriptions (external_customer_id) where external_customer_id is not null;
 create unique index if not exists subscriptions_external_subscription_unique on subscriptions (external_subscription_id) where external_subscription_id is not null;
+create unique index if not exists subscriptions_checkout_session_unique on subscriptions (stripe_checkout_session_id) where stripe_checkout_session_id is not null;
 create index if not exists subscriptions_status_idx on subscriptions (status, trial_ends_at);
 
 create table if not exists stripe_webhook_events (

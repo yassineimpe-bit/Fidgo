@@ -7,6 +7,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   BILLING_DISABLED: "La facturation n’est pas activée sur cet environnement.",
   BILLING_NOT_CONFIGURED: "La configuration Stripe est incomplète.",
   ALREADY_SUBSCRIBED: "Un abonnement est déjà rattaché à ce commerce.",
+  CHECKOUT_PENDING: "Une ouverture de paiement est déjà en cours. Réessaie dans quelques instants.",
   STRIPE_UNAVAILABLE: "Stripe est temporairement indisponible. Le reste de Retiko continue de fonctionner.",
   TOO_MANY_ATTEMPTS: "Trop de tentatives. Réessaie un peu plus tard.",
 };

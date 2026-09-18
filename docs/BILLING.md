@@ -42,8 +42,10 @@ Lorsque `STRIPE_ENABLED=true`, `npm run env:check` exige une clé `sk_`, un secr
 3. `/api/billing/checkout` relit l’abonnement uniquement avec `session.establishmentId`, détermine le Price côté serveur et utilise une clé d’idempotence Stripe limitée au tenant et à l’offre.
 4. `/api/billing/portal` relit également le client Stripe dans le tenant de la session.
 5. `/api/billing/webhook` lit le corps brut, vérifie obligatoirement `stripe-signature`, puis traite l’événement dans une transaction DB.
-6. `stripe_webhook_events.event_id` empêche un rejeu. `stripe_last_event_created` et `stripe_last_event_id` empêchent un événement ancien de remplacer un état plus récent.
-7. Une liaison existante customer/subscription ne peut pas être réaffectée à un autre établissement. Les identifiants externes ont des index uniques.
+6. Une réservation atomique en base empêche deux requêtes Checkout concurrentes de créer deux abonnements. La session Checkout créée est enregistrée avant d'être rendue au navigateur et expire avant que la réservation puisse être reprise.
+7. Le webhook lie un Checkout au tenant via cet identifiant de session enregistré côté serveur. Les metadata Stripe ne sont utilisées que comme contrôle de cohérence, jamais comme preuve suffisante d'identité tenant.
+8. `stripe_webhook_events.event_id` empêche un rejeu. `stripe_last_event_created` et `stripe_last_event_id` empêchent un événement ancien de remplacer un état plus récent.
+9. Une liaison existante customer/subscription ne peut pas être réaffectée à un autre établissement. Les identifiants externes et les sessions Checkout ont des index uniques.
 
 Les statuts locaux sont `trial`, `active`, `past_due`, `canceled` et `unpaid`. `incomplete` et `incomplete_expired` sont ramenés à `unpaid`; `paused` à `past_due`. Les dates conservées sont la fin de pilote/essai et la fin de période courante.
 

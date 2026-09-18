@@ -17,6 +17,8 @@ describe("migration Stripe v2", () => {
     expect(migration).toMatch(/on conflict \(establishment_id\) do nothing/i);
     expect(migration).toContain("subscriptions_external_customer_unique");
     expect(migration).toContain("subscriptions_external_subscription_unique");
+    expect(migration).toContain("subscriptions_checkout_session_unique");
+    expect(migration).toMatch(/legacy_plan = coalesce\(legacy_plan, plan\)/i);
   });
 
   it("garde le schéma de référence aligné sans donnée bancaire", () => {

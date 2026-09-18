@@ -55,7 +55,33 @@ function subscriptionEvent(input: {
   };
 }
 
-async function sendWebhook(request: APIRequestContext, event: ReturnType<typeof subscriptionEvent>) {
+function checkoutEvent(input: {
+  id: string;
+  establishmentId: string;
+  checkoutSessionId: string;
+  subscriptionId: string;
+  customerId: string;
+  plan: string;
+}) {
+  return {
+    id: input.id,
+    object: "event",
+    type: "checkout.session.completed",
+    created: 900,
+    data: {
+      object: {
+        id: input.checkoutSessionId,
+        object: "checkout.session",
+        client_reference_id: input.establishmentId,
+        customer: input.customerId,
+        subscription: input.subscriptionId,
+        metadata: { establishmentId: input.establishmentId, retikoPlan: input.plan },
+      },
+    },
+  };
+}
+
+async function sendWebhook(request: APIRequestContext, event: object) {
   const payload = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000);
   const digest = createHmac("sha256", webhookSecret).update(`${timestamp}.${payload}`).digest("hex");
@@ -104,6 +130,31 @@ test("Stripe v2 : pilote non bloquant, webhook idempotent, ordonné et isolé pa
       subscriptionId: "sub_e2e_tenant_a",
       customerId: "cus_e2e_tenant_a",
     };
+    await sql`
+      update subscriptions
+      set stripe_checkout_session_id='cs_e2e_tenant_a',
+          stripe_checkout_plan='FLEX',
+          stripe_checkout_pending_at=now(),
+          stripe_checkout_claim_token='claim_e2e_tenant_a'
+      where establishment_id=${tenantA.id}
+    `;
+    const spoofedCheckout = await sendWebhook(request, checkoutEvent({
+      ...base,
+      id: "evt_e2e_checkout_spoofed",
+      checkoutSessionId: "cs_e2e_tenant_a",
+      establishmentId: String(tenantB.id),
+      plan: "FLEX",
+    }));
+    expect(spoofedCheckout.status()).toBe(500);
+    const checkout = await sendWebhook(request, checkoutEvent({
+      ...base,
+      id: "evt_e2e_checkout",
+      checkoutSessionId: "cs_e2e_tenant_a",
+      plan: "FLEX",
+    }));
+    expect(checkout.status()).toBe(200);
+    await expect(checkout.json()).resolves.toMatchObject({ result: "applied" });
+
     const active = subscriptionEvent({ ...base, id: "evt_e2e_active", created: 1_000, status: "active", priceId: "price_e2e_flex" });
     const invalidSignature = await request.post("/api/billing/webhook", {
       headers: { "content-type": "application/json", "stripe-signature": "t=1,v1=invalid" },
@@ -163,6 +214,19 @@ test("Stripe v2 : pilote non bloquant, webhook idempotent, ordonné et isolé pa
     expect(stateB).toMatchObject({ external_customer_id: null, external_subscription_id: null, status: "trial" });
     const [{ count: rejected }] = await sql`select count(*)::int as count from stripe_webhook_events where event_id='evt_e2e_cross_tenant'`;
     expect(Number(rejected)).toBe(0);
+
+    const metadataOnly = await sendWebhook(request, subscriptionEvent({
+      establishmentId: String(tenantB.id),
+      subscriptionId: "sub_e2e_unbound",
+      customerId: "cus_e2e_unbound",
+      id: "evt_e2e_metadata_only",
+      created: 1_600,
+      status: "active",
+      priceId: "price_e2e_flex",
+    }));
+    expect(metadataOnly.status()).toBe(500);
+    const [stillIsolated] = await sql`select external_customer_id,external_subscription_id,status from subscriptions where establishment_id=${tenantB.id}`;
+    expect(stillIsolated).toMatchObject({ external_customer_id: null, external_subscription_id: null, status: "trial" });
   } finally {
     await tenantBContext.close();
     await sql.end({ timeout: 5 });

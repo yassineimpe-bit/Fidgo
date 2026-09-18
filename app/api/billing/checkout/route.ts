@@ -4,6 +4,7 @@ import {
   billingEnabled,
   checkoutPlanFromRequest,
   createCheckoutSession,
+  expireCheckoutSession,
   getBillingRuntimeStatus,
 } from "@/lib/billing";
 import { sql } from "@/lib/db";
@@ -43,17 +44,34 @@ async function handlePost(request: Request) {
   }
   const idempotencyKey = `retiko-checkout:${session.establishmentId}:${plan}:${requestedKey || crypto.randomUUID()}`;
 
+  const claimToken = crypto.randomUUID();
   const [subscription] = await sql`
-    select status, trial_ends_at, external_customer_id, external_subscription_id
-    from subscriptions
+    update subscriptions
+    set stripe_checkout_claim_token = ${claimToken},
+        stripe_checkout_plan = ${plan},
+        stripe_checkout_pending_at = now(),
+        stripe_checkout_session_id = null,
+        updated_at = now()
     where establishment_id = ${session.establishmentId}
-    limit 1
+      and (external_subscription_id is null or status = 'canceled')
+      and (stripe_checkout_pending_at is null or stripe_checkout_pending_at < now() - interval '35 minutes')
+    returning status, trial_ends_at, external_customer_id, external_subscription_id
   `;
-  if (!subscription) return Response.json({ error: "BILLING_STATE_NOT_FOUND" }, { status: 409 });
-  if (subscription.external_subscription_id && String(subscription.status) !== "canceled") {
-    return Response.json({ error: "ALREADY_SUBSCRIBED" }, { status: 409 });
+  if (!subscription) {
+    const [current] = await sql`
+      select external_subscription_id, status, stripe_checkout_pending_at
+      from subscriptions
+      where establishment_id = ${session.establishmentId}
+      limit 1
+    `;
+    if (!current) return Response.json({ error: "BILLING_STATE_NOT_FOUND" }, { status: 409 });
+    if (current.external_subscription_id && String(current.status) !== "canceled") {
+      return Response.json({ error: "ALREADY_SUBSCRIBED" }, { status: 409 });
+    }
+    return Response.json({ error: "CHECKOUT_PENDING" }, { status: 409 });
   }
 
+  let checkoutId: string | null = null;
   try {
     const checkout = await createCheckoutSession({
       establishmentId: session.establishmentId,
@@ -63,9 +81,31 @@ async function handlePost(request: Request) {
       customerId: subscription.external_customer_id ? String(subscription.external_customer_id) : null,
       idempotencyKey,
     });
-    if (!checkout.url) return Response.json({ error: "STRIPE_CHECKOUT_URL_MISSING" }, { status: 502 });
+    if (!checkout.url) throw new Error("STRIPE_CHECKOUT_URL_MISSING");
+    checkoutId = checkout.id;
+    const persisted = await sql`
+      update subscriptions
+      set stripe_checkout_session_id = ${checkout.id}, updated_at = now()
+      where establishment_id = ${session.establishmentId}
+        and stripe_checkout_claim_token = ${claimToken}
+      returning id
+    `;
+    if (persisted.length !== 1) {
+      await expireCheckoutSession(checkout.id).catch(() => undefined);
+      throw new Error("STRIPE_CHECKOUT_CLAIM_LOST");
+    }
     return Response.json({ url: checkout.url }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
+    await sql`
+      update subscriptions
+      set stripe_checkout_claim_token = null,
+          stripe_checkout_plan = null,
+          stripe_checkout_pending_at = null,
+          stripe_checkout_session_id = case when stripe_checkout_session_id = ${checkoutId} then null else stripe_checkout_session_id end,
+          updated_at = now()
+      where establishment_id = ${session.establishmentId}
+        and stripe_checkout_claim_token = ${claimToken}
+    `;
     console.error("STRIPE_CHECKOUT_CREATE_FAILED", { code: safeErrorCode(error, "STRIPE_CHECKOUT_CREATE_FAILED") });
     return Response.json({ error: "STRIPE_UNAVAILABLE" }, { status: 502 });
   }

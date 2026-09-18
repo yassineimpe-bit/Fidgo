@@ -89,6 +89,24 @@ describe("routes Stripe", () => {
     consoleError.mockRestore();
   });
 
+  it("bloque une seconde création Checkout pendant qu'une session est réservée", async () => {
+    mocks.sql
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        external_subscription_id: null,
+        status: "trial",
+        stripe_checkout_pending_at: new Date(),
+      }]);
+    const { POST } = await import("@/app/api/billing/checkout/route");
+    const response = await POST(new Request("https://retiko.test/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan: "FLEX" }),
+    }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: "CHECKOUT_PENDING" });
+    expect(mocks.checkoutCreate).not.toHaveBeenCalled();
+  });
+
   it("réserve la facturation au OWNER", async () => {
     mocks.getSession.mockResolvedValueOnce({ establishmentId: "tenant-a", role: "MANAGER" });
     const { POST } = await import("@/app/api/billing/checkout/route");

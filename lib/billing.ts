@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 
 export const BILLING_TRIAL_DAYS = 30;
 const STRIPE_MIN_TRIAL_AHEAD_SECONDS = 48 * 60 * 60;
+const STRIPE_CHECKOUT_LIFETIME_SECONDS = 31 * 60;
 
 export const BILLING_PLANS = {
   FLEX: {
@@ -198,6 +199,7 @@ export async function createCheckoutSession(input: {
       metadata: { establishmentId: input.establishmentId, retikoPlan: input.plan },
     },
     metadata: { establishmentId: input.establishmentId, retikoPlan: input.plan },
+    expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_LIFETIME_SECONDS,
     success_url: `${appUrl}/dashboard/billing?checkout=success`,
     cancel_url: `${appUrl}/dashboard/billing?checkout=canceled`,
   }, { idempotencyKey: input.idempotencyKey });
@@ -213,6 +215,13 @@ export async function createBillingPortalSession(
     customer: customerId,
     return_url: `${appUrl}/dashboard/billing`,
   });
+}
+
+export async function expireCheckoutSession(
+  sessionId: string,
+  client: BillingStripeClient = stripeClient(),
+) {
+  return client.checkout.sessions.expire(sessionId);
 }
 
 export function constructWebhookEvent(
@@ -255,10 +264,23 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
       const checkout = event.data.object as Stripe.Checkout.Session;
       const referenceId = checkout.client_reference_id;
       const metadataId = checkout.metadata?.establishmentId || null;
-      if (!referenceId || (metadataId && metadataId !== referenceId)) throw new Error("STRIPE_TENANT_MISMATCH");
       const customerId = stripeId(checkout.customer);
       const subscriptionId = stripeId(checkout.subscription);
-      const plan = checkout.metadata?.retikoPlan;
+      const [target] = await tx`
+        select establishment_id, stripe_checkout_plan
+        from subscriptions
+        where stripe_checkout_session_id = ${checkout.id}
+        for update
+      `;
+      if (!target) throw new Error("STRIPE_CHECKOUT_UNBOUND");
+      const establishmentId = String(target.establishment_id);
+      const plan = target.stripe_checkout_plan;
+      if (!referenceId || referenceId !== establishmentId || (metadataId && metadataId !== establishmentId)) {
+        throw new Error("STRIPE_TENANT_MISMATCH");
+      }
+      if (checkout.metadata?.retikoPlan && checkout.metadata.retikoPlan !== plan) {
+        throw new Error("STRIPE_PLAN_MISMATCH");
+      }
       if (!customerId || !subscriptionId || !isBillingPlan(plan)) throw new Error("STRIPE_CHECKOUT_INCOMPLETE");
       const definition = BILLING_PLANS[plan];
       const updated = await tx`
@@ -269,8 +291,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
             external_subscription_id = ${subscriptionId},
             plan = ${plan},
             billing_interval = ${definition.billingInterval},
+            stripe_checkout_claim_token = null,
+            stripe_checkout_pending_at = null,
             updated_at = now()
-        where establishment_id = ${referenceId}
+        where establishment_id = ${establishmentId}
+          and stripe_checkout_session_id = ${checkout.id}
           and (external_customer_id is null or external_customer_id = ${customerId})
           and (external_subscription_id is null or external_subscription_id = ${subscriptionId} or status = 'canceled')
         returning establishment_id
@@ -278,7 +303,7 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
       if (updated.length !== 1) throw new Error("STRIPE_TENANT_MISMATCH");
       await tx`
         update stripe_webhook_events
-        set establishment_id = ${referenceId}, external_subscription_id = ${subscriptionId}
+        set establishment_id = ${establishmentId}, external_subscription_id = ${subscriptionId}
         where event_id = ${event.id}
       `;
       return "applied" as const;
@@ -304,21 +329,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
       where external_subscription_id = ${subscription.id}
       for update
     `;
-    let target = byExternal[0];
+    const target = byExternal[0];
     if (target && metadataId && String(target.establishment_id) !== metadataId) {
       throw new Error("STRIPE_TENANT_MISMATCH");
     }
-    if (!target) {
-      if (!metadataId) throw new Error("STRIPE_TENANT_MISSING");
-      const candidates = await tx`
-        select establishment_id, external_customer_id, external_subscription_id,
-               stripe_last_event_created, stripe_last_event_id
-        from subscriptions
-        where establishment_id = ${metadataId}
-        for update
-      `;
-      target = candidates[0];
-    }
+    if (!target) throw new Error("STRIPE_SUBSCRIPTION_UNBOUND");
     if (!target
       || (target.external_customer_id && String(target.external_customer_id) !== customerId)
       || (target.external_subscription_id && String(target.external_subscription_id) !== subscription.id)) {
