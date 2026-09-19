@@ -101,6 +101,8 @@ describe("entrée Checkout", () => {
     expect(result.url).toContain("checkout.stripe.test");
     const [params, options] = create.mock.calls[0];
     expect(params.line_items).toEqual([{ price: "price_retiko12", quantity: 1 }]);
+    expect(params.billing_address_collection).toBe("required");
+    expect(params.tax_id_collection).toEqual({ enabled: true });
     expect(params.subscription_data?.metadata).toMatchObject({ retikoPlan: "RETIKO_12" });
     expect(params.subscription_data?.trial_end).toBe(checkoutTrialEnd(trialEndsAt));
     expect(params.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000) + 30 * 60);

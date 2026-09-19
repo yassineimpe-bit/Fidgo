@@ -223,6 +223,8 @@ export async function createCheckoutSession(input: {
   const trialEnd = checkoutTrialEnd(input.trialEndsAt);
   return client.checkout.sessions.create({
     mode: "subscription",
+    billing_address_collection: "required",
+    tax_id_collection: { enabled: true },
     ...(input.customerId ? { customer: input.customerId } : { customer_email: input.email }),
     client_reference_id: input.establishmentId,
     line_items: [{ price: priceIdForPlan(input.plan), quantity: 1 }],

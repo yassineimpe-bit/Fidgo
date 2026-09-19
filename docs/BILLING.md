@@ -12,6 +12,8 @@ La facturation est indépendante du cœur fidélité. `STRIPE_ENABLED=false` est
 
 Les montants et la fiscalité doivent être configurés dans Stripe Dashboard. Le navigateur envoie uniquement la clé d’offre `FLEX`, `RETIKO_12` ou `ANNUAL`; le serveur choisit le Price ID correspondant. Un `priceId` fourni par le client est rejeté.
 
+Checkout exige l’adresse de facturation et active la collecte de l’identifiant fiscal lorsque Stripe le propose au client. Cela prépare les données nécessaires à la facturation B2B, mais **n’active pas à lui seul le calcul automatique de TVA** : `automatic_tax` reste volontairement désactivé tant que les immatriculations fiscales et le traitement TVA de Retiko n’ont pas été validés.
+
 Le pilote initial est enregistré localement pour environ 30 jours. Le signup ne contacte jamais Stripe et ne redirige pas automatiquement vers Checkout. Si Checkout est lancé pendant le pilote, sa date de fin existante est transmise à Stripe lorsqu’elle respecte encore le minimum accepté par Stripe; elle n’est jamais prolongée par un nouvel essai.
 
 ## Limite de l’engagement Retiko 12
@@ -55,7 +57,7 @@ La table ne stocke ni numéro de carte, ni moyen de paiement, ni payload webhook
 
 1. Utiliser d’abord le mode test Stripe.
 2. Créer un produit Retiko et trois Prices récurrents en EUR : 24,99 € mensuel, 19,99 € mensuel, 210 € annuel.
-3. Vérifier que les prix sont exprimés HT et configurer Stripe Tax/TVA, adresses de facturation et factures conformément au cadre validé par le conseil de Retiko.
+3. Vérifier que les prix sont exprimés HT. Checkout collecte déjà l’adresse de facturation et l’identifiant fiscal ; configurer ensuite Stripe Tax/TVA et les immatriculations fiscales conformément au cadre validé pour Retiko avant d’activer `automatic_tax`.
 4. Reporter les trois `price_...` dans les variables correspondant exactement aux offres.
 5. Activer et configurer Customer Portal. Décider séparément du traitement de l’engagement Retiko 12 avant de permettre la résiliation libre.
 6. Créer l’endpoint `https://retiko.fr/api/billing/webhook` avec au minimum :
