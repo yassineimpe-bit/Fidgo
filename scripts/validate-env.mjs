@@ -59,7 +59,7 @@ if (!cronSecret && process.env.NODE_ENV === "production") {
   console.warn("Avertissement: CRON_SECRET absent, la purge /api/cron/purge restera inactive.");
 }
 
-for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED", "STRIPE_ENABLED"]) {
+for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED", "STRIPE_ENABLED", "STRIPE_AUTOMATIC_TAX_ENABLED"]) {
   const value = envValue(flag);
   if (value && value !== "true" && value !== "false") {
     fail(`${flag} doit valoir true ou false.`);

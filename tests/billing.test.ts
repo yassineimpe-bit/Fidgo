@@ -11,6 +11,7 @@ import {
   createCheckoutSession,
   getBillingRuntimeStatus,
   mapStripeStatus,
+  stripeAutomaticTaxEnabled,
   planFromStripePriceId,
 } from "@/lib/billing";
 import { safeErrorCode } from "@/lib/observability";
@@ -29,6 +30,12 @@ beforeEach(() => {
 });
 
 describe("configuration Stripe v2", () => {
+  it("garde Stripe Tax automatique désactivé tant que le flag dédié n'est pas activé", () => {
+    expect(stripeAutomaticTaxEnabled({})).toBe(false);
+    expect(stripeAutomaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: "false" })).toBe(false);
+    expect(stripeAutomaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: "true" })).toBe(true);
+  });
+
   it("reste désactivée par défaut", () => {
     expect(getBillingRuntimeStatus({})).toEqual({ enabled: false, configured: false, missing: expect.any(Array), invalid: [] });
   });
@@ -101,12 +108,46 @@ describe("entrée Checkout", () => {
     expect(result.url).toContain("checkout.stripe.test");
     const [params, options] = create.mock.calls[0];
     expect(params.line_items).toEqual([{ price: "price_retiko12", quantity: 1 }]);
+    expect(params.billing_address_collection).toBe("required");
+    expect(params.tax_id_collection).toEqual({ enabled: true });
+    expect(params.automatic_tax).toEqual({ enabled: false });
     expect(params.subscription_data?.metadata).toMatchObject({ retikoPlan: "RETIKO_12" });
     expect(params.subscription_data?.trial_end).toBe(checkoutTrialEnd(trialEndsAt));
     expect(params.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000) + 30 * 60);
     expect(params.expires_at).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31 * 60);
     expect(options).toEqual({ idempotencyKey: "retiko-checkout-test" });
     expect(JSON.stringify(params)).not.toContain("sk_test_placeholder");
+  });
+
+  it("met à jour l'adresse de facturation d'un Customer Stripe existant", async () => {
+    const create = vi.fn(async (
+      _params: Stripe.Checkout.SessionCreateParams,
+      _options?: Stripe.RequestOptions,
+    ) => {
+      void _params;
+      void _options;
+      return { id: "cs_existing", url: "https://checkout.stripe.test/session-existing" };
+    });
+    const client = {
+      checkout: { sessions: { create } },
+      billingPortal: { sessions: { create: vi.fn() } },
+      webhooks: { constructEvent: vi.fn() },
+    } as unknown as BillingStripeClient;
+
+    await createCheckoutSession({
+      establishmentId: "11111111-1111-4111-8111-111111111111",
+      email: "owner@example.com",
+      plan: "FLEX",
+      customerId: "cus_existing",
+      idempotencyKey: "retiko-checkout-existing-customer",
+    }, client);
+
+    const [params] = create.mock.calls[0];
+    expect(params.customer).toBe("cus_existing");
+    expect(params.customer_email).toBeUndefined();
+    expect(params.customer_update).toEqual({ address: "auto" });
+    expect(params.billing_address_collection).toBe("required");
+    expect(params.tax_id_collection).toEqual({ enabled: true });
   });
 
   it("crée un portail pour le client Stripe déjà lié", async () => {

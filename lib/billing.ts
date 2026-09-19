@@ -53,6 +53,10 @@ export function billingEnabled(env: Record<string, string | undefined> = process
   return env.STRIPE_ENABLED === "true";
 }
 
+export function stripeAutomaticTaxEnabled(env: Record<string, string | undefined> = process.env) {
+  return env.STRIPE_AUTOMATIC_TAX_ENABLED === "true";
+}
+
 export function getBillingRuntimeStatus(
   env: Record<string, string | undefined> = process.env,
 ): BillingRuntimeStatus {
@@ -223,7 +227,12 @@ export async function createCheckoutSession(input: {
   const trialEnd = checkoutTrialEnd(input.trialEndsAt);
   return client.checkout.sessions.create({
     mode: "subscription",
-    ...(input.customerId ? { customer: input.customerId } : { customer_email: input.email }),
+    billing_address_collection: "required",
+    tax_id_collection: { enabled: true },
+    automatic_tax: { enabled: stripeAutomaticTaxEnabled() },
+    ...(input.customerId
+      ? { customer: input.customerId, customer_update: { address: "auto" as const } }
+      : { customer_email: input.email }),
     client_reference_id: input.establishmentId,
     line_items: [{ price: priceIdForPlan(input.plan), quantity: 1 }],
     subscription_data: {
