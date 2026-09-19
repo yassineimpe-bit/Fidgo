@@ -45,10 +45,10 @@ async function handlePost(req: Request) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
-  // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit
-  // largement a un commerce reel et coupe l'enumeration de masse.
-  const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${slug}`, 15, 60 * 60);
-  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+  // Plafond par IP SEULE en premiere ligne : son espace de cles est borne,
+  // il ne peut donc ni etre contourne ni servir a gonfler `rate_limits`.
+  const byIp = await consumeRateLimit(`enroll-ip:${requestIp(req)}`, 60, 60 * 60);
+  if (!byIp.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
 
   const [establishment] = await sql`
     select e.id, e.status, p.expires_after_days
@@ -60,6 +60,15 @@ async function handlePost(req: Request) {
   if (!establishment || establishment.status !== "active") {
     return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404 });
   }
+
+  // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit
+  // largement a un commerce reel et coupe l'enumeration de masse.
+  //
+  // La cle porte desormais l'UUID d'un etablissement VERIFIE, plus le slug
+  // brut : auparavant chaque slug inedit ouvrait un compteur neuf, ce qui
+  // insérait une ligne dans `rate_limits` a chaque requete d'un anonyme.
+  const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${establishment.id}`, 15, 60 * 60);
+  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
 
   if (await existingCustomerId(establishment.id, email, phone)) {
     // Reponse volontairement muette : on confirme au visiteur legitime qu'il a

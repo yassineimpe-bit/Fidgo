@@ -3,10 +3,12 @@ import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canReverse, isValidIdempotencyKey } from "@/lib/loyalty";
 import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
 const KNOWN_REVERSE_ERRORS = new Set(["TRANSACTION_NOT_FOUND", "ALREADY_REVERSED", "NEGATIVE_BALANCE", "CANNOT_REVERSE_REVERSAL"]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
@@ -14,8 +16,16 @@ async function handlePost(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canReverse(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
-  const { transactionId, idempotencyKey } = await req.json();
-  if (!transactionId || !isValidIdempotencyKey(idempotencyKey)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  const limited = await enforceRateLimit(req, `reverse:${session.staffId}`, 60, 60);
+  if (limited) return limited;
+  // `.catch()` : un corps non-JSON renvoyait un 500 au lieu d'un 400.
+  const { transactionId, idempotencyKey } = await req.json().catch(() => ({}));
+  // transactionId partait tel quel vers une colonne uuid : toute valeur non
+  // conforme declenchait une erreur Postgres 22P02 remontee en 500, ce qui
+  // noyait les vraies erreurs dans les logs.
+  if (typeof transactionId !== "string" || !UUID.test(transactionId) || !isValidIdempotencyKey(idempotencyKey)) {
+    return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  }
 
   try {
     const result = await sql.begin(async (tx) => {

@@ -24,10 +24,15 @@ async function handlePost(req: Request) {
   if (eventType === "JOIN_PAGE_VIEW") {
     const slug = boundedText(body.slug, 60);
     if (!slug) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
-    const rate = await consumeRateLimit(`event-join-view:${requestIp(req)}:${slug}`, 120, 60 * 60);
-    if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+    // Plafond par IP seule d'abord : borne, donc non contournable.
+    const byIp = await consumeRateLimit(`event-join-view-ip:${requestIp(req)}`, 300, 60 * 60);
+    if (!byIp.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
     const [establishment] = await sql`select id from establishments where slug = ${slug} and status = 'active' limit 1`;
     if (!establishment) return Response.json({ ok: true }, { status: 202 });
+    // Cle derivee d'un etablissement verifie, plus du slug brut fourni par
+    // l'appelant : sinon chaque slug inedit creait une ligne `rate_limits`.
+    const rate = await consumeRateLimit(`event-join-view:${requestIp(req)}:${establishment.id}`, 120, 60 * 60);
+    if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
     await sql`insert into product_events(establishment_id, event_type) values(${establishment.id}, 'JOIN_PAGE_VIEW')`;
     return Response.json({ ok: true }, { status: 202 });
   }
