@@ -1,5 +1,6 @@
 export const APP_NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/s", label: "Scanner", keepMobile: true },
   { href: "/dashboard/clients", label: "Clients" },
   { href: "/dashboard/program", label: "Programme" },
