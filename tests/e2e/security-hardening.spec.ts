@@ -128,4 +128,3 @@ test("enroll : un slug inconnu ne cree pas de compteur de rate-limit", async ({ 
     await sql.end({ timeout: 5 });
   }
 });
-

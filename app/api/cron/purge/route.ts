@@ -38,4 +38,3 @@ async function handleGet(request: Request) {
 }
 
 export const GET = withApiErrorHandling("CRON_PURGE", handleGet);
-
