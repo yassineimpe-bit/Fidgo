@@ -564,7 +564,7 @@ export function ScannerClient() {
         <form onSubmit={manualLookup}>
           <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court, email ou téléphone du client</label>
           <div style={{display:"flex",gap:8}}>
-            <input className="input" id="scanner-manual-query" style={{minWidth:0}} value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code, email ou téléphone" disabled={!online} />
+            <input className="input" id="scanner-manual-query" style={{minWidth:0}} value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email, ou téléphone" disabled={!online} />
             <button className="btn" type="submit" style={{flexShrink:0,whiteSpace:"nowrap"}} disabled={!online}>Chercher</button>
           </div>
         </form>
