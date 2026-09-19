@@ -17,7 +17,7 @@ test("scanner : un client peut être retrouvé par téléphone malgré le format
   await expect(page.getByText("Nora")).toBeVisible();
 
   await page.goto("/s");
-  await page.getByPlaceholder("Code, email ou téléphone").fill("06 12 34 56 78");
+  await page.getByPlaceholder("Code court ou email, ou téléphone").fill("06 12 34 56 78");
   await page.getByRole("button", { name: "Chercher" }).click();
   await expect(page.getByText("Nora")).toBeVisible();
   await expect(page.getByText(/0 \/ 10 tampons/)).toBeVisible();
