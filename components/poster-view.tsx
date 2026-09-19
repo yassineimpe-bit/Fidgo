@@ -31,16 +31,29 @@ export function PosterView({ name, logoUrl, primaryColor, rewardThreshold, rewar
 }) {
   const [format, setFormat] = useState<PosterFormat>("a4");
   const [template, setTemplate] = useState<PosterTemplate>("minimal");
+  const [shareMessage, setShareMessage] = useState("");
 
   const brandColor = normalizeHexColor(primaryColor, "#111111");
   const brandTextColor = contrastTextColor(brandColor);
   const cssVars = { "--poster-brand-color": brandColor, "--poster-text-color": brandTextColor } as CSSProperties;
+  const qrFileName = `retiko-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "commerce"}-qr.png`;
+
+  async function copyJoinUrl() {
+    try {
+      await navigator.clipboard.writeText(joinUrl);
+      setShareMessage("Lien copié.");
+    } catch {
+      setShareMessage("Copie impossible sur ce navigateur. Le lien reste affiché sous l’affiche.");
+    }
+  }
 
   return <main className="poster-page">
     <div className="no-print" style={{ padding: 16, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap" }}>
         <a className="btn" href="/dashboard">Retour</a>
         <PrintButton />
+        <a className="btn" href={qr} download={qrFileName}>Télécharger le QR</a>
+        <button className="btn" type="button" onClick={copyJoinUrl}>Copier le lien</button>
       </div>
       <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
         <legend className="muted" style={{ width: "100%", textAlign: "center", marginBottom: 6 }}>Format</legend>
@@ -58,6 +71,7 @@ export function PosterView({ name, logoUrl, primaryColor, rewardThreshold, rewar
           </button>
         ))}
       </fieldset>
+      {shareMessage ? <div className="notice" role="status" aria-live="polite">{shareMessage}</div> : null}
     </div>
     <section className={`poster poster--${format} poster--${template}`} style={cssVars}>
       {logoUrl ? (
