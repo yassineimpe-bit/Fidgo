@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canReverse } from "@/lib/loyalty";
+import { canManageProgram, canReverse } from "@/lib/loyalty";
 import { AppNav } from "@/components/app-nav";
 import { TransactionTable } from "@/components/transaction-table";
 import {
@@ -23,6 +23,15 @@ type Row = {
   staff_email?: string | null;
   reversed: boolean;
 };
+
+function exportHref(filters: ReturnType<typeof parseTransactionHistoryFilters>) {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.type !== "ALL") params.set("type", filters.type);
+  if (filters.period !== "ALL") params.set("period", filters.period);
+  const query = params.toString();
+  return query ? `/api/transactions/export?${query}` : "/api/transactions/export";
+}
 
 function pageHref(filters: ReturnType<typeof parseTransactionHistoryFilters>, page: number) {
   const params = new URLSearchParams();
@@ -95,7 +104,7 @@ export default async function TransactionsPage({
   }));
 
   return <><AppNav restaurantName={String(restaurant.name)}/><main className="shell page">
-    <div className="section-head"><div><h2>Transactions</h2><p className="muted">Ledger append-only. Recherche, filtres et annulations par écriture inverse.</p></div></div>
+    <div className="section-head"><div><h2>Transactions</h2><p className="muted">Ledger append-only. Recherche, filtres et annulations par écriture inverse.</p></div>{canManageProgram(session.role) && <a className="btn" href={exportHref(filters)}>Exporter CSV</a>}</div>
 
     <section className="card" style={{marginBottom:18}}>
       <form method="get" className="grid grid-3" aria-label="Filtrer les transactions">
