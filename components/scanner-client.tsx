@@ -562,9 +562,9 @@ export function ScannerClient() {
         <p style={{margin:"6px 0 12px",color:"#aaa"}}>{cameraIssue ? CAMERA_ISSUE_INFO[cameraIssue].detail : online ? "Cadre le QR dans le viseur : la détection est automatique." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
         {cameraIssue && CAMERA_ISSUE_INFO[cameraIssue].retryable && <button className="btn" style={{marginBottom:12}} onClick={retryCamera}>Réessayer la caméra</button>}
         <form onSubmit={manualLookup}>
-          <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court ou email du client</label>
+          <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court, email ou téléphone du client</label>
           <div style={{display:"flex",gap:8}}>
-            <input className="input" id="scanner-manual-query" style={{minWidth:0}} value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email" disabled={!online} />
+            <input className="input" id="scanner-manual-query" style={{minWidth:0}} value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email, ou téléphone" disabled={!online} />
             <button className="btn" type="submit" style={{flexShrink:0,whiteSpace:"nowrap"}} disabled={!online}>Chercher</button>
           </div>
         </form>

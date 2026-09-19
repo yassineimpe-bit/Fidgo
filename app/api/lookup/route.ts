@@ -4,6 +4,7 @@ import { canScan } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS } from "@/lib/security";
+import { phoneLookupVariants } from "@/lib/customer-lookup";
 
 async function handleGet(req: Request) {
   const session = await getSession();
@@ -19,6 +20,7 @@ async function handleGet(req: Request) {
 
   const q = new URL(req.url).searchParams.get("q")?.trim().slice(0, 254);
   if (!q) return Response.json({ error: "INVALID_QUERY" }, { status: 400 });
+  const [phone1, phone2, phone3] = phoneLookupVariants(q);
 
   const [row] = await sql`
     select c.token, c.short_code, c.balance, u.first_name, u.email, p.mode, p.reward_threshold
@@ -27,7 +29,14 @@ async function handleGet(req: Request) {
     join loyalty_programs p on p.establishment_id = c.establishment_id
     where c.establishment_id = ${session.establishmentId}
       and u.deleted_at is null
-      and (upper(c.short_code) = upper(${q}) or lower(u.email) = lower(${q}))
+      and (
+        upper(c.short_code) = upper(${q})
+        or lower(u.email) = lower(${q})
+        or (
+          ${phone1}::text is not null
+          and regexp_replace(coalesce(u.phone, ''), '[^0-9]', '', 'g') in (${phone1}, ${phone2}, ${phone3})
+        )
+      )
     limit 1
   `;
   return row
