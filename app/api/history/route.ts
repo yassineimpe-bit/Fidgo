@@ -1,10 +1,15 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 async function handleGet(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  // Agregat coûteux (jointures + sous-requete d'existence) : plafonne pour
+  // qu'une session valide ne puisse pas le marteler.
+  const limited = await enforceRateLimit(req, `history:${session.staffId}`, 120, 60);
+  if (limited) return limited;
   const url = new URL(req.url);
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
 

@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { boundedInt, boundedNumber, boundedText } from "@/lib/input";
 import { canManageProgram } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
 async function handleGet() {
@@ -20,8 +21,10 @@ async function handlePatch(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  const limited = await enforceRateLimit(req, `program-patch:${session.staffId}`, 30, 60 * 60);
+  if (limited) return limited;
 
-  const b = await req.json();
+  const b = await req.json().catch(() => ({}));
   const mode = b.mode === "POINTS" ? "POINTS" : b.mode === "STAMPS" ? "STAMPS" : null;
   const pointsRule = b.pointsRule === "PER_EURO" ? "PER_EURO" : b.pointsRule === "PER_PURCHASE" ? "PER_PURCHASE" : null;
   const threshold = boundedInt(b.rewardThreshold, { min: 1, max: 100_000 });

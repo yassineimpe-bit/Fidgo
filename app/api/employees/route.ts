@@ -3,12 +3,15 @@ import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageStaff } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
-async function handleGet() {
+async function handleGet(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  const limited = await enforceRateLimit(req, `employees-list:${session.staffId}`, 120, 60);
+  if (limited) return limited;
   const rows = await sql`
     select id, email, role, active, created_at
     from staff_users
@@ -27,7 +30,13 @@ async function handlePost(req: Request) {
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
 
-  const body = await req.json();
+  // Chaque appel execute bcrypt.hash(..., 12), soit ~300 ms de CPU serveur.
+  // Sans plafond, un compte manager compromis saturait le runtime avec
+  // quelques dizaines de requetes paralleles, a cout nul pour l'attaquant.
+  const limited = await enforceRateLimit(req, `employee-create:${session.staffId}`, 10, 60 * 60);
+  if (limited) return limited;
+
+  const body = await req.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
   const role = body.role === "VIEWER" ? "VIEWER" : "EMPLOYEE";

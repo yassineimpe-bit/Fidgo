@@ -1,0 +1,47 @@
+name: data-lifecycle
+
+# Les durees de conservation annoncees dans docs/RGPD.md n'etaient appliquees
+# nulle part : scripts/purge-data-lifecycle.mjs existait mais aucun cron ni
+# workflow ne l'executait. Le script prend un pg_try_advisory_lock et travaille
+# par lots de 5 000, deux executions concurrentes sont donc sans danger.
+
+on:
+  schedule:
+    - cron: "41 2 * * *"
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: "Appliquer les suppressions (sinon dry-run)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retiko-data-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Dry-run retention report
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run data:purge
+
+      - name: Apply retention
+        if: github.event_name == 'schedule' || inputs.execute
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run data:purge -- --execute

@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageProgram } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
 /**
@@ -41,7 +42,9 @@ async function handlePatch(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
-  const b = await req.json();
+  const limited = await enforceRateLimit(req, `restaurant-patch:${session.staffId}`, 30, 60 * 60);
+  if (limited) return limited;
+  const b = await req.json().catch(() => ({}));
   const color = /^#[0-9a-fA-F]{6}$/.test(String(b.primaryColor || "")) ? String(b.primaryColor) : "#111111";
   const restaurant = await sql.begin(async (tx) => {
     const [updated] = await tx`

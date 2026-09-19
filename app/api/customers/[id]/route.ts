@@ -5,6 +5,7 @@ import { sql } from "@/lib/db";
 import { notifyGoogleWalletRevocation } from "@/lib/google-wallet";
 import { canManageProgram } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
 
 async function handleDelete(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +14,11 @@ async function handleDelete(req: Request, { params }: { params: Promise<{ id: st
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401, headers: PRIVATE_HEADERS });
   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
+
+  // Transaction lourde et irreversible : un compte compromis pouvait effacer
+  // toute la base clients en rafale, sans aucun frein.
+  const limited = await enforceRateLimit(req, `customer-erase:${session.staffId}`, 20, 60 * 60);
+  if (limited) return limited;
 
   const { id } = await params;
   const result = await sql.begin(async (tx) => {

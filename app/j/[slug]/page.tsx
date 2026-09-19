@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { normalizeHexColor } from "@/lib/brand-color";
 import { sql } from "@/lib/db";
 import { JoinForm } from "@/components/join-form";
 import { cardRecoveryEnabled } from "@/lib/card-recovery";
@@ -13,9 +14,18 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
   `;
   if (!restaurant) notFound();
 
-  return <main className="auth-wrap" style={{background:`linear-gradient(160deg, ${restaurant.primary_color}18, #f5f6f8 55%)`}}>
+  // La page /c/{token} normalisait deja ses valeurs de marque, pas celle-ci :
+  // la couleur partait brute dans une chaine CSS et le logo dans un <img src>
+  // sans verification de schema. La validation cote ecriture ne couvre pas les
+  // lignes creees avant son ajout (cf. migration 014).
+  const brandColor = normalizeHexColor(restaurant.primary_color, "#111111");
+  const logoUrl = typeof restaurant.logo_url === "string" && /^https:\/\//i.test(restaurant.logo_url)
+    ? restaurant.logo_url
+    : null;
+
+  return <main className="auth-wrap" style={{background:`linear-gradient(160deg, ${brandColor}18, #f5f6f8 55%)`}}>
     <section className="card auth-card">
-      {restaurant.logo_url&&<img src={restaurant.logo_url} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
+      {logoUrl&&<img src={logoUrl} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
       <span className="eyebrow" style={{marginTop:12}}>{restaurant.mode==="STAMPS"?"Carte à tampons":"Carte à points"}</span>
       <h2 style={{margin:"14px 0 6px"}}>{restaurant.name}</h2>
       <p className="muted">{restaurant.program_name} · {restaurant.reward_threshold} unités = {restaurant.reward_label}</p>

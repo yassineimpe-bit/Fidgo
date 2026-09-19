@@ -1,7 +1,10 @@
 node_modules
 .next
-.env
-.env.local
+# Tout fichier d'environnement est ignore ; l'exemple public est la seule
+# exception. .env.production et .env.*.local (generes par Next et par
+# `vercel env pull`) n'etaient pas couverts.
+.env*
+!.env.example
 .vercel
 .DS_Store
 *.log
