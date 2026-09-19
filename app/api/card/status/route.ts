@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { rejectCrossOrigin } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,19 @@ export const dynamic = "force-dynamic";
  * a chaque poll (toutes les 3 s tant que la carte reste visible).
  */
 async function handlePost(request: Request) {
+  // Seule route mutante-like restee sans controle d'origine : n'importe quel
+  // site tiers pouvait sonder le solde d'une carte dont il connait le token.
+  const originError = rejectCrossOrigin(request);
+  if (originError) return originError;
+
+  // Plafond par IP EN PREMIER, avant toute cle derivee du token. Le bucket
+  // `card-status:${token}` a un espace de cles controle par l'appelant : chaque
+  // token inedit ouvrait un compteur neuf (donc aucun frein reel sur
+  // l'enumeration) et inserait une ligne de plus dans `rate_limits`. Le bucket
+  // par IP, lui, est borne et ne peut pas etre contourne.
+  const perIp = await enforceRateLimit(request, "card-status-ip", 400, 6 * 60);
+  if (perIp) return perIp;
+
   const body = await request.json().catch(() => ({}));
   const token = parseCardToken(body.token);
   if (!token) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
