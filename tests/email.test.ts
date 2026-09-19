@@ -3,6 +3,7 @@ import {
   EmailDeliveryError,
   recoveryEmailConfigured,
   sendCardRecoveryEmail,
+  sendPasswordResetEmail,
 } from "@/lib/email";
 
 const env = {
@@ -123,5 +124,63 @@ describe("Resend card recovery email", () => {
       { fetchImpl: fetchImpl as typeof fetch },
     )).rejects.toMatchObject({ code: "EMAIL_INVALID_RECOVERY_URL" } satisfies Partial<EmailDeliveryError>);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("Resend password reset email", () => {
+  const resetInput = {
+    to: "Owner@Example.com",
+    resetUrl: `https://retiko.fr/reset-password?token=${"a".repeat(43)}`,
+    idempotencyKey: `password-reset-${"b".repeat(64)}`,
+  };
+
+  it("sends the expected subject and reset link, never the raw token elsewhere", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ id: "resend-reset-123" }));
+
+    const result = await sendPasswordResetEmail(resetInput, env, { fetchImpl: fetchImpl as typeof fetch });
+
+    expect(result).toEqual({ messageId: "resend-reset-123" });
+    const [url, request] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://api.resend.com/emails");
+    expect(new Headers(request?.headers).get("idempotency-key")).toBe(resetInput.idempotencyKey);
+
+    const payload = JSON.parse(String(request?.body));
+    expect(payload.subject).toBe("Réinitialisez votre mot de passe Retiko");
+    expect(payload.to).toEqual(["owner@example.com"]);
+    expect(payload.text).toContain(resetInput.resetUrl);
+    expect(payload.html).toContain(resetInput.resetUrl);
+    expect(payload.html).toContain("<title>Réinitialisez votre mot de passe Retiko</title>");
+    expect(payload.html).toContain("expire dans 30 minutes");
+  });
+
+  it("rejects insecure production reset URLs before contacting Resend", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(sendPasswordResetEmail(
+      { ...resetInput, resetUrl: `http://retiko.fr/reset-password?token=${"a".repeat(43)}` },
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    )).rejects.toMatchObject({ code: "EMAIL_INVALID_RECOVERY_URL" } satisfies Partial<EmailDeliveryError>);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("retries only transient provider errors", async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ id: "resend-reset-after-retry" }));
+    const sleep = vi.fn(async () => undefined);
+
+    await expect(sendPasswordResetEmail(resetInput, env, {
+      fetchImpl: fetchImpl as typeof fetch,
+      sleep,
+    })).resolves.toEqual({ messageId: "resend-reset-after-retry" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry permanent provider rejections", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(null, { status: 401 }));
+    await expect(sendPasswordResetEmail(resetInput, env, {
+      fetchImpl: fetchImpl as typeof fetch,
+    })).rejects.toMatchObject({ code: "EMAIL_SEND_401" } satisfies Partial<EmailDeliveryError>);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
