@@ -11,6 +11,7 @@ import {
   createCheckoutSession,
   getBillingRuntimeStatus,
   mapStripeStatus,
+  stripeAutomaticTaxEnabled,
   planFromStripePriceId,
 } from "@/lib/billing";
 import { safeErrorCode } from "@/lib/observability";
@@ -29,6 +30,12 @@ beforeEach(() => {
 });
 
 describe("configuration Stripe v2", () => {
+  it("garde Stripe Tax automatique désactivé tant que le flag dédié n'est pas activé", () => {
+    expect(stripeAutomaticTaxEnabled({})).toBe(false);
+    expect(stripeAutomaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: "false" })).toBe(false);
+    expect(stripeAutomaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: "true" })).toBe(true);
+  });
+
   it("reste désactivée par défaut", () => {
     expect(getBillingRuntimeStatus({})).toEqual({ enabled: false, configured: false, missing: expect.any(Array), invalid: [] });
   });
@@ -103,6 +110,7 @@ describe("entrée Checkout", () => {
     expect(params.line_items).toEqual([{ price: "price_retiko12", quantity: 1 }]);
     expect(params.billing_address_collection).toBe("required");
     expect(params.tax_id_collection).toEqual({ enabled: true });
+    expect(params.automatic_tax).toEqual({ enabled: false });
     expect(params.subscription_data?.metadata).toMatchObject({ retikoPlan: "RETIKO_12" });
     expect(params.subscription_data?.trial_end).toBe(checkoutTrialEnd(trialEndsAt));
     expect(params.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000) + 30 * 60);
