@@ -111,6 +111,37 @@ describe("entrée Checkout", () => {
     expect(JSON.stringify(params)).not.toContain("sk_test_placeholder");
   });
 
+  it("met à jour l'adresse de facturation d'un Customer Stripe existant", async () => {
+    const create = vi.fn(async (
+      _params: Stripe.Checkout.SessionCreateParams,
+      _options?: Stripe.RequestOptions,
+    ) => {
+      void _params;
+      void _options;
+      return { id: "cs_existing", url: "https://checkout.stripe.test/session-existing" };
+    });
+    const client = {
+      checkout: { sessions: { create } },
+      billingPortal: { sessions: { create: vi.fn() } },
+      webhooks: { constructEvent: vi.fn() },
+    } as unknown as BillingStripeClient;
+
+    await createCheckoutSession({
+      establishmentId: "11111111-1111-4111-8111-111111111111",
+      email: "owner@example.com",
+      plan: "FLEX",
+      customerId: "cus_existing",
+      idempotencyKey: "retiko-checkout-existing-customer",
+    }, client);
+
+    const [params] = create.mock.calls[0];
+    expect(params.customer).toBe("cus_existing");
+    expect(params.customer_email).toBeUndefined();
+    expect(params.customer_update).toEqual({ address: "auto" });
+    expect(params.billing_address_collection).toBe("required");
+    expect(params.tax_id_collection).toEqual({ enabled: true });
+  });
+
   it("crée un portail pour le client Stripe déjà lié", async () => {
     const create = vi.fn(async () => ({ id: "bps_test", url: "https://billing.stripe.test/portal" }));
     const client = {
