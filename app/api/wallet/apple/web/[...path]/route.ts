@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { sql } from "@/lib/db";
 import { applePassTypeIdentifier, buildApplePass, buildRevokedApplePass } from "@/lib/apple-wallet";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { walletCardById, walletCardForRevocationById } from "@/lib/wallet-data";
 
 export const runtime = "nodejs";
@@ -43,13 +44,27 @@ function registrationPath(parts: string[]) {
 }
 
 export async function POST(request: Request, context: Context) {
+  // Ces trois verbes interrogent la base AVANT toute authentification
+  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
+  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
+  // requetes par appareil et par mise a jour : 60/min est tres large.
+  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
+  if (limited) return limited;
+
   const { path } = await context.params;
   if (path.length === 2 && path[0] === "v1" && path[1] === "log") {
     // Endpoint impose par Apple, donc non authentifiable. On accuse reception
     // sans jamais recopier le corps brut dans les logs (log injection /
     // saturation du stockage de logs par un tiers anonyme).
-    const body = await request.json().catch(() => ({})) as { logs?: unknown };
-    const count = Array.isArray(body.logs) ? body.logs.length : 0;
+    // Endpoint non authentifiable : on borne explicitement la taille du corps
+    // plutot que de parser ce qu'un anonyme veut bien envoyer.
+    const raw = await request.text();
+    if (raw.length > 32_000) return new Response(null, { status: 413 });
+    let count = 0;
+    try {
+      const body = JSON.parse(raw) as { logs?: unknown };
+      count = Array.isArray(body.logs) ? body.logs.length : 0;
+    } catch { /* corps illisible : ignore silencieusement */ }
     console.warn(`Apple Wallet device log received (${count} entries)`);
     return new Response(null, { status: 200 });
   }
@@ -72,6 +87,13 @@ export async function POST(request: Request, context: Context) {
 }
 
 export async function DELETE(request: Request, context: Context) {
+  // Ces trois verbes interrogent la base AVANT toute authentification
+  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
+  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
+  // requetes par appareil et par mise a jour : 60/min est tres large.
+  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
+  if (limited) return limited;
+
   const { path } = await context.params;
   const parsed = registrationPath(path);
   if (!parsed) return new Response(null, { status: 404 });
@@ -82,6 +104,13 @@ export async function DELETE(request: Request, context: Context) {
 }
 
 export async function GET(request: Request, context: Context) {
+  // Ces trois verbes interrogent la base AVANT toute authentification
+  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
+  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
+  // requetes par appareil et par mise a jour : 60/min est tres large.
+  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
+  if (limited) return limited;
+
   const { path } = await context.params;
 
   if (path.length === 4 && path[0] === "v1" && path[1] === "passes") {

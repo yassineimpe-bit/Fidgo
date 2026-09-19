@@ -1,0 +1,858 @@
+diff --git a/.env.example b/.env.example
+index 65050fd..2042a6e 100644
+--- a/.env.example
++++ b/.env.example
+@@ -2,6 +2,9 @@
+ DATABASE_URL=postgres://user:password@host:5432/loyalty?sslmode=require
+ AUTH_SECRET=replace-with-at-least-32-random-bytes
+ NEXT_PUBLIC_APP_URL=https://retiko.fr
++# Protege /api/cron/purge (purge quotidienne de rate_limits). Vercel Cron
++# envoie automatiquement "Authorization: Bearer $CRON_SECRET".
++CRON_SECRET=
+ 
+ # Demo bootstrap (optional)
+ DEMO_SLUG=retiko-demo
+diff --git a/.github/workflows/data-lifecycle.yml b/.github/workflows/data-lifecycle.yml
+new file mode 100644
+index 0000000..f5a1928
+--- /dev/null
++++ b/.github/workflows/data-lifecycle.yml
+@@ -0,0 +1,47 @@
++name: data-lifecycle
++
++# Les durees de conservation annoncees dans docs/RGPD.md n'etaient appliquees
++# nulle part : scripts/purge-data-lifecycle.mjs existait mais aucun cron ni
++# workflow ne l'executait. Le script prend un pg_try_advisory_lock et travaille
++# par lots de 5 000, deux executions concurrentes sont donc sans danger.
++
++on:
++  schedule:
++    - cron: "41 2 * * *"
++  workflow_dispatch:
++    inputs:
++      execute:
++        description: "Appliquer les suppressions (sinon dry-run)"
++        type: boolean
++        default: true
++
++permissions:
++  contents: read
++
++concurrency:
++  group: retiko-data-lifecycle
++  cancel-in-progress: false
++
++jobs:
++  purge:
++    runs-on: ubuntu-latest
++    timeout-minutes: 10
++    environment: production
++    steps:
++      - uses: actions/checkout@v5
++      - uses: actions/setup-node@v5
++        with:
++          node-version: 22
++          cache: npm
++      - run: npm ci --no-audit --no-fund
++
++      - name: Dry-run retention report
++        env:
++          DATABASE_URL: ${{ secrets.DATABASE_URL }}
++        run: npm run data:purge
++
++      - name: Apply retention
++        if: github.event_name == 'schedule' || inputs.execute
++        env:
++          DATABASE_URL: ${{ secrets.DATABASE_URL }}
++        run: npm run data:purge -- --execute
+diff --git a/.gitignore b/.gitignore
+index 930a5fb..a144556 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,7 +1,10 @@
+ node_modules
+ .next
+-.env
+-.env.local
++# Tout fichier d'environnement est ignore ; l'exemple public est la seule
++# exception. .env.production et .env.*.local (generes par Next et par
++# `vercel env pull`) n'etaient pas couverts.
++.env*
++!.env.example
+ .vercel
+ .DS_Store
+ *.log
+diff --git a/app/api/auth/login/route.ts b/app/api/auth/login/route.ts
+index ae6f346..df3c2ad 100644
+--- a/app/api/auth/login/route.ts
++++ b/app/api/auth/login/route.ts
+@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
+ import bcrypt from "bcryptjs";
+ import { databaseConfigured, sql } from "@/lib/db";
+ import { signSession, sessionCookie } from "@/lib/auth";
+-import { consumeRateLimit, rateLimit } from "@/lib/rate-limit";
+-import { requireSameOrigin } from "@/lib/security";
++import { consumeRateLimit, rateLimit, resetRateLimit } from "@/lib/rate-limit";
++import { hashRateKey, requireSameOrigin } from "@/lib/security";
+ import { isEmail } from "@/lib/input";
+ import { safeErrorCode } from "@/lib/observability";
+ 
+@@ -14,6 +14,9 @@ import { safeErrorCode } from "@/lib/observability";
+  */
+ const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEe.7jbm1Av7B9VrPX1i8EQnE6ZBqJfFqcO";
+ 
++const ACCOUNT_ATTEMPT_LIMIT = 20;
++const ACCOUNT_WINDOW_SECONDS = 15 * 60;
++
+ export async function POST(request: Request) {
+   const origin = requireSameOrigin(request);
+   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
+@@ -34,10 +37,15 @@ export async function POST(request: Request) {
+ 
+   // Second compteur par compte : sans lui, un brute-force distribue sur
+   // plusieurs IP contourne entierement la limite par IP.
+-  if (isEmail(email)) {
+-    const byAccount = await consumeRateLimit(`login-account:${email}`, 20, 15 * 60);
+-    if (!byAccount.allowed) return NextResponse.json({ error: "TOO_MANY_ATTEMPTS" }, { status: 429 });
+-  }
++  //
++  // Il n'est plus consulte AVANT la verification du mot de passe. Un blocage
++  // en amont transformait ce garde-fou en arme : 20 requetes suffisaient pour
++  // empecher un commercant de se connecter pendant 15 minutes, en connaissant
++  // seulement son email — et une caisse bloquee en plein service est un degat
++  // bien plus concret que les tentatives qu'on cherchait a freiner. Le
++  // compteur gouverne desormais les ECHECS, pas l'acces : un mot de passe
++  // correct passe toujours (cf. plus bas).
++  const accountKey = `login-account:${email}`;
+ 
+   if (!isEmail(email) || !password || password.length > 256) {
+     return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 400 });
+@@ -49,9 +57,22 @@ export async function POST(request: Request) {
+     const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
+     const passwordOk = await bcrypt.compare(password, hash);
+     if (!user || !user.active || !passwordOk) {
++      // Seul l'echec consomme un jeton.
++      const { allowed } = await consumeRateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_WINDOW_SECONDS);
++      if (!allowed) {
++        // Compensation du blocage retire : l'acharnement sur un compte devient
++        // un signal exploitable dans les logs, sans journaliser l'adresse.
++        console.warn("LOGIN_ACCOUNT_THROTTLED", { account: hashRateKey(email).slice(0, 12) });
++        return NextResponse.json({ error: "TOO_MANY_ATTEMPTS" }, { status: 429 });
++      }
+       return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
+     }
+ 
++    // Le titulaire legitime repart d'un compteur vierge. Combine au fait qu'un
++    // mot de passe correct n'est jamais rejete, il ne peut plus etre maintenu
++    // dehors par les tentatives d'un tiers.
++    await resetRateLimit(accountKey);
++
+     const token = await signSession({
+       staffId: String(user.id),
+       establishmentId: String(user.establishment_id),
+diff --git a/app/api/card/status/route.ts b/app/api/card/status/route.ts
+index 3a7c572..b0edf30 100644
+--- a/app/api/card/status/route.ts
++++ b/app/api/card/status/route.ts
+@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
+ import { parseCardToken } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
+ import { enforceRateLimit } from "@/lib/rate-limit";
++import { rejectCrossOrigin } from "@/lib/security";
+ 
+ export const dynamic = "force-dynamic";
+ 
+@@ -11,6 +12,19 @@ export const dynamic = "force-dynamic";
+  * a chaque poll (toutes les 3 s tant que la carte reste visible).
+  */
+ async function handlePost(request: Request) {
++  // Seule route mutante-like restee sans controle d'origine : n'importe quel
++  // site tiers pouvait sonder le solde d'une carte dont il connait le token.
++  const originError = rejectCrossOrigin(request);
++  if (originError) return originError;
++
++  // Plafond par IP EN PREMIER, avant toute cle derivee du token. Le bucket
++  // `card-status:${token}` a un espace de cles controle par l'appelant : chaque
++  // token inedit ouvrait un compteur neuf (donc aucun frein reel sur
++  // l'enumeration) et inserait une ligne de plus dans `rate_limits`. Le bucket
++  // par IP, lui, est borne et ne peut pas etre contourne.
++  const perIp = await enforceRateLimit(request, "card-status-ip", 400, 6 * 60);
++  if (perIp) return perIp;
++
+   const body = await request.json().catch(() => ({}));
+   const token = parseCardToken(body.token);
+   if (!token) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
+diff --git a/app/api/cron/purge/route.ts b/app/api/cron/purge/route.ts
+new file mode 100644
+index 0000000..0fc863a
+--- /dev/null
++++ b/app/api/cron/purge/route.ts
+@@ -0,0 +1,40 @@
++import { timingSafeEqual } from "node:crypto";
++import { databaseConfigured } from "@/lib/db";
++import { withApiErrorHandling } from "@/lib/observability";
++import { purgeStaleRateLimits } from "@/lib/rate-limit";
++
++export const dynamic = "force-dynamic";
++
++/**
++ * `purgeStaleRateLimits()` existait mais n'etait appelee nulle part : la table
++ * `rate_limits` ne se purgeait donc jamais. Plusieurs routes non authentifiees
++ * derivent leur cle d'une valeur fournie par l'appelant (token de carte, slug),
++ * ce qui permettait a un anonyme d'y inserer une ligne inedite a chaque
++ * requete. Ce cron ferme la fuite cote stockage ; la retention complete
++ * (product_events, audit_logs, tokens, registrations Apple) reste portee par
++ * `scripts/purge-data-lifecycle.mjs`, desormais planifie en CI.
++ */
++function authorized(request: Request): boolean {
++  const expected = process.env.CRON_SECRET?.trim();
++  // Fail closed : sans secret configure, la route reste inaccessible.
++  if (!expected) return false;
++  const supplied = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
++  const a = Buffer.from(supplied);
++  const b = Buffer.from(expected);
++  return a.length === b.length && timingSafeEqual(a, b);
++}
++
++async function handleGet(request: Request) {
++  if (!authorized(request)) return new Response(null, { status: 401 });
++  if (!databaseConfigured) {
++    return Response.json({ error: "SERVICE_UNAVAILABLE" }, { status: 503, headers: { "cache-control": "no-store" } });
++  }
++
++  const rateLimits = await purgeStaleRateLimits(48);
++  return Response.json(
++    { ok: true, purged: { rateLimits } },
++    { headers: { "cache-control": "no-store" } },
++  );
++}
++
++export const GET = withApiErrorHandling("CRON_PURGE", handleGet);
+diff --git a/app/api/customers/[id]/export/route.ts b/app/api/customers/[id]/export/route.ts
+index 9deb445..65e0e95 100644
+--- a/app/api/customers/[id]/export/route.ts
++++ b/app/api/customers/[id]/export/route.ts
+@@ -2,12 +2,19 @@ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { canManageProgram } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ 
+-async function handleGet(_req: Request, { params }: { params: Promise<{ id: string }> }) {
++async function handleGet(req: Request, { params }: { params: Promise<{ id: string }> }) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+ 
++  // Un export RGPD est unitaire et rare. Sans plafond, un compte OWNER/MANAGER
++  // compromis aspirait la base clients entiere, fiche par fiche. 20/h couvre
++  // tout usage legitime et rend l'aspiration lente et bruyante.
++  const limited = await enforceRateLimit(req, `customer-export:${session.staffId}`, 20, 60 * 60);
++  if (limited) return limited;
++
+   const { id } = await params;
+   const [customer] = await sql`
+     select id,email,phone,first_name,marketing_consent,marketing_consent_at,created_at,updated_at
+@@ -58,6 +65,17 @@ async function handleGet(_req: Request, { params }: { params: Promise<{ id: stri
+     order by created_at
+   `;
+ 
++  // L'effacement (CUSTOMER_ERASE) et l'ajustement (CARD_ADJUSTED) etaient
++  // traces, pas la lecture complete du dossier. Une exfiltration par un compte
++  // legitime ne laissait donc aucune trace exploitable en reponse a incident.
++  await sql`
++    insert into audit_logs(establishment_id, staff_user_id, action, entity_type, entity_id, metadata)
++    values(
++      ${session.establishmentId}, ${session.staffId}, 'CUSTOMER_EXPORT', 'customer', ${id},
++      ${sql.json({ transactions: transactions.length, hasCard: Boolean(cardId) })}
++    )
++  `;
++
+   const body = JSON.stringify({
+     format: "retiko-customer-export",
+     version: 1,
+diff --git a/app/api/customers/[id]/route.ts b/app/api/customers/[id]/route.ts
+index 594ed12..4b66063 100644
+--- a/app/api/customers/[id]/route.ts
++++ b/app/api/customers/[id]/route.ts
+@@ -5,6 +5,7 @@ import { sql } from "@/lib/db";
+ import { notifyGoogleWalletRevocation } from "@/lib/google-wallet";
+ import { canManageProgram } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
+ 
+ async function handleDelete(req: Request, { params }: { params: Promise<{ id: string }> }) {
+@@ -14,6 +15,11 @@ async function handleDelete(req: Request, { params }: { params: Promise<{ id: st
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401, headers: PRIVATE_HEADERS });
+   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
+ 
++  // Transaction lourde et irreversible : un compte compromis pouvait effacer
++  // toute la base clients en rafale, sans aucun frein.
++  const limited = await enforceRateLimit(req, `customer-erase:${session.staffId}`, 20, 60 * 60);
++  if (limited) return limited;
++
+   const { id } = await params;
+   const result = await sql.begin(async (tx) => {
+     const [customer] = await tx`
+diff --git a/app/api/dashboard/route.ts b/app/api/dashboard/route.ts
+index c20a35d..a95b7d0 100644
+--- a/app/api/dashboard/route.ts
++++ b/app/api/dashboard/route.ts
+@@ -1,5 +1,6 @@
+ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { withApiErrorHandling } from "@/lib/observability";
+-async function handleGet(){const session=await getSession();if(!session)return Response.json({error:"UNAUTHORIZED"},{status:401});const [stats]=await sql`select (select count(*)::int from customers where establishment_id=${session.establishmentId} and deleted_at is null) as customers,(select count(*)::int from cards where establishment_id=${session.establishmentId} and active=true) as active_cards,(select coalesce(sum(case when delta>0 then delta else 0 end),0)::int from transactions where establishment_id=${session.establishmentId}) as units_issued,(select count(*)::int from transactions where establishment_id=${session.establishmentId} and type='redeem') as rewards_redeemed,(select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and created_at>=now()-interval '7 days') as active_this_week,(select count(*)::int from campaigns where establishment_id=${session.establishmentId} and status='sent') as campaigns_sent`;return Response.json(stats,{headers:{"cache-control":"no-store"}});}
++import { enforceRateLimit } from "@/lib/rate-limit";
++async function handleGet(req: Request){const session=await getSession();if(!session)return Response.json({error:"UNAUTHORIZED"},{status:401});const limited=await enforceRateLimit(req,`dashboard:${session.staffId}`,120,60);if(limited)return limited;const [stats]=await sql`select (select count(*)::int from customers where establishment_id=${session.establishmentId} and deleted_at is null) as customers,(select count(*)::int from cards where establishment_id=${session.establishmentId} and active=true) as active_cards,(select coalesce(sum(case when delta>0 then delta else 0 end),0)::int from transactions where establishment_id=${session.establishmentId}) as units_issued,(select count(*)::int from transactions where establishment_id=${session.establishmentId} and type='redeem') as rewards_redeemed,(select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and created_at>=now()-interval '7 days') as active_this_week,(select count(*)::int from campaigns where establishment_id=${session.establishmentId} and status='sent') as campaigns_sent`;return Response.json(stats,{headers:{"cache-control":"no-store"}});}
+ export const GET = withApiErrorHandling("DASHBOARD", handleGet);
+diff --git a/app/api/employees/route.ts b/app/api/employees/route.ts
+index e9f51b2..81377e8 100644
+--- a/app/api/employees/route.ts
++++ b/app/api/employees/route.ts
+@@ -3,12 +3,15 @@ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { canManageStaff } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { rejectCrossOrigin } from "@/lib/security";
+ 
+-async function handleGet() {
++async function handleGet(req: Request) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
++  const limited = await enforceRateLimit(req, `employees-list:${session.staffId}`, 120, 60);
++  if (limited) return limited;
+   const rows = await sql`
+     select id, email, role, active, created_at
+     from staff_users
+@@ -27,7 +30,13 @@ async function handlePost(req: Request) {
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+ 
+-  const body = await req.json();
++  // Chaque appel execute bcrypt.hash(..., 12), soit ~300 ms de CPU serveur.
++  // Sans plafond, un compte manager compromis saturait le runtime avec
++  // quelques dizaines de requetes paralleles, a cout nul pour l'attaquant.
++  const limited = await enforceRateLimit(req, `employee-create:${session.staffId}`, 10, 60 * 60);
++  if (limited) return limited;
++
++  const body = await req.json().catch(() => ({}));
+   const email = String(body.email || "").trim().toLowerCase();
+   const password = String(body.password || "");
+   const role = body.role === "VIEWER" ? "VIEWER" : "EMPLOYEE";
+diff --git a/app/api/enroll/route.ts b/app/api/enroll/route.ts
+index e4519a3..b0a11a0 100644
+--- a/app/api/enroll/route.ts
++++ b/app/api/enroll/route.ts
+@@ -45,10 +45,10 @@ async function handlePost(req: Request) {
+     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+   }
+ 
+-  // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit
+-  // largement a un commerce reel et coupe l'enumeration de masse.
+-  const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${slug}`, 15, 60 * 60);
+-  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
++  // Plafond par IP SEULE en premiere ligne : son espace de cles est borne,
++  // il ne peut donc ni etre contourne ni servir a gonfler `rate_limits`.
++  const byIp = await consumeRateLimit(`enroll-ip:${requestIp(req)}`, 60, 60 * 60);
++  if (!byIp.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+ 
+   const [establishment] = await sql`
+     select e.id, e.status, p.expires_after_days
+@@ -61,6 +61,15 @@ async function handlePost(req: Request) {
+     return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404 });
+   }
+ 
++  // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit
++  // largement a un commerce reel et coupe l'enumeration de masse.
++  //
++  // La cle porte desormais l'UUID d'un etablissement VERIFIE, plus le slug
++  // brut : auparavant chaque slug inedit ouvrait un compteur neuf, ce qui
++  // insérait une ligne dans `rate_limits` a chaque requete d'un anonyme.
++  const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${establishment.id}`, 15, 60 * 60);
++  if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
++
+   if (await existingCustomerId(establishment.id, email, phone)) {
+     // Reponse volontairement muette : on confirme au visiteur legitime qu'il a
+     // deja une carte, sans livrer le moindre identifiant exploitable.
+diff --git a/app/api/events/route.ts b/app/api/events/route.ts
+index 69c0973..5638d9c 100644
+--- a/app/api/events/route.ts
++++ b/app/api/events/route.ts
+@@ -24,10 +24,15 @@ async function handlePost(req: Request) {
+   if (eventType === "JOIN_PAGE_VIEW") {
+     const slug = boundedText(body.slug, 60);
+     if (!slug) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+-    const rate = await consumeRateLimit(`event-join-view:${requestIp(req)}:${slug}`, 120, 60 * 60);
+-    if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
++    // Plafond par IP seule d'abord : borne, donc non contournable.
++    const byIp = await consumeRateLimit(`event-join-view-ip:${requestIp(req)}`, 300, 60 * 60);
++    if (!byIp.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+     const [establishment] = await sql`select id from establishments where slug = ${slug} and status = 'active' limit 1`;
+     if (!establishment) return Response.json({ ok: true }, { status: 202 });
++    // Cle derivee d'un etablissement verifie, plus du slug brut fourni par
++    // l'appelant : sinon chaque slug inedit creait une ligne `rate_limits`.
++    const rate = await consumeRateLimit(`event-join-view:${requestIp(req)}:${establishment.id}`, 120, 60 * 60);
++    if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
+     await sql`insert into product_events(establishment_id, event_type) values(${establishment.id}, 'JOIN_PAGE_VIEW')`;
+     return Response.json({ ok: true }, { status: 202 });
+   }
+diff --git a/app/api/history/route.ts b/app/api/history/route.ts
+index 9efae71..b3427a0 100644
+--- a/app/api/history/route.ts
++++ b/app/api/history/route.ts
+@@ -1,10 +1,15 @@
+ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ 
+ async function handleGet(req: Request) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
++  // Agregat coûteux (jointures + sous-requete d'existence) : plafonne pour
++  // qu'une session valide ne puisse pas le marteler.
++  const limited = await enforceRateLimit(req, `history:${session.staffId}`, 120, 60);
++  if (limited) return limited;
+   const url = new URL(req.url);
+   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") || 20)));
+ 
+diff --git a/app/api/program/route.ts b/app/api/program/route.ts
+index f882639..094196a 100644
+--- a/app/api/program/route.ts
++++ b/app/api/program/route.ts
+@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
+ import { boundedInt, boundedNumber, boundedText } from "@/lib/input";
+ import { canManageProgram } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { rejectCrossOrigin } from "@/lib/security";
+ 
+ async function handleGet() {
+@@ -20,8 +21,10 @@ async function handlePatch(req: Request) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
++  const limited = await enforceRateLimit(req, `program-patch:${session.staffId}`, 30, 60 * 60);
++  if (limited) return limited;
+ 
+-  const b = await req.json();
++  const b = await req.json().catch(() => ({}));
+   const mode = b.mode === "POINTS" ? "POINTS" : b.mode === "STAMPS" ? "STAMPS" : null;
+   const pointsRule = b.pointsRule === "PER_EURO" ? "PER_EURO" : b.pointsRule === "PER_PURCHASE" ? "PER_PURCHASE" : null;
+   const threshold = boundedInt(b.rewardThreshold, { min: 1, max: 100_000 });
+diff --git a/app/api/restaurant/route.ts b/app/api/restaurant/route.ts
+index a91fcff..8ed19bb 100644
+--- a/app/api/restaurant/route.ts
++++ b/app/api/restaurant/route.ts
+@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { canManageProgram } from "@/lib/loyalty";
+ import { withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { rejectCrossOrigin } from "@/lib/security";
+ 
+ /**
+@@ -41,7 +42,9 @@ async function handlePatch(req: Request) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+-  const b = await req.json();
++  const limited = await enforceRateLimit(req, `restaurant-patch:${session.staffId}`, 30, 60 * 60);
++  if (limited) return limited;
++  const b = await req.json().catch(() => ({}));
+   const color = /^#[0-9a-fA-F]{6}$/.test(String(b.primaryColor || "")) ? String(b.primaryColor) : "#111111";
+   const restaurant = await sql.begin(async (tx) => {
+     const [updated] = await tx`
+diff --git a/app/api/transactions/reverse/route.ts b/app/api/transactions/reverse/route.ts
+index 6b74f51..6e400c2 100644
+--- a/app/api/transactions/reverse/route.ts
++++ b/app/api/transactions/reverse/route.ts
+@@ -3,10 +3,12 @@ import { getSession } from "@/lib/auth";
+ import { sql } from "@/lib/db";
+ import { canReverse, isValidIdempotencyKey } from "@/lib/loyalty";
+ import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { rejectCrossOrigin } from "@/lib/security";
+ import { syncWalletsForCard } from "@/lib/wallet-sync";
+ 
+ const KNOWN_REVERSE_ERRORS = new Set(["TRANSACTION_NOT_FOUND", "ALREADY_REVERSED", "NEGATIVE_BALANCE", "CANNOT_REVERSE_REVERSAL"]);
++const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+ 
+ async function handlePost(req: Request) {
+   const originError = rejectCrossOrigin(req);
+@@ -14,8 +16,16 @@ async function handlePost(req: Request) {
+   const session = await getSession();
+   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
+   if (!canReverse(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+-  const { transactionId, idempotencyKey } = await req.json();
+-  if (!transactionId || !isValidIdempotencyKey(idempotencyKey)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
++  const limited = await enforceRateLimit(req, `reverse:${session.staffId}`, 60, 60);
++  if (limited) return limited;
++  // `.catch()` : un corps non-JSON renvoyait un 500 au lieu d'un 400.
++  const { transactionId, idempotencyKey } = await req.json().catch(() => ({}));
++  // transactionId partait tel quel vers une colonne uuid : toute valeur non
++  // conforme declenchait une erreur Postgres 22P02 remontee en 500, ce qui
++  // noyait les vraies erreurs dans les logs.
++  if (typeof transactionId !== "string" || !UUID.test(transactionId) || !isValidIdempotencyKey(idempotencyKey)) {
++    return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
++  }
+ 
+   try {
+     const result = await sql.begin(async (tx) => {
+diff --git a/app/api/wallet/apple/web/[...path]/route.ts b/app/api/wallet/apple/web/[...path]/route.ts
+index 3e48435..7c335a7 100644
+--- a/app/api/wallet/apple/web/[...path]/route.ts
++++ b/app/api/wallet/apple/web/[...path]/route.ts
+@@ -1,6 +1,7 @@
+ import { createHash, timingSafeEqual } from "node:crypto";
+ import { sql } from "@/lib/db";
+ import { applePassTypeIdentifier, buildApplePass, buildRevokedApplePass } from "@/lib/apple-wallet";
++import { enforceRateLimit } from "@/lib/rate-limit";
+ import { walletCardById, walletCardForRevocationById } from "@/lib/wallet-data";
+ 
+ export const runtime = "nodejs";
+@@ -43,13 +44,27 @@ function registrationPath(parts: string[]) {
+ }
+ 
+ export async function POST(request: Request, context: Context) {
++  // Ces trois verbes interrogent la base AVANT toute authentification
++  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
++  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
++  // requetes par appareil et par mise a jour : 60/min est tres large.
++  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
++  if (limited) return limited;
++
+   const { path } = await context.params;
+   if (path.length === 2 && path[0] === "v1" && path[1] === "log") {
+     // Endpoint impose par Apple, donc non authentifiable. On accuse reception
+     // sans jamais recopier le corps brut dans les logs (log injection /
+     // saturation du stockage de logs par un tiers anonyme).
+-    const body = await request.json().catch(() => ({})) as { logs?: unknown };
+-    const count = Array.isArray(body.logs) ? body.logs.length : 0;
++    // Endpoint non authentifiable : on borne explicitement la taille du corps
++    // plutot que de parser ce qu'un anonyme veut bien envoyer.
++    const raw = await request.text();
++    if (raw.length > 32_000) return new Response(null, { status: 413 });
++    let count = 0;
++    try {
++      const body = JSON.parse(raw) as { logs?: unknown };
++      count = Array.isArray(body.logs) ? body.logs.length : 0;
++    } catch { /* corps illisible : ignore silencieusement */ }
+     console.warn(`Apple Wallet device log received (${count} entries)`);
+     return new Response(null, { status: 200 });
+   }
+@@ -72,6 +87,13 @@ export async function POST(request: Request, context: Context) {
+ }
+ 
+ export async function DELETE(request: Request, context: Context) {
++  // Ces trois verbes interrogent la base AVANT toute authentification
++  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
++  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
++  // requetes par appareil et par mise a jour : 60/min est tres large.
++  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
++  if (limited) return limited;
++
+   const { path } = await context.params;
+   const parsed = registrationPath(path);
+   if (!parsed) return new Response(null, { status: 404 });
+@@ -82,6 +104,13 @@ export async function DELETE(request: Request, context: Context) {
+ }
+ 
+ export async function GET(request: Request, context: Context) {
++  // Ces trois verbes interrogent la base AVANT toute authentification
++  // (authorizedWalletPass fait un select puis compare le hash). Sans plafond,
++  // c'etait un DoS SQL gratuit pour un anonyme. Apple n'emet que quelques
++  // requetes par appareil et par mise a jour : 60/min est tres large.
++  const limited = await enforceRateLimit(request, "wallet-apple-web", 60, 60);
++  if (limited) return limited;
++
+   const { path } = await context.params;
+ 
+   if (path.length === 4 && path[0] === "v1" && path[1] === "passes") {
+diff --git a/app/j/[slug]/page.tsx b/app/j/[slug]/page.tsx
+index c8ccfce..c1ddece 100644
+--- a/app/j/[slug]/page.tsx
++++ b/app/j/[slug]/page.tsx
+@@ -1,4 +1,5 @@
+ import { notFound } from "next/navigation";
++import { normalizeHexColor } from "@/lib/brand-color";
+ import { sql } from "@/lib/db";
+ import { JoinForm } from "@/components/join-form";
+ import { cardRecoveryEnabled } from "@/lib/card-recovery";
+@@ -13,9 +14,18 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
+   `;
+   if (!restaurant) notFound();
+ 
+-  return <main className="auth-wrap" style={{background:`linear-gradient(160deg, ${restaurant.primary_color}18, #f5f6f8 55%)`}}>
++  // La page /c/{token} normalisait deja ses valeurs de marque, pas celle-ci :
++  // la couleur partait brute dans une chaine CSS et le logo dans un <img src>
++  // sans verification de schema. La validation cote ecriture ne couvre pas les
++  // lignes creees avant son ajout (cf. migration 014).
++  const brandColor = normalizeHexColor(restaurant.primary_color, "#111111");
++  const logoUrl = typeof restaurant.logo_url === "string" && /^https:\/\//i.test(restaurant.logo_url)
++    ? restaurant.logo_url
++    : null;
++
++  return <main className="auth-wrap" style={{background:`linear-gradient(160deg, ${brandColor}18, #f5f6f8 55%)`}}>
+     <section className="card auth-card">
+-      {restaurant.logo_url&&<img src={restaurant.logo_url} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
++      {logoUrl&&<img src={logoUrl} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
+       <span className="eyebrow" style={{marginTop:12}}>{restaurant.mode==="STAMPS"?"Carte à tampons":"Carte à points"}</span>
+       <h2 style={{margin:"14px 0 6px"}}>{restaurant.name}</h2>
+       <p className="muted">{restaurant.program_name} · {restaurant.reward_threshold} unités = {restaurant.reward_label}</p>
+diff --git a/db/migrations/014_brand_hardening.sql b/db/migrations/014_brand_hardening.sql
+new file mode 100644
+index 0000000..f5e1cb6
+--- /dev/null
++++ b/db/migrations/014_brand_hardening.sql
+@@ -0,0 +1,57 @@
++-- La validation des donnees de marque (safeHttpsUrl, normalizeHexColor) a ete
++-- ajoutee sur le chemin d'ECRITURE uniquement. Les lignes creees avant ce
++-- durcissement n'ont jamais ete nettoyees et sont toujours servies telles
++-- quelles sur les pages publiques /j/{slug} et /c/{token}.
++--
++-- Rejouable : db-setup applique ce fichier a chaque execution.
++
++begin;
++
++-- 1. Nettoyage des valeurs heritees.
++update establishments
++set primary_color = '#111111'
++where primary_color is null or primary_color !~ '^#[0-9a-fA-F]{6}$';
++
++update establishments
++set logo_url = null
++where logo_url is not null and logo_url !~* '^https://';
++
++update establishments
++set website = null
++where website is not null and website !~* '^https://';
++
++-- 2. La base devient la derniere ligne de defense, comme pour status/mode/role.
++do $$
++begin
++  if not exists (
++    select 1 from pg_constraint
++    where connamespace = 'public'::regnamespace
++      and conname = 'establishments_primary_color_check'
++  ) then
++    alter table establishments
++      add constraint establishments_primary_color_check
++      check (primary_color ~ '^#[0-9a-fA-F]{6}$');
++  end if;
++
++  if not exists (
++    select 1 from pg_constraint
++    where connamespace = 'public'::regnamespace
++      and conname = 'establishments_logo_url_https_check'
++  ) then
++    alter table establishments
++      add constraint establishments_logo_url_https_check
++      check (logo_url is null or logo_url ~* '^https://');
++  end if;
++
++  if not exists (
++    select 1 from pg_constraint
++    where connamespace = 'public'::regnamespace
++      and conname = 'establishments_website_https_check'
++  ) then
++    alter table establishments
++      add constraint establishments_website_https_check
++      check (website is null or website ~* '^https://');
++  end if;
++end $$;
++
++commit;
+diff --git a/lib/rate-limit.ts b/lib/rate-limit.ts
+index a0b38be..2d15291 100644
+--- a/lib/rate-limit.ts
++++ b/lib/rate-limit.ts
+@@ -15,6 +15,11 @@ export async function consumeRateLimit(rawKey: string, limit: number, windowSeco
+   return { allowed: hits <= limit, remaining: Math.max(0, limit - hits) };
+ }
+ 
++/** Remet un compteur a zero apres une operation legitime reussie. */
++export async function resetRateLimit(rawKey: string): Promise<void> {
++  await sql`delete from rate_limits where key_hash = ${hashRateKey(rawKey)}`;
++}
++
+ export async function rateLimit(request: Request, scope: string, limit: number, windowSeconds: number) {
+   return consumeRateLimit(`${scope}:${requestIp(request)}`, limit, windowSeconds);
+ }
+diff --git a/scripts/validate-env.mjs b/scripts/validate-env.mjs
+index 40b55de..6343af5 100644
+--- a/scripts/validate-env.mjs
++++ b/scripts/validate-env.mjs
+@@ -48,6 +48,17 @@ try {
+   fail(error instanceof Error ? error.message : "NEXT_PUBLIC_APP_URL invalide.");
+ }
+ 
++// Non bloquant : sans CRON_SECRET, /api/cron/purge reste ferme (401) et la
++// purge quotidienne ne tourne simplement pas. Mais un secret trop court est
++// une fausse securite, donc on refuse.
++const cronSecret = envValue("CRON_SECRET");
++if (cronSecret && Buffer.byteLength(cronSecret, "utf8") < 16) {
++  fail("CRON_SECRET doit contenir au moins 16 octets.");
++}
++if (!cronSecret && process.env.NODE_ENV === "production") {
++  console.warn("Avertissement: CRON_SECRET absent, la purge /api/cron/purge restera inactive.");
++}
++
+ for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED", "STRIPE_ENABLED"]) {
+   const value = envValue(flag);
+   if (value && value !== "true" && value !== "false") {
+diff --git a/tests/e2e/security-hardening.spec.ts b/tests/e2e/security-hardening.spec.ts
+new file mode 100644
+index 0000000..8c66fa7
+--- /dev/null
++++ b/tests/e2e/security-hardening.spec.ts
+@@ -0,0 +1,130 @@
++import { expect, test } from "@playwright/test";
++import postgres from "postgres";
++import { createMerchant, currentCustomerId, enrollCustomer, origin, testClientIp, unique } from "./helpers";
++
++/**
++ * Regressions du durcissement de securite. Chaque test correspond a une faille
++ * identifiee en audit : si l'un d'eux repasse au rouge, la faille est revenue.
++ */
++
++test("login : 20 echecs d'un tiers ne verrouillent pas le titulaire du compte", async ({ page }) => {
++  const marker = unique("lockout");
++  const email = `${marker}@example.com`;
++  const password = "Password-test-123!";
++
++  await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
++  await page.goto("/signup");
++  await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
++  await page.getByLabel("Email").fill(email);
++  await page.getByLabel("Mot de passe").fill(password);
++  await page.getByRole("button", { name: "Créer mon espace" }).click();
++  await expect(page).toHaveURL(/\/dashboard$/);
++
++  // L'attaquant change d'IP a chaque coup : le plafond par IP (10/15 min) ne
++  // le freine pas, seul le compteur par compte entre en jeu.
++  let throttled = 0;
++  for (let attempt = 0; attempt < 25; attempt += 1) {
++    const response = await page.request.post("/api/auth/login", {
++      headers: { origin, "x-real-ip": testClientIp() },
++      data: { email, password: `wrong-${attempt}` },
++    });
++    expect([401, 429]).toContain(response.status());
++    if (response.status() === 429) throttled += 1;
++  }
++
++  // Les echecs finissent bien par etre throttles : le garde-fou anti
++  // brute-force distribue reste actif.
++  expect(throttled).toBeGreaterThan(0);
++
++  // Mais le titulaire passe toujours avec le bon mot de passe. Avant le
++  // correctif, cette requete renvoyait 429 : 20 requetes d'un inconnu
++  // suffisaient a bloquer une caisse pendant 15 minutes.
++  const legitimate = await page.request.post("/api/auth/login", {
++    headers: { origin, "x-real-ip": testClientIp() },
++    data: { email, password },
++  });
++  expect(legitimate.status()).toBe(200);
++
++  // Et le succes a remis le compteur a zero : l'echec suivant repart de 401.
++  const afterReset = await page.request.post("/api/auth/login", {
++    headers: { origin, "x-real-ip": testClientIp() },
++    data: { email, password: "wrong-again" },
++  });
++  expect(afterReset.status()).toBe(401);
++});
++
++test("export RGPD : plafonne et trace dans audit_logs", async ({ page }) => {
++  await createMerchant(page, "export-audit");
++  const { shortCode } = await enrollCustomer(page, "Claire", `${unique("export")}@example.com`);
++  expect(shortCode).toMatch(/^[A-Z0-9]{6}$/);
++
++  const customerId = await currentCustomerId(page);
++  const exported = await page.request.get(`/api/customers/${customerId}/export`);
++  expect(exported.ok()).toBeTruthy();
++
++  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
++  try {
++    // Sans cette trace, une exfiltration par un compte legitime ne laissait
++    // aucune trace exploitable en reponse a incident.
++    const [audit] = await sql`
++      select action, staff_user_id from audit_logs
++      where entity_type = 'customer' and entity_id = ${customerId} and action = 'CUSTOMER_EXPORT'
++      limit 1
++    `;
++    expect(audit).toBeTruthy();
++    expect(audit.staff_user_id).toBeTruthy();
++  } finally {
++    await sql.end({ timeout: 5 });
++  }
++});
++
++test("routes publiques : les gardes ajoutees repondent bien", async ({ page }) => {
++  // /api/cron/purge : ferme par defaut, meme sans CRON_SECRET configure.
++  const cronAnonymous = await page.request.get("/api/cron/purge");
++  expect(cronAnonymous.status()).toBe(401);
++
++  const cronWrongSecret = await page.request.get("/api/cron/purge", {
++    headers: { authorization: "Bearer mauvais-secret-de-la-bonne-taille" },
++  });
++  expect(cronWrongSecret.status()).toBe(401);
++
++  // /api/card/status : etait la seule route POST sans controle d'origine.
++  const crossOrigin = await page.request.post("/api/card/status", {
++    headers: { origin: "https://exemple-tiers.test" },
++    data: { token: "LOY1:aaaaaaaaaaaaaaaaaaaaaa" },
++  });
++  expect(crossOrigin.status()).toBe(403);
++
++  // /api/transactions/reverse : un id non-UUID renvoyait 500 (erreur Postgres
++  // 22P02 remontee brute) au lieu d'un 400.
++  await createMerchant(page, "reverse-input");
++  const badId = await page.request.post("/api/transactions/reverse", {
++    headers: { origin },
++    data: { transactionId: "pas-un-uuid", idempotencyKey: unique("idem") },
++  });
++  expect(badId.status()).toBe(400);
++});
++
++test("enroll : un slug inconnu ne cree pas de compteur de rate-limit", async ({ page }) => {
++  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
++  try {
++    const [before] = await sql`select count(*)::int as total from rate_limits`;
++
++    // Chaque slug inedit ouvrait auparavant un bucket neuf : ecriture illimitee
++    // en base par un anonyme, et aucun frein reel sur l'enumeration.
++    const ip = testClientIp();
++    for (let attempt = 0; attempt < 12; attempt += 1) {
++      const response = await page.request.post("/api/enroll", {
++        headers: { origin, "x-real-ip": ip },
++        data: { slug: unique("slug-inexistant"), email: `${unique("ghost")}@example.com` },
++      });
++      expect(response.status()).toBe(404);
++    }
++
++    const [after] = await sql`select count(*)::int as total from rate_limits`;
++    // Un seul compteur cree : celui par IP, dont l'espace de cles est borne.
++    expect(Number(after.total) - Number(before.total)).toBeLessThanOrEqual(1);
++  } finally {
++    await sql.end({ timeout: 5 });
++  }
++});
+diff --git a/vercel.json b/vercel.json
+index 25920bc..fdc9c4d 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -1,3 +1,9 @@
+ {
+-  "regions": ["fra1"]
++  "regions": ["fra1"],
++  "crons": [
++    {
++      "path": "/api/cron/purge",
++      "schedule": "23 3 * * *"
++    }
++  ]
+ }

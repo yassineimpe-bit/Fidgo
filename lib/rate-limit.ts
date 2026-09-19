@@ -15,6 +15,11 @@ export async function consumeRateLimit(rawKey: string, limit: number, windowSeco
   return { allowed: hits <= limit, remaining: Math.max(0, limit - hits) };
 }
 
+/** Remet un compteur a zero apres une operation legitime reussie. */
+export async function resetRateLimit(rawKey: string): Promise<void> {
+  await sql`delete from rate_limits where key_hash = ${hashRateKey(rawKey)}`;
+}
+
 export async function rateLimit(request: Request, scope: string, limit: number, windowSeconds: number) {
   return consumeRateLimit(`${scope}:${requestIp(request)}`, limit, windowSeconds);
 }

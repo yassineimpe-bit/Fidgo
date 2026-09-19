@@ -48,6 +48,17 @@ try {
   fail(error instanceof Error ? error.message : "NEXT_PUBLIC_APP_URL invalide.");
 }
 
+// Non bloquant : sans CRON_SECRET, /api/cron/purge reste ferme (401) et la
+// purge quotidienne ne tourne simplement pas. Mais un secret trop court est
+// une fausse securite, donc on refuse.
+const cronSecret = envValue("CRON_SECRET");
+if (cronSecret && Buffer.byteLength(cronSecret, "utf8") < 16) {
+  fail("CRON_SECRET doit contenir au moins 16 octets.");
+}
+if (!cronSecret && process.env.NODE_ENV === "production") {
+  console.warn("Avertissement: CRON_SECRET absent, la purge /api/cron/purge restera inactive.");
+}
+
 for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOVERY_ENABLED", "STRIPE_ENABLED"]) {
   const value = envValue(flag);
   if (value && value !== "true" && value !== "false") {
