@@ -26,6 +26,7 @@ Avant d’activer Retiko 12, il faut choisir et valider avec l’exploitation/co
 
 ```text
 STRIPE_ENABLED=false
+STRIPE_AUTOMATIC_TAX_ENABLED=false
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_FLEX_MONTHLY=
@@ -35,7 +36,7 @@ STRIPE_PRICE_ANNUAL=
 
 Aucune clé publiable Stripe n’est nécessaire : Retiko utilise Checkout et Customer Portal hébergés par Stripe. Aucun secret ni Price ID n’est envoyé dans le HTML.
 
-Lorsque `STRIPE_ENABLED=true`, `npm run env:check` exige une clé `sk_`, un secret `whsec_` et trois Price IDs `price_` distincts.
+Lorsque `STRIPE_ENABLED=true`, `npm run env:check` exige une clé `sk_`, un secret `whsec_` et trois Price IDs `price_` distincts. `STRIPE_AUTOMATIC_TAX_ENABLED` reste indépendant et vaut `false` tant que la configuration fiscale n'est pas validée ; le passer à `true` active `automatic_tax` sur les nouvelles Checkout Sessions sans nécessiter un nouveau déploiement de code.
 
 ## Parcours et isolation
 
