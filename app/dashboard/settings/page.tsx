@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { getAppUrl } from "@/lib/app-url";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canManageProgram } from "@/lib/loyalty";
+import { canManageEstablishment } from "@/lib/loyalty";
 import { AppNav } from "@/components/app-nav";
 import { RestaurantForm } from "@/components/restaurant-form";
 
