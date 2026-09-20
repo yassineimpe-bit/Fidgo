@@ -1233,3 +1233,87 @@ Le produit doit pouvoir être vendu à plusieurs métiers sans devenir un logici
 Le premier avantage commercial recherché est la simplicité : remplacer une carte papier ou l’absence totale de programme fidélité par une expérience digitale immédiatement compréhensible.
 
 La première preuve de marché n’est pas le nombre de fonctionnalités livrées. C’est le nombre de commerces qui utilisent réellement Retiko après la période gratuite et acceptent de payer, avec une préférence donnée à l’abonnement annuel.
+
+
+---
+
+# 36. Bloc juridique et consentements
+
+Ce bloc est **P0 avant première facturation**.
+
+## Documents publics
+
+Retiko doit exposer en permanence :
+
+```text
+/legal/cgu
+/legal/cgv
+/legal/confidentialite
+/legal/cookies
+/legal/mentions-legales
+```
+
+Les documents contractuels utilisent une version explicite. Toute modification substantielle imposant une nouvelle acceptation doit créer une nouvelle version plutôt que d'écraser silencieusement la preuve antérieure.
+
+## Création d'un compte commerçant
+
+La création du compte OWNER exige :
+
+```text
+[ ] acceptation CGU + CGV
+```
+
+Cette case :
+
+- n'est jamais précochée ;
+- contient des liens accessibles vers les versions concernées ;
+- est contrôlée côté serveur, pas uniquement dans le navigateur ;
+- enregistre au minimum le type de document, la version et la date d'acceptation ;
+- est enregistrée dans la même transaction que la création du compte.
+
+La politique de confidentialité est présentée comme une information accessible, sans faux mécanisme « j'accepte la politique de confidentialité ».
+
+## Marketing Retiko
+
+Le choix de recevoir les nouveautés et offres Retiko est distinct de l'acceptation contractuelle :
+
+```text
+[ ] Je souhaite recevoir les nouveautés et offres Retiko
+```
+
+Ce choix est facultatif, non précoché, conservé séparément et doit pouvoir être retiré.
+
+## Clients finaux des commerces
+
+Le consentement marketing du client final reste distinct de la création de sa carte de fidélité. Le commerce agit comme responsable de traitement pour son programme ; Retiko agit comme sous-traitant technique pour les traitements réalisés pour son compte.
+
+## Cookies et traceurs
+
+Tant que Retiko utilise uniquement des traceurs strictement nécessaires au service, aucune bannière de consentement artificielle n'est affichée.
+
+Avant l'activation d'un traceur soumis au consentement :
+
+```text
+blocage avant consentement
++ information claire
++ accepter / refuser de facilité comparable
++ retrait facile
++ preuve du choix si nécessaire
+```
+
+Toute nouvelle dépendance frontend susceptible de déposer ou lire un identifiant terminal nécessite une revue cookies avant production.
+
+## Bloquants juridiques avant commercialisation payante
+
+```text
+[ ] identité juridique Retiko complétée
+[ ] mentions légales définitives
+[ ] coordonnées exactes des hébergeurs
+[ ] sous-traitants et transferts documentés
+[ ] CGU / CGV / DPA relus juridiquement
+[ ] clause responsabilité / juridiction validée
+[ ] régime de rétractation des petits professionnels démarchés hors établissement vérifié
+[ ] procédure de retrait du consentement marketing opérationnelle avant première campagne
+```
+
+Le code peut être techniquement terminé avant ces points. La commercialisation payante, elle, ne doit pas prétendre que les crochets administratifs se remplissent par télépathie.
