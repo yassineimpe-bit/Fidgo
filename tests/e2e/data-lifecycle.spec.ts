@@ -158,6 +158,14 @@ test("cycle de vie établissement : suspension révoque accès, cartes, Wallets 
       insert into card_recovery_tokens(establishment_id,card_id,token_hash,expires_at)
       values(${restaurant.id},${card.id},${link.hash},now()+interval '15 minutes')
     `;
+    const [owner] = await sql`
+      select id from staff_users where establishment_id=${restaurant.id} and role='OWNER' limit 1
+    `;
+    const resetLink = recoveryToken();
+    await sql`
+      insert into password_reset_tokens(staff_user_id,token_hash,expires_at)
+      values(${owner.id},${resetLink.hash},now()+interval '30 minutes')
+    `;
     await sql`
       insert into wallet_passes(establishment_id,card_id,provider,external_id,status)
       values(${restaurant.id},${card.id},'GOOGLE',${`object-${card.id}`},'active')
@@ -192,6 +200,9 @@ test("cycle de vie établissement : suspension révoque accès, cartes, Wallets 
         (select count(*)::int from cards where establishment_id=e.id and active) as active_cards,
         (select count(*)::int from wallet_passes where establishment_id=e.id and status='active') as active_wallets,
         (select count(*)::int from card_recovery_tokens where establishment_id=e.id and used_at is null) as active_recovery,
+        (select count(*)::int from password_reset_tokens r
+          join staff_users s on s.id=r.staff_user_id
+          where s.establishment_id=e.id and r.used_at is null and r.expires_at > now()) as active_password_resets,
         (select count(*)::int from transactions where establishment_id=e.id) as transactions
       from establishments e where e.id=${restaurant.id}
     `;
@@ -200,6 +211,7 @@ test("cycle de vie établissement : suspension révoque accès, cartes, Wallets 
     expect(Number(state.active_cards)).toBe(0);
     expect(Number(state.active_wallets)).toBe(0);
     expect(Number(state.active_recovery)).toBe(0);
+    expect(Number(state.active_password_resets)).toBe(0);
     expect(Number(state.transactions)).toBe(Number(before.count));
     await expect(sql`delete from establishments where id=${restaurant.id}`).rejects.toMatchObject({ code: "55000" });
   } finally {

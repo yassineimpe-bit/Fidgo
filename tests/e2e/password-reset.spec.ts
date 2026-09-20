@@ -274,7 +274,12 @@ test.describe("réinitialisation du mot de passe", () => {
       const [staff] = await sql`select id from staff_users where establishment_id=${restaurant.id} and role='OWNER' limit 1`;
       const link = resetToken();
       await sql`insert into password_reset_tokens(staff_user_id, token_hash, expires_at) values(${staff.id}, ${link.hash}, now() + interval '30 minutes')`;
-      await sql`update establishments set status='suspended' where id=${restaurant.id}`;
+
+      const suspended = await page.request.post("/api/restaurant/suspend", {
+        headers: { origin },
+        data: { confirmation: "SUSPENDRE", confirmationSlug: restaurant.slug },
+      });
+      expect(suspended.status()).toBe(200);
 
       const response = await page.request.post("/api/auth/reset-password", {
         headers: ipHeaders(),
@@ -282,6 +287,11 @@ test.describe("réinitialisation du mot de passe", () => {
       });
       expect(response.status()).toBe(400);
       expect(await response.json()).toEqual({ error: "INVALID_OR_EXPIRED_LINK" });
+
+      const [tokenState] = await sql`
+        select used_at is not null as consumed from password_reset_tokens where token_hash=${link.hash}
+      `;
+      expect(tokenState.consumed).toBe(true);
     } finally {
       await sql.end({ timeout: 5 });
     }

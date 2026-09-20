@@ -57,6 +57,13 @@ async function handlePost(req: Request) {
       where establishment_id=${session.establishmentId}
     `;
     await tx`
+      update password_reset_tokens
+      set used_at=coalesce(used_at,now())
+      where staff_user_id in (
+        select id from staff_users where establishment_id=${session.establishmentId}
+      )
+    `;
+    await tx`
       update wallet_passes set status='revoked',last_error=null,updated_at=now()
       where establishment_id=${session.establishmentId}
     `;

@@ -17,6 +17,7 @@ activation en production.
 | `wallet_passes` | fournisseur, identifiant externe, hash d'auth Apple, statut, erreur | credential dérivé / état Wallet | marqué `revoked`, jamais exporté avec secrets |
 | `apple_wallet_registrations` | identifiant appareil et push token | identifiant technique d'appareil | conservé le temps de délivrer le pass Apple `voided`, puis supprimé par Apple ou après 30 jours pour un pass révoqué |
 | `card_recovery_tokens` | hash du lien, expiration, consommation | credential temporaire | invalidé immédiatement ; purge 30 jours après usage/expiration |
+| `password_reset_tokens` | hash du lien de reset staff, expiration, consommation | credential temporaire | usage unique ; purge 30 jours après usage/expiration |
 | `product_events` | type, durée, IDs carte/staff, métadonnées bornées | télémétrie pseudonymisée | lien carte retiré à l'effacement ; proposition de purge à 180 jours |
 | `audit_logs` | acteur, action, entité, métadonnées | preuve technique et sécurité | pseudonymisé ; proposition de purge à 730 jours, sans toucher au ledger |
 | `campaign_recipients` | lien campagne/client, état de livraison | historique marketing | supprimé avec l'effacement client |
@@ -68,7 +69,7 @@ la chaîne `SUSPENDRE`. L'opération :
 - suspend l'établissement ;
 - révoque immédiatement toutes les sessions staff ;
 - désactive et renouvelle les identifiants publics des cartes ;
-- invalide recovery et push web ;
+- invalide recovery, password reset et push web ;
 - marque les Wallets révoqués et notifie Apple si configuré ;
 - conserve clients, transactions, audits et configuration.
 
@@ -83,14 +84,20 @@ au maximum 5 000 lignes par table et par exécution, avec verrou consultatif :
 
 - `product_events` : 180 jours ;
 - `audit_logs` : 730 jours ;
-- recovery tokens utilisés/expirés : 30 jours ;
+- recovery tokens carte utilisés/expirés : 30 jours ;
+- tokens de réinitialisation staff utilisés/expirés : 30 jours ;
 - inscriptions Apple de passes révoqués : 30 jours ;
 - rate limits : 2 jours.
 
 Aucune transaction, carte ledger, client actif, staff, établissement,
 configuration de programme ou donnée de facturation n'est supprimé par ce
-script. Aucun cron n'est activé par cette PR : les durées doivent d'abord être
-validées et le dry-run observé en production.
+script. Le workflow `.github/workflows/data-lifecycle.yml` exécute chaque jour
+un dry-run sur l'environnement GitHub `production`, à condition que son secret
+`DATABASE_URL` soit configuré. La suppression planifiée ne s'exécute que si la
+variable GitHub d'environnement `DATA_LIFECYCLE_EXECUTE=true` est explicitement
+activée ; un déclenchement manuel peut également demander l'exécution. Les
+durées restent à valider juridiquement avant activation automatique et doivent
+être réévaluées si la politique de conservation évolue.
 
 ## Limites opérationnelles connues
 
