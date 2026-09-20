@@ -8,7 +8,7 @@ import { AppNav } from "@/components/app-nav";
 import { RestaurantForm } from "@/components/restaurant-form";
 
 export default async function SettingsPage(){
-  const session=await getSession(); if(!session) redirect("/login"); if(!canManageProgram(session.role)) redirect("/dashboard");
+  const session=await getSession(); if(!session) redirect("/login"); if(!canManageEstablishment(session.role)) redirect("/dashboard");
   const [restaurant]=await sql`
     select e.name,e.slug,e.logo_url,e.primary_color,e.address,e.phone,e.instagram,e.website,
       p.mode,p.reward_threshold,p.reward_label
