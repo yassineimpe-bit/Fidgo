@@ -3,6 +3,7 @@ import { healthSchemaIsReady } from "@/lib/health-schema";
 
 const coreSchema = {
   recovery_table: true,
+  password_reset_table: true,
   product_events_table: true,
   token_version: true,
   last_earn_at: true,
@@ -15,7 +16,12 @@ const coreSchema = {
   billing_trial_end: false,
 };
 
-describe("health schema Stripe optionnel", () => {
+describe("health schema", () => {
+  it("échoue fermé si la migration password reset 015 manque", () => {
+    expect(healthSchemaIsReady({ ...coreSchema, password_reset_table: false }, false)).toBe(false);
+  });
+
+  describe("Stripe optionnel", () => {
   it("reste vert avant migration 013 lorsque Stripe est désactivé", () => {
     expect(healthSchemaIsReady(coreSchema, false)).toBe(true);
   });
@@ -27,5 +33,6 @@ describe("health schema Stripe optionnel", () => {
       stripe_webhook_events_table: true,
       billing_trial_end: true,
     }, true)).toBe(true);
+  });
   });
 });

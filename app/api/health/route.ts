@@ -1,4 +1,6 @@
+import { getBillingRuntimeStatus } from "@/lib/billing";
 import { databaseConfigured, sql } from "@/lib/db";
+import { recoveryEmailConfigured } from "@/lib/email";
 import { healthSchemaIsReady } from "@/lib/health-schema";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
@@ -7,12 +9,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const started = Date.now();
   const wallet = getWalletRuntimeStatus();
+  const billing = getBillingRuntimeStatus();
+  const emailConfigured = recoveryEmailConfigured();
   const authConfigured = Boolean(process.env.AUTH_SECRET?.trim());
   const walletState = {
     https: wallet.appUrlConfigured && wallet.appUrlHttps,
     apple: wallet.apple.configured,
     google: wallet.google.configured,
   };
+  const billingState = { enabled: billing.enabled, configured: billing.configured };
+  const emailState = { recovery: emailConfigured, passwordReset: emailConfigured };
 
   if (!databaseConfigured || !authConfigured) {
     return Response.json({
@@ -22,6 +28,8 @@ export async function GET() {
       schema: "unknown",
       auth: authConfigured ? "up" : "down",
       wallet: walletState,
+      billing: billingState,
+      email: emailState,
       serverMs: Date.now() - started,
     }, { status: 503, headers: { "cache-control": "no-store" } });
   }
@@ -30,6 +38,7 @@ export async function GET() {
     const [schema] = await sql`
       select
         to_regclass('public.card_recovery_tokens') is not null as recovery_table,
+        to_regclass('public.password_reset_tokens') is not null as password_reset_table,
         to_regclass('public.product_events') is not null as product_events_table,
         to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
         exists(
@@ -82,6 +91,8 @@ export async function GET() {
       schema: schemaReady ? "up" : "down",
       auth: "up",
       wallet: walletState,
+      billing: billingState,
+      email: emailState,
       serverMs: Date.now() - started,
     }, { status: schemaReady ? 200 : 503, headers: { "cache-control": "no-store" } });
   } catch {
@@ -92,6 +103,8 @@ export async function GET() {
       schema: "unknown",
       auth: "up",
       wallet: walletState,
+      billing: billingState,
+      email: emailState,
       serverMs: Date.now() - started,
     }, { status: 503, headers: { "cache-control": "no-store" } });
   }
