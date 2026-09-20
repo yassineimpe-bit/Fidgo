@@ -69,8 +69,9 @@ Exemples de recherches Vercel Runtime Logs :
 La réponse inclut aussi :
 
 - `serverMs` ;
-- `version` ;
 - `checkedAt`.
+
+La version déployée (`VERCEL_GIT_COMMIT_SHA`) reste journalisée en interne via `RETIKO_HEALTH_OK/SLOW/DEGRADED`, mais n'est plus renvoyée dans le corps JSON public de `/api/health` : le dépôt étant public, exposer le commit exact en production faciliterait le repérage de la fenêtre entre la publication d'un correctif et son déploiement effectif.
 
 Chaque appel produit l'un des signaux :
 

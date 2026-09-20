@@ -7,10 +7,6 @@ import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
 
-function version() {
-  return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev";
-}
-
 function healthResponse(
   body: {
     ok: boolean;
@@ -35,7 +31,6 @@ function healthResponse(
 
   return Response.json({
     ...body,
-    version: version(),
     checkedAt: new Date().toISOString(),
   }, { status, headers: { "cache-control": "no-store" } });
 }
