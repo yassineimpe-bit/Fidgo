@@ -12,7 +12,7 @@ export async function AppNav({ restaurantName }: { restaurantName?: string }) {
 
   return <header className="topbar no-print"><div className="shell topbar-inner"><Link className="brand" href={session?.role === "EMPLOYEE" ? "/s" : "/dashboard"}>{restaurantName || "Retiko"}</Link><nav className="navlinks">
     {links.map((link) => <Link key={link.href} href={link.href} className={link.keepMobile ? "keep-mobile" : undefined}>{link.label}</Link>)}
-    <MobileNavMenu/>
+    <MobileNavMenu links={links}/>
     <LogoutButton/>
   </nav></div></header>;
 }
