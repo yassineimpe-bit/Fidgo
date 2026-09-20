@@ -130,7 +130,7 @@ export default async function ClientsPage({
           />
         </form>
         {canManageProgram(session.role) && <a className="btn" href={`/api/customers/export${term ? `?q=${encodeURIComponent(term)}` : ""}`}>
-          Exporter les clients (CSV)
+          Télécharger le CSV clients
         </a>}
       </div>
 

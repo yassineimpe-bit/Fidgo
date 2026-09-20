@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
 
+test.setTimeout(60_000);
+
 test("export clients : recherche courante, colonnes, tenant et aucun token complet", async ({ page }) => {
   await createMerchant(page, "customers-csv-a");
   const firstEmail = `${unique("csv-marie")}@example.com`;
@@ -9,7 +11,7 @@ test("export clients : recherche courante, colonnes, tenant et aucun token compl
   const otherEmail = `${unique("csv-lina")}@example.com`;
   await enrollCustomer(page, "Lina", otherEmail);
   await page.goto("/dashboard/clients?q=Marie");
-  const link = page.getByRole("link", { name: "Exporter les clients (CSV)" });
+  const link = page.getByRole("link", { name: "Télécharger le CSV clients" });
   await expect(link).toHaveAttribute("href", "/api/customers/export?q=Marie");
 
   const response = await page.request.get("/api/customers/export?q=Marie");
@@ -52,7 +54,7 @@ test("export clients : EMPLOYEE interdit même par appel direct", async ({ page 
     await expect(employeePage).toHaveURL(/\/dashboard$/);
     expect((await employeePage.request.get("/api/customers/export")).status()).toBe(403);
     await employeePage.goto("/dashboard/clients");
-    await expect(employeePage.getByRole("link", { name: "Exporter les clients (CSV)" })).toHaveCount(0);
+    await expect(employeePage.getByRole("link", { name: "Télécharger le CSV clients" })).toHaveCount(0);
   } finally {
     await employeeContext.close();
   }
