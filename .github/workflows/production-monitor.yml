@@ -1,0 +1,162 @@
+name: production-monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub Actions est un synthetic monitor externe à Vercel.
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: retiko-production-monitor
+  cancel-in-progress: true
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      PUBLIC_URL: https://retiko.fr
+      HEALTH_URL: https://retiko.fr/api/health
+    steps:
+      - name: Probe production
+        id: probe
+        shell: bash
+        run: |
+          set -u
+
+          rm -f /tmp/retiko-monitor-body
+          result=$(curl --silent --show-error --location --max-time 15             --connect-timeout 5             -o /tmp/retiko-monitor-body             -w '%{http_code} %{time_total}'             "$HEALTH_URL" 2>/tmp/retiko-monitor-curl-error || true)
+
+          http_code=$(printf '%s' "$result" | awk '{print $1}')
+          total_seconds=$(printf '%s' "$result" | awk '{print $2}')
+          http_code=${http_code:-000}
+          total_seconds=${total_seconds:-0}
+          latency_ms=$(awk -v seconds="$total_seconds" 'BEGIN { printf "%.0f", seconds * 1000 }')
+
+          healthy=false
+          reason="health endpoint unavailable"
+
+          if [ -s /tmp/retiko-monitor-body ] && jq -e . /tmp/retiko-monitor-body >/dev/null 2>&1; then
+            if [ "$http_code" = "200" ] && jq -e '
+              .ok == true and
+              .service == "retiko" and
+              .database == "up" and
+              .schema == "up" and
+              .auth == "up" and
+              .wallet.https == true
+            ' /tmp/retiko-monitor-body >/dev/null; then
+              healthy=true
+              reason="healthy"
+            elif jq -e '.auth == "down"' /tmp/retiko-monitor-body >/dev/null; then
+              reason="AUTH_SECRET missing or invalid"
+            elif jq -e '.database == "down"' /tmp/retiko-monitor-body >/dev/null; then
+              reason="database unavailable"
+            elif jq -e '.schema == "down"' /tmp/retiko-monitor-body >/dev/null; then
+              reason="database schema not ready"
+            else
+              reason="health payload reports degraded state"
+            fi
+          elif [ -s /tmp/retiko-monitor-curl-error ]; then
+            reason="network/TLS/DNS probe failed"
+          fi
+
+          echo "healthy=$healthy" >> "$GITHUB_OUTPUT"
+          echo "http_code=$http_code" >> "$GITHUB_OUTPUT"
+          echo "latency_ms=$latency_ms" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Retiko production probe"
+            echo
+            echo "- Health: `$healthy`"
+            echo "- HTTP: `$http_code`"
+            echo "- Latency: `${latency_ms} ms`"
+            echo "- Reason: `$reason`"
+            echo "- Endpoint: $HEALTH_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open or resolve monitoring incident
+        id: incident
+        uses: actions/github-script@v7
+        env:
+          HEALTHY: ${{ steps.probe.outputs.healthy }}
+          HTTP_CODE: ${{ steps.probe.outputs.http_code }}
+          LATENCY_MS: ${{ steps.probe.outputs.latency_ms }}
+          REASON: ${{ steps.probe.outputs.reason }}
+          HEALTH_URL: ${{ env.HEALTH_URL }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = "[monitoring] Retiko production incident";
+            const healthy = process.env.HEALTHY === "true";
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: "open",
+              per_page: 100,
+            });
+            const current = issues.find((issue) => !issue.pull_request && issue.title === title);
+
+            if (!healthy) {
+              const body = [
+                "Le synthetic monitor Retiko a détecté une indisponibilité ou un état dégradé.",
+                "",
+                `- Détection : ${new Date().toISOString()}`,
+                `- HTTP : ${process.env.HTTP_CODE}`,
+                `- Latence : ${process.env.LATENCY_MS} ms`,
+                `- Diagnostic : ${process.env.REASON}`,
+                `- Endpoint : ${process.env.HEALTH_URL}`,
+                `- Run : ${runUrl}`,
+                "",
+                "Cette issue reste ouverte tant que /api/health ne repasse pas au vert.",
+              ].join("\n");
+
+              if (!current) {
+                const created = await github.rest.issues.create({ owner, repo, title, body });
+                core.notice(`Production incident opened as #${created.data.number}`);
+                core.setOutput("new_incident", "true");
+              } else {
+                core.notice(`Production incident already tracked by #${current.number}`);
+                core.setOutput("new_incident", "false");
+              }
+              return;
+            }
+
+            if (current) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: current.number,
+                body: [
+                  "✅ Le synthetic monitor est de nouveau au vert.",
+                  "",
+                  `- Récupération : ${new Date().toISOString()}`,
+                  `- HTTP : ${process.env.HTTP_CODE}`,
+                  `- Latence : ${process.env.LATENCY_MS} ms`,
+                  `- Run : ${runUrl}`,
+                ].join("\n"),
+              });
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: current.number,
+                state: "closed",
+                state_reason: "completed",
+              });
+              core.notice(`Production incident #${current.number} resolved automatically`);
+            }
+            core.setOutput("new_incident", "false");
+
+      - name: Fail once when a new incident is detected
+        if: steps.probe.outputs.healthy != 'true' && steps.incident.outputs.new_incident == 'true'
+        shell: bash
+        run: |
+          echo "::error::Retiko production is unhealthy. An incident issue has been opened."
+          exit 1
