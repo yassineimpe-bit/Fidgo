@@ -23,6 +23,7 @@ test("création établissement : compte, OWNER, programme et essai sont atomique
       where e.slug=${joinPath!.slice(3)}
     `;
     expect(rows).toHaveLength(1);
+    expect(String(rows[0].name)).toContain(marker);
     expect(rows[0]).toMatchObject({
       status: "active", role: "OWNER", owner_active: true,
       mode: "STAMPS", reward_threshold: 10, program_active: true,
