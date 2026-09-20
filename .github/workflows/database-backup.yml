@@ -4,6 +4,13 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/database-backup.yml"
+      - "ops/backup/**"
+      - "scripts/restore-backup.sh"
+      - "docs/BACKUP_RESTORE.md"
   pull_request:
     branches: [main]
     paths:
@@ -20,10 +27,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  config-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate recovery certificate
+        run: |
+          openssl x509 -in ops/backup/retiko-backup-public.crt -noout -checkend 2592000
+          fingerprint=$(openssl x509 -in ops/backup/retiko-backup-public.crt -noout -fingerprint -sha256 | cut -d= -f2)
+          test "$fingerprint" = "9D:C6:75:2C:0D:38:1A:AD:36:8C:A5:63:BF:D6:29:0D:E8:06:E3:A8:47:00:9F:61:F8:1E:09:8C:7A:E4:A5:F8"
+      - name: Validate restore script syntax
+        run: bash -n scripts/restore-backup.sh
+
   backup-restore:
-    if: >-
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
