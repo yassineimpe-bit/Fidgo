@@ -62,7 +62,7 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     await employeePage.goto("/dashboard");
     await expect(employeePage).toHaveURL(/\/s$/);
@@ -220,7 +220,7 @@ test("session : désactivation, réactivation et changement de rôle révoquent 
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(password);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     const disabled = await page.request.patch(`/api/employees/${employee.id}`, {
       headers: { origin },
@@ -241,7 +241,7 @@ test("session : désactivation, réactivation et changement de rôle révoquent 
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(password);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     // getSession relit le rôle courant en base à chaque requête : un JWT
     // EMPLOYEE ne conserve donc pas canScan après passage en VIEWER.
