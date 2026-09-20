@@ -33,6 +33,13 @@ async function handlePatch(req: Request, { params }: { params: Promise<{ id: str
         where id=${id} and establishment_id=${session.establishmentId}
         returning id,email,role,active,created_at
       `;
+      if (!body.active) {
+        await tx`
+          update password_reset_tokens
+          set used_at=now()
+          where staff_user_id=${id} and used_at is null
+        `;
+      }
       await tx`
         insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata)
         values(${session.establishmentId},${session.staffId},'STAFF_ACCESS_UPDATE','staff_user',${id},${tx.json({ active: body.active })})

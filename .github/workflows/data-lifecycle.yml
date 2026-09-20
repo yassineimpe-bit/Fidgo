@@ -41,7 +41,9 @@ jobs:
         run: npm run data:purge
 
       - name: Apply retention
-        if: github.event_name == 'schedule' || inputs.execute
+        if: >-
+          (github.event_name == 'schedule' && vars.DATA_LIFECYCLE_EXECUTE == 'true') ||
+          (github.event_name == 'workflow_dispatch' && inputs.execute)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run data:purge -- --execute

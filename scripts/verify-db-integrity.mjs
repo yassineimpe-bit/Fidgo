@@ -102,6 +102,14 @@ try {
         where r.used_at is null and r.expires_at > now()
           and (not c.active or u.deleted_at is not null or e.status <> 'active')
       ) as active_orphan_recovery_tokens
+      ,(
+        select count(*)::int
+        from password_reset_tokens r
+        join staff_users s on s.id=r.staff_user_id
+        join establishments e on e.id=s.establishment_id
+        where r.used_at is null and r.expires_at > now()
+          and (not s.active or e.status <> 'active')
+      ) as active_orphan_password_reset_tokens
   `;
   const [billingData] = await sql`
     select
@@ -138,6 +146,7 @@ try {
   if (Number(tenantData.active_deleted_customer_cards) > 0) failures.push(`${tenantData.active_deleted_customer_cards} carte(s) active(s) pour un client effacé`);
   if (Number(tenantData.active_orphan_wallets) > 0) failures.push(`${tenantData.active_orphan_wallets} Wallet(s) actif(s) sur une ressource révoquée`);
   if (Number(tenantData.active_orphan_recovery_tokens) > 0) failures.push(`${tenantData.active_orphan_recovery_tokens} lien(s) recovery actif(s) sur une ressource révoquée`);
+  if (Number(tenantData.active_orphan_password_reset_tokens) > 0) failures.push(`${tenantData.active_orphan_password_reset_tokens} lien(s) password reset actif(s) sur un compte révoqué`);
   if (Number(billingData.establishments_without_subscription) > 0) failures.push(`${billingData.establishments_without_subscription} commerce(s) sans état de facturation`);
   if (Number(billingData.webhook_tenant_mismatches) > 0) failures.push(`${billingData.webhook_tenant_mismatches} webhook(s) Stripe lié(s) au mauvais tenant`);
   if (Number(billingData.duplicate_stripe_customers) > 0) failures.push(`${billingData.duplicate_stripe_customers} client(s) Stripe dupliqué(s)`);
@@ -157,6 +166,7 @@ try {
   console.log(`Cartes actives de clients effacés : ${tenantData.active_deleted_customer_cards}`);
   console.log(`Wallets actifs incohérents : ${tenantData.active_orphan_wallets}`);
   console.log(`Recovery tokens actifs incohérents : ${tenantData.active_orphan_recovery_tokens}`);
+  console.log(`Password reset tokens actifs incohérents : ${tenantData.active_orphan_password_reset_tokens}`);
   console.log(`Commerces sans état de facturation : ${billingData.establishments_without_subscription}`);
   console.log(`Webhooks Stripe cross-tenant : ${billingData.webhook_tenant_mismatches}`);
   console.log(`Clients Stripe dupliqués : ${billingData.duplicate_stripe_customers}`);
