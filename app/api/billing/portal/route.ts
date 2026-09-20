@@ -5,6 +5,7 @@ import {
   getBillingRuntimeStatus,
 } from "@/lib/billing";
 import { sql } from "@/lib/db";
+import { canManageBilling } from "@/lib/loyalty";
 import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { rateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
@@ -14,7 +15,7 @@ async function handlePost(request: Request) {
   if (originError) return originError;
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  if (session.role !== "OWNER") return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!canManageBilling(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
   if (!billingEnabled()) return Response.json({ error: "BILLING_DISABLED" }, { status: 503 });
   if (!getBillingRuntimeStatus().configured) {
     return Response.json({ error: "BILLING_NOT_CONFIGURED" }, { status: 503 });
