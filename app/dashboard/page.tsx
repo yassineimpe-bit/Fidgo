@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { canAccessBackoffice } from "@/lib/loyalty";
 import { AppNav } from "@/components/app-nav";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
 import Link from "next/link";
@@ -8,6 +9,7 @@ import Link from "next/link";
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canAccessBackoffice(session.role)) redirect("/s");
   const [restaurant] = await sql`select name, slug, logo_url from establishments where id = ${session.establishmentId}`;
   const [program] = await sql`select mode, program_name, reward_threshold, reward_label from loyalty_programs where establishment_id = ${session.establishmentId}`;
   const [stats] = await sql`

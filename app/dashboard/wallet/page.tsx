@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { canManageProgram } from "@/lib/loyalty";
 import { getWalletRuntimeStatus, type WalletProviderStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ function providerDetail(status: WalletProviderStatus, readyText: string) {
 export default async function WalletDashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canManageProgram(session.role)) redirect(session.role === "EMPLOYEE" ? "/s" : "/dashboard");
 
   const [restaurant] = await sql`select name,slug from establishments where id=${session.establishmentId} limit 1`;
   const status = getWalletRuntimeStatus();

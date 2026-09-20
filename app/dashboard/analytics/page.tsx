@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { getSession } from "@/lib/auth";
-import { canManageProgram } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
 import { sql } from "@/lib/db";
 import { ANALYTICS_PERIODS, parseAnalyticsPeriod } from "@/lib/analytics-period";
 
@@ -15,6 +15,7 @@ export default async function AnalyticsPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canAccessBackoffice(session.role)) redirect("/s");
   const period = parseAnalyticsPeriod((await searchParams).period);
 
   const [restaurant] = await sql`select name from establishments where id=${session.establishmentId} limit 1`;

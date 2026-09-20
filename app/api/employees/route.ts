@@ -39,8 +39,8 @@ async function handlePost(req: Request) {
   const body = await req.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  const role = body.role === "VIEWER" ? "VIEWER" : "EMPLOYEE";
-  if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || password.length > 256) {
+  const role = body.role === "VIEWER" ? "VIEWER" : body.role === "EMPLOYEE" ? "EMPLOYEE" : null;
+  if (!role || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || password.length > 256) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 

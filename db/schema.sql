@@ -48,6 +48,7 @@ create table if not exists staff_users (
   updated_at timestamptz not null default now()
 );
 create unique index if not exists staff_users_email_key on staff_users (lower(email));
+create unique index if not exists staff_users_one_owner_per_establishment on staff_users (establishment_id) where role = 'OWNER';
 
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),

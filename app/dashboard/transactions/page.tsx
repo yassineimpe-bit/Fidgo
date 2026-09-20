@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canManageProgram, canReverse } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageProgram, canReverse } from "@/lib/loyalty";
 import { AppNav } from "@/components/app-nav";
 import { TransactionTable } from "@/components/transaction-table";
 import {
@@ -50,6 +50,7 @@ export default async function TransactionsPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canAccessBackoffice(session.role)) redirect("/s");
   const filters = parseTransactionHistoryFilters(await searchParams);
   const searchPattern = `%${filters.q.toLowerCase()}%`;
 

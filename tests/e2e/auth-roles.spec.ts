@@ -42,6 +42,18 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
   const employeeId = employees.find((e: { email: string }) => e.email === employeeEmail)?.id;
   expect(employeeId).toBeTruthy();
 
+  const createOwner = await page.request.post("/api/employees", {
+    headers: { origin },
+    data: { email: `${unique("owner-escalation")}@example.com`, password: employeePassword, role: "OWNER" },
+  });
+  expect(createOwner.status()).toBe(400);
+
+  const createManager = await page.request.post("/api/employees", {
+    headers: { origin },
+    data: { email: `${unique("manager-escalation")}@example.com`, password: employeePassword, role: "MANAGER" },
+  });
+  expect(createManager.status()).toBe(400);
+
   // Nouvelle session, isolée du cookie OWNER, connectée en tant qu'EMPLOYEE.
   const employeeContext = await page.context().browser()!.newContext();
   const employeePage = await employeeContext.newPage();
@@ -50,7 +62,29 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
+
+    await employeePage.goto("/dashboard");
+    await expect(employeePage).toHaveURL(/\/s$/);
+
+    await employeePage.goto("/dashboard/clients");
+    await expect(employeePage).toHaveURL(/\/s$/);
+
+    await employeePage.goto("/dashboard/program");
+    await expect(employeePage).toHaveURL(/\/s$/);
+
+    await employeePage.goto("/dashboard/employees");
+    await expect(employeePage).toHaveURL(/\/s$/);
+
+    await employeePage.goto("/dashboard/security");
+    await expect(employeePage).toHaveURL(/\/dashboard\/security$/);
+    await expect(employeePage.getByRole("link", { name: "Scanner" })).toBeVisible();
+    await expect(employeePage.getByRole("link", { name: "Équipe" })).toHaveCount(0);
+    await expect(employeePage.getByRole("link", { name: "Programme" })).toHaveCount(0);
+    await expect(employeePage.getByRole("link", { name: "Facturation" })).toHaveCount(0);
+
+    const dashboardApi = await employeePage.request.get("/api/dashboard");
+    expect(dashboardApi.status()).toBe(403);
 
     const patchOther = await employeePage.request.patch(`/api/employees/${employeeId}`, {
       headers: { origin },
@@ -186,7 +220,7 @@ test("session : désactivation, réactivation et changement de rôle révoquent 
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(password);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     const disabled = await page.request.patch(`/api/employees/${employee.id}`, {
       headers: { origin },
@@ -207,7 +241,7 @@ test("session : désactivation, réactivation et changement de rôle révoquent 
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(password);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     // getSession relit le rôle courant en base à chaque requête : un JWT
     // EMPLOYEE ne conserve donc pas canScan après passage en VIEWER.
@@ -220,5 +254,26 @@ test("session : désactivation, réactivation et changement de rôle révoquent 
   } finally {
     await sql.end({ timeout: 5 });
     await employeeContext.close();
+  }
+});
+
+
+test("rôle : la base garantit un seul OWNER par établissement", async ({ page }) => {
+  await createMerchant(page, "single-owner");
+  const employees = await page.request.get("/api/employees").then((response) => response.json());
+  const owner = employees.find((employee: { role: string }) => employee.role === "OWNER");
+  expect(owner).toBeTruthy();
+
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
+  try {
+    await expect(
+      sql`
+        insert into staff_users(establishment_id,email,password_hash,role)
+        select establishment_id,${`${unique("duplicate-owner")}@example.com`},'not-used','OWNER'
+        from staff_users where id=${owner.id}
+      `,
+    ).rejects.toMatchObject({ code: "23505" });
+  } finally {
+    await sql.end({ timeout: 5 });
   }
 });

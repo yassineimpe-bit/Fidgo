@@ -72,11 +72,10 @@ test("note interne : OWNER/MANAGER seulement, tenant strict et validation serveu
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
     expect((await employeePage.request.patch(url, { headers: { origin }, data: { note: "escalade" } })).status()).toBe(403);
     await employeePage.goto(`/dashboard/clients/${customerId}`);
-    await expect(employeePage.getByRole("heading", { name: "Note interne" })).toBeVisible();
-    await expect(employeePage.getByRole("button", { name: "Enregistrer la note" })).toHaveCount(0);
+    await expect(employeePage).toHaveURL(/\/s$/);
   } finally {
     await employeeContext.close();
   }

@@ -30,7 +30,7 @@ test("équipe pilote : un Owner crée un Employé scanner qui se connecte et cr�
   await page.getByLabel("Rôle").selectOption("EMPLOYEE");
   await page.getByRole("button", { name: "Créer l’accès" }).click();
   await expect(page.getByText("Employé créé.")).toBeVisible();
-  await expect(page.getByRole("row", { name: new RegExp(employeeEmail) })).toContainText("EMPLOYEE");
+  await expect(page.getByRole("row", { name: new RegExp(employeeEmail) })).toContainText("Employé");
 
   // Le poste Owner et le téléphone caisse sont deux sessions indépendantes :
   // la connexion Employé ne doit ni réutiliser ni révoquer le cookie Owner.
@@ -41,7 +41,7 @@ test("équipe pilote : un Owner crée un Employé scanner qui se connecte et cr�
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     // Chromium CI n'a pas de caméra. Le refus simulé doit conserver le parcours
     // caisse manuel, puis l'Employé doit pouvoir scanner/créditer sans droits admin.
