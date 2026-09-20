@@ -10,6 +10,7 @@ import {
   getSubscription,
 } from "@/lib/billing";
 import { sql } from "@/lib/db";
+import { canManageBilling } from "@/lib/loyalty";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ function formatDate(value: unknown) {
 export default async function BillingPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.role !== "OWNER") redirect("/dashboard");
+  if (!canManageBilling(session.role)) redirect("/dashboard");
 
   const [establishment] = await sql`
     select name from establishments where id = ${session.establishmentId} limit 1
