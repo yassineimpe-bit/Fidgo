@@ -39,6 +39,27 @@ jobs:
             --retry 2 --retry-delay 2 \
             --output /dev/null "$PUBLIC_URL/"
 
+      - name: Check password recovery public contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forgot_code=$(curl --silent --show-error --max-time 15             -o /tmp/retiko-forgot-body -w '%{http_code}'             -X POST "$PUBLIC_URL/api/auth/forgot-password"             -H "Origin: $PUBLIC_URL"             -H "Content-Type: application/json"             --data '{"email":"production-smoke-nonexistent@retiko.invalid"}')
+
+          if [ "$forgot_code" != "202" ]; then
+            echo "::error::Forgot-password returned HTTP $forgot_code instead of 202."
+            cat /tmp/retiko-forgot-body || true
+            exit 1
+          fi
+
+          jq -e '.ok == true and (.message | type == "string")' /tmp/retiko-forgot-body >/dev/null
+
+          headers=$(curl --silent --show-error --max-time 15 --head             "$PUBLIC_URL/reset-password?token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+
+          echo "$headers" | grep -qi '^cache-control:.*no-store'
+          echo "$headers" | grep -qi '^referrer-policy:.*no-referrer'
+          echo "$headers" | grep -qi '^x-robots-tag:.*noindex'
+
       - name: Wait for Retiko production health
         shell: bash
         run: |
