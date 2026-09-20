@@ -28,10 +28,31 @@ Environment=RETIKO_REPO=yassineimpe-bit/Fidgo
 Environment=RETIKO_OWNER=yassineimpe-bit
 Environment=RETIKO_AGENT_HUB=$HOME/projects/agent-hub/router.py
 Environment=RETIKO_POLL_SECONDS=10
+# Optional: set to a fine-grained GitHub token scoped to this repo only
+# (metadata: read, issues: read+write) instead of inheriting the broader
+# scope of your interactive \`gh auth login\` session. \`gh\` reads GH_TOKEN
+# automatically. Leave unset to keep using the existing \`gh\` session.
+# Environment=GH_TOKEN=
+
+# Narrow, safe-by-default hardening. These do NOT sandbox what the local
+# agent itself can read or write under \$HOME -- the router's whole job is
+# to give Claude/Codex/AGY broad filesystem access to do real work, so
+# ProtectHome/ReadOnlyPaths are deliberately not applied here. Treat the
+# authorization check in remote_worker.py (author + untampered body) as the
+# real trust boundary, not this sandbox.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
 
 [Install]
 WantedBy=default.target
 EOF
+chmod 600 "$SERVICE_FILE"
 
 systemctl --user daemon-reload
 systemctl --user enable --now retiko-agent-worker.service
