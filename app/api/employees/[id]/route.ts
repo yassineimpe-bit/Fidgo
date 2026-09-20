@@ -1,8 +1,19 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canManageStaff } from "@/lib/loyalty";
+import {
+  canAssignStaffRole,
+  canManageStaff,
+  canManageStaffTarget,
+  type StaffRole,
+} from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { rejectCrossOrigin } from "@/lib/security";
+
+function requestedStaffRole(value: unknown): StaffRole | null {
+  return value === "OWNER" || value === "MANAGER" || value === "EMPLOYEE" || value === "VIEWER"
+    ? value
+    : null;
+}
 
 async function handlePatch(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const originError = rejectCrossOrigin(req);
@@ -13,39 +24,79 @@ async function handlePatch(req: Request, { params }: { params: Promise<{ id: str
   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
 
   const { id } = await params;
-  if (id === session.staffId) return Response.json({ error: "CANNOT_DISABLE_SELF" }, { status: 409 });
+  if (id === session.staffId) return Response.json({ error: "CANNOT_MODIFY_SELF" }, { status: 409 });
+
   const body = await req.json().catch(() => ({}));
-  if (typeof body.active !== "boolean") return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  const hasActive = Object.prototype.hasOwnProperty.call(body, "active");
+  const hasRole = Object.prototype.hasOwnProperty.call(body, "role");
+  if (!hasActive && !hasRole) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (hasActive && typeof body.active !== "boolean") return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+
+  const requestedRole = hasRole ? requestedStaffRole(body.role) : null;
+  if (hasRole && !requestedRole) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (requestedRole && !canAssignStaffRole(session.role, requestedRole)) {
+    return Response.json({ error: "FORBIDDEN_ROLE" }, { status: 403 });
+  }
 
   try {
     const employee = await sql.begin(async (tx) => {
       const [target] = await tx`
-        select id,role from staff_users
+        select id,email,role,active,created_at from staff_users
         where id=${id} and establishment_id=${session.establishmentId}
         limit 1 for update
       `;
       if (!target) return null;
-      if (target.role === "OWNER" || target.role === "MANAGER") throw new Error("PROTECTED_ROLE");
+
+      const currentRole = String(target.role) as StaffRole;
+      if (!canManageStaffTarget(session.role, currentRole)) throw new Error("PROTECTED_ROLE");
+
+      const nextRole = requestedRole || currentRole;
+      const nextActive = hasActive ? Boolean(body.active) : Boolean(target.active);
+      const roleChanged = nextRole !== currentRole;
+      const activeChanged = nextActive !== Boolean(target.active);
+
+      if (!roleChanged && !activeChanged) return target;
 
       const [updated] = await tx`
         update staff_users
-        set active=${body.active},token_version=token_version+1,updated_at=now()
+        set
+          role=${nextRole},
+          active=${nextActive},
+          token_version=token_version+1,
+          updated_at=now()
         where id=${id} and establishment_id=${session.establishmentId}
         returning id,email,role,active,created_at
       `;
-      if (!body.active) {
+
+      if (!nextActive || roleChanged) {
         await tx`
           update password_reset_tokens
           set used_at=now()
           where staff_user_id=${id} and used_at is null
         `;
       }
+
       await tx`
         insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata)
-        values(${session.establishmentId},${session.staffId},'STAFF_ACCESS_UPDATE','staff_user',${id},${tx.json({ active: body.active })})
+        values(
+          ${session.establishmentId},
+          ${session.staffId},
+          'STAFF_UPDATE',
+          'staff_user',
+          ${id},
+          ${tx.json({
+            previousRole: currentRole,
+            role: nextRole,
+            previousActive: Boolean(target.active),
+            active: nextActive,
+            roleChanged,
+            activeChanged,
+          })}
+        )
       `;
       return updated;
     });
+
     return employee
       ? Response.json(employee)
       : Response.json({ error: "NOT_FOUND" }, { status: 404 });

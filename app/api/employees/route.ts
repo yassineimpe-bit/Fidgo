@@ -1,10 +1,16 @@
 import bcrypt from "bcryptjs";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canManageStaff } from "@/lib/loyalty";
+import { canAssignStaffRole, canManageStaff, type StaffRole } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
+
+function requestedStaffRole(value: unknown): StaffRole | null {
+  return value === "OWNER" || value === "MANAGER" || value === "EMPLOYEE" || value === "VIEWER"
+    ? value
+    : null;
+}
 
 async function handleGet(req: Request) {
   const session = await getSession();
@@ -30,18 +36,18 @@ async function handlePost(req: Request) {
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canManageStaff(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
 
-  // Chaque appel execute bcrypt.hash(..., 12), soit ~300 ms de CPU serveur.
-  // Sans plafond, un compte manager compromis saturait le runtime avec
-  // quelques dizaines de requetes paralleles, a cout nul pour l'attaquant.
   const limited = await enforceRateLimit(req, `employee-create:${session.staffId}`, 10, 60 * 60);
   if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  const role = body.role === "VIEWER" ? "VIEWER" : body.role === "EMPLOYEE" ? "EMPLOYEE" : null;
+  const role = requestedStaffRole(body.role);
   if (!role || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || password.length > 256) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  }
+  if (!canAssignStaffRole(session.role, role)) {
+    return Response.json({ error: "FORBIDDEN_ROLE" }, { status: 403 });
   }
 
   const hash = await bcrypt.hash(password, 12);
@@ -55,7 +61,14 @@ async function handlePost(req: Request) {
       const employee = rows[0];
       await tx`
         insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id, metadata)
-        values (${session.establishmentId}, ${session.staffId}, 'STAFF_CREATE', 'staff_user', ${employee.id}, ${tx.json({ role })})
+        values (
+          ${session.establishmentId},
+          ${session.staffId},
+          'STAFF_CREATE',
+          'staff_user',
+          ${employee.id},
+          ${tx.json({ role, active: true })}
+        )
       `;
       return rows;
     });

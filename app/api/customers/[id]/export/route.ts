@@ -1,13 +1,13 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canManageProgram } from "@/lib/loyalty";
+import { canManageCustomers } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 async function handleGet(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!canManageCustomers(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
 
   // Un export RGPD est unitaire et rare. Sans plafond, un compte OWNER/MANAGER
   // compromis aspirait la base clients entiere, fiche par fiche. 20/h couvre

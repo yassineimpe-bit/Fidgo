@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { boundedInt, boundedText } from "@/lib/input";
-import { canManageProgram, isValidIdempotencyKey } from "@/lib/loyalty";
+import { canManageCustomers, isValidIdempotencyKey } from "@/lib/loyalty";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { safeErrorCode, sanitizeAuditText, withApiErrorHandling } from "@/lib/observability";
@@ -16,7 +16,7 @@ async function handlePost(req: Request, { params }: { params: Promise<{ id: stri
 
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!canManageCustomers(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
 
   const limited = await enforceRateLimit(req, `card-adjust:${session.staffId}`, 30, 60);
   if (limited) return limited;

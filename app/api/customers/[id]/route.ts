@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { notifyAppleWalletRevocation } from "@/lib/apple-wallet";
 import { sql } from "@/lib/db";
 import { notifyGoogleWalletRevocation } from "@/lib/google-wallet";
-import { canManageProgram } from "@/lib/loyalty";
+import { canManageCustomers } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
@@ -13,7 +13,7 @@ async function handleDelete(req: Request, { params }: { params: Promise<{ id: st
   if (originError) return originError;
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401, headers: PRIVATE_HEADERS });
-  if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
+  if (!canManageCustomers(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
 
   // Transaction lourde et irreversible : un compte compromis pouvait effacer
   // toute la base clients en rafale, sans aucun frein.

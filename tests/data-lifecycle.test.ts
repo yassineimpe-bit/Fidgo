@@ -33,7 +33,7 @@ describe("data lifecycle database contract", () => {
   it("invalide les liens password reset lorsqu'un employé est désactivé", () => {
     expect(employeeRoute).toContain("update password_reset_tokens");
     expect(employeeRoute).toContain("where staff_user_id=");
-    expect(employeeRoute).toContain("if (!body.active)");
+    expect(employeeRoute).toContain("if (!nextActive || roleChanged)");
   });
 
   it("invalide aussi les liens password reset à la suspension du commerce", () => {
