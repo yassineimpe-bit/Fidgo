@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, origin, unique } from "./helpers";
+import { createMerchant, origin, testClientIp, unique } from "./helpers";
 
 async function tokenForNewCustomer(page: Page, label: string, slug: string) {
   const response = await page.request.post("/api/enroll", {
@@ -176,8 +176,8 @@ test("concurrence staff : deux EMPLOYEE sur la même carte ne doublent jamais un
     data: { email: `${unique("cashier-b")}@example.com`, password, role: "EMPLOYEE" },
   }).then((response) => response.json());
 
-  const firstContext = await browser.newContext();
-  const secondContext = await browser.newContext();
+  const firstContext = await browser.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
+  const secondContext = await browser.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
   const firstPage = await firstContext.newPage();
   const secondPage = await secondContext.newPage();
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
