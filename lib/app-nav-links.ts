@@ -7,6 +7,7 @@ export const APP_NAV_LINKS = [
   { href: "/dashboard/transactions", label: "Transactions" },
   { href: "/dashboard/employees", label: "Équipe" },
   { href: "/dashboard/settings", label: "Commerce" },
+  { href: "/dashboard/security", label: "Sécurité" },
   { href: "/dashboard/billing", label: "Facturation" },
   { href: "/dashboard/wallet", label: "Wallet" },
   { href: "/dashboard/poster", label: "Affiche QR" },
