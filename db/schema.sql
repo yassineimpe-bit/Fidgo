@@ -43,12 +43,25 @@ create table if not exists staff_users (
   email text not null,
   password_hash text not null,
   role text not null default 'EMPLOYEE' check (role in ('OWNER','MANAGER','EMPLOYEE','VIEWER')),
+  marketing_consent boolean not null default false,
+  marketing_consent_at timestamptz,
   active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create unique index if not exists staff_users_email_key on staff_users (lower(email));
 create unique index if not exists staff_users_one_owner_per_establishment on staff_users (establishment_id) where role = 'OWNER';
+
+create table if not exists legal_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  staff_user_id uuid not null references staff_users(id) on delete cascade,
+  document_type text not null check (document_type in ('CGU','CGV')),
+  document_version text not null,
+  source text not null default 'signup' check (source in ('signup','reauth','admin')),
+  accepted_at timestamptz not null default now(),
+  unique(staff_user_id, document_type, document_version)
+);
+create index if not exists legal_acceptances_staff_idx on legal_acceptances (staff_user_id, accepted_at desc);
 
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
