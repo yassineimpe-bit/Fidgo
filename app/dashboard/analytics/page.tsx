@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { getSession } from "@/lib/auth";
-import { canAccessBackoffice } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
 import { sql } from "@/lib/db";
 import { ANALYTICS_PERIODS, parseAnalyticsPeriod } from "@/lib/analytics-period";
 
