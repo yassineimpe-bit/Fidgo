@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { origin, randomizeClientIp, unique } from "./helpers";
+import { LEGAL_VERSION } from "../../lib/legal";
 
 // bcrypt tronque silencieusement tout au-delà de 72 octets : sans ce garde-fou,
 // deux mots de passe partageant les 72 mêmes premiers octets produiraient le
@@ -26,6 +27,9 @@ test("signup refuse un mot de passe dépassant la limite bcrypt de 72 octets", a
       restaurantName: `Commerce ${marker}`,
       email: `${marker}@example.com`,
       password: "a".repeat(72),
+      legalAccepted: true,
+      legalVersion: LEGAL_VERSION,
+      marketingOptIn: false,
     },
   });
   expect(exactly72.status()).toBe(200);
