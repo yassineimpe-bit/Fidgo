@@ -44,4 +44,13 @@ describe("password reset tokens", () => {
     expect(isValidNewPassword("12345678")).toBe(true);
     expect(isValidNewPassword("a-very-long-passphrase")).toBe(true);
   });
+
+  it("rejects passwords beyond bcrypt's 72-byte limit to avoid silent truncation", () => {
+    expect(isValidNewPassword("a".repeat(72))).toBe(true);
+    expect(isValidNewPassword("a".repeat(73))).toBe(false);
+    // Les caractères multi-octets (UTF-8) doivent compter en octets, pas en
+    // unités de code JS : "é" (U+00E9) pèse 2 octets.
+    expect(isValidNewPassword("é".repeat(36))).toBe(true);
+    expect(isValidNewPassword("é".repeat(37))).toBe(false);
+  });
 });

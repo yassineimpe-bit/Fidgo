@@ -19,10 +19,17 @@ export function createPasswordResetToken(now = Date.now()) {
   };
 }
 
+const BCRYPT_MAX_PASSWORD_BYTES = 72;
+
 /**
- * Politique de mot de passe identique à l'inscription (app/api/auth/signup) :
- * une seule politique, jamais deux divergentes.
+ * Politique de mot de passe partagée par signup, reset et changement de mot
+ * de passe connecté : une seule source, jamais deux règles divergentes.
+ * bcrypt ignore silencieusement tout octet au-delà de 72 : sans ce plafond,
+ * deux mots de passe partageant les 72 mêmes premiers octets produisent le
+ * même hash sans que l'utilisateur ni le code ne le sache.
  */
 export function isValidNewPassword(password: string) {
-  return typeof password === "string" && password.length >= 8;
+  return typeof password === "string"
+    && password.length >= 8
+    && new TextEncoder().encode(password).length <= BCRYPT_MAX_PASSWORD_BYTES;
 }
