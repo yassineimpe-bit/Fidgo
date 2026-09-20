@@ -108,3 +108,18 @@ Puis vérifier `/api/health` avec l'application raccordée à la base restaurée
 Le plan Neon actuel conserve l'historique point-in-time seulement quelques heures et n'autorise pas le planning natif des snapshots. Le backup logique GitHub est donc la protection principale à moyen terme.
 
 Si Retiko passe sur un plan Neon avec snapshots planifiés, conserver ce workflow comme **copie indépendante**.
+
+
+## Extension Neon gérée par la plateforme
+
+La base de production contient `pg_session_jwt`, une extension Neon qui n'existe pas dans l'image PostgreSQL officielle utilisée pour le restore drill.
+
+Le dump logique Retiko l'exclut volontairement avec :
+
+```text
+--exclude-extension=pg_session_jwt
+```
+
+Les données, tables, contraintes, index, séquences et autres extensions applicatives restent sauvegardés. `pg_session_jwt` est considéré comme une dépendance de plateforme à reprovisionner par Neon sur une cible Neon, et non comme une donnée métier Retiko.
+
+Cette exclusion permet au restore drill de vérifier chaque jour que la sauvegarde Retiko est réellement restaurable dans PostgreSQL 17 standard, au lieu de produire un faux échec uniquement parce que l'image Docker ne contient pas une extension propriétaire du fournisseur.
