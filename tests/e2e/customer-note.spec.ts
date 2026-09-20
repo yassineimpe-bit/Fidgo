@@ -7,6 +7,7 @@ test("note interne : modification, audit sans texte libre, export et effacement"
   await enrollCustomer(page, "Nora", `${unique("note")}@example.com`);
   await page.goto("/dashboard/clients");
   await page.getByRole("link", { name: "Nora" }).click();
+  await page.waitForURL(/\/dashboard\/clients\/[0-9a-f-]+$/);
   const customerId = new URL(page.url()).pathname.split("/").at(-1)!;
 
   await page.getByLabel("Visible par l’équipe, jamais par le client.").fill("Préférence de visite le mardi");
@@ -50,6 +51,7 @@ test("note interne : OWNER/MANAGER seulement, tenant strict et validation serveu
   await enrollCustomer(page, "Aya", `${unique("note-a")}@example.com`);
   await page.goto("/dashboard/clients");
   await page.getByRole("link", { name: "Aya" }).click();
+  await page.waitForURL(/\/dashboard\/clients\/[0-9a-f-]+$/);
   const customerId = new URL(page.url()).pathname.split("/").at(-1)!;
   const url = `/api/customers/${customerId}/note`;
 
