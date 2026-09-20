@@ -2,9 +2,43 @@ import { getBillingRuntimeStatus } from "@/lib/billing";
 import { databaseConfigured, sql } from "@/lib/db";
 import { recoveryEmailConfigured } from "@/lib/email";
 import { healthSchemaIsReady } from "@/lib/health-schema";
+import { logHealthSnapshot } from "@/lib/observability";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
+
+function version() {
+  return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev";
+}
+
+function healthResponse(
+  body: {
+    ok: boolean;
+    service: string;
+    database: "up" | "down" | "unknown";
+    schema: "up" | "down" | "unknown";
+    auth: "up" | "down";
+    wallet: { https: boolean; apple: boolean; google: boolean };
+    billing: { enabled: boolean; configured: boolean };
+    email: { recovery: boolean; passwordReset: boolean };
+    serverMs: number;
+  },
+  status: number,
+) {
+  logHealthSnapshot({
+    ok: body.ok,
+    database: body.database,
+    schema: body.schema,
+    auth: body.auth,
+    serverMs: body.serverMs,
+  });
+
+  return Response.json({
+    ...body,
+    version: version(),
+    checkedAt: new Date().toISOString(),
+  }, { status, headers: { "cache-control": "no-store" } });
+}
 
 export async function GET() {
   const started = Date.now();
@@ -21,7 +55,7 @@ export async function GET() {
   const emailState = { recovery: emailConfigured, passwordReset: emailConfigured };
 
   if (!databaseConfigured || !authConfigured) {
-    return Response.json({
+    return healthResponse({
       ok: false,
       service: "retiko",
       database: databaseConfigured ? "unknown" : "down",
@@ -31,7 +65,7 @@ export async function GET() {
       billing: billingState,
       email: emailState,
       serverMs: Date.now() - started,
-    }, { status: 503, headers: { "cache-control": "no-store" } });
+    }, 503);
   }
 
   try {
@@ -84,7 +118,7 @@ export async function GET() {
 
     const schemaReady = healthSchemaIsReady(schema, process.env.STRIPE_ENABLED === "true");
 
-    return Response.json({
+    return healthResponse({
       ok: schemaReady,
       service: "retiko",
       database: "up",
@@ -94,9 +128,9 @@ export async function GET() {
       billing: billingState,
       email: emailState,
       serverMs: Date.now() - started,
-    }, { status: schemaReady ? 200 : 503, headers: { "cache-control": "no-store" } });
+    }, schemaReady ? 200 : 503);
   } catch {
-    return Response.json({
+    return healthResponse({
       ok: false,
       service: "retiko",
       database: "down",
@@ -106,6 +140,6 @@ export async function GET() {
       billing: billingState,
       email: emailState,
       serverMs: Date.now() - started,
-    }, { status: 503, headers: { "cache-control": "no-store" } });
+    }, 503);
   }
 }
