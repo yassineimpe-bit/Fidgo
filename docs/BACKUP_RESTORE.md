@@ -12,7 +12,7 @@ Le workflow `.github/workflows/database-backup.yml` s'exécute chaque jour à **
 
 Il effectue dans cet ordre :
 
-1. connexion à la base de production via le secret GitHub Environment `production / DATABASE_URL` ;
+1. GitHub Actions demande un jeton OIDC signé pour le workflow de backup sur `main` ;\n2. Retiko vérifie cryptographiquement le dépôt, le workflow, la branche, l'environnement et le type d'événement avant de remettre la connexion PostgreSQL au runner ;
 2. `pg_dump` PostgreSQL 17 au format custom ;
 3. validation de l'archive avec `pg_restore --list` ;
 4. restauration intégrale dans une PostgreSQL 17 jetable du runner ;
@@ -23,6 +23,25 @@ Il effectue dans cet ordre :
 9. conservation pendant **14 jours**.
 
 Un backup n'est donc conservé que si le dump est lisible, restaurable et si les contrôles d'intégrité Retiko passent.
+
+## Authentification GitHub → Retiko
+
+Aucun mot de passe PostgreSQL n'est stocké dans GitHub Actions.
+
+Le job `backup-restore` possède uniquement la permission GitHub `id-token: write`. Il demande un jeton OIDC avec l'audience `retiko-backup`, puis appelle `POST /api/internal/backup-credentials`.
+
+Retiko vérifie notamment :
+
+- issuer GitHub Actions officiel ;
+- audience exacte `retiko-backup` ;
+- dépôt `yassineimpe-bit/Fidgo` et son repository ID ;
+- branche `refs/heads/main` ;
+- workflow exact `.github/workflows/database-backup.yml` sur `main` ;
+- environnement GitHub `production` ;
+- runner GitHub-hosted ;
+- événements autorisés : `push`, `schedule`, `workflow_dispatch`.
+
+Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner et n'est jamais enregistré comme secret GitHub.
 
 ## Chiffrement
 
@@ -80,7 +99,7 @@ Puis vérifier `/api/health` avec l'application raccordée à la base restaurée
 - Ne jamais restaurer directement par-dessus la production pour un test.
 - Toujours restaurer dans une base vide ou une infrastructure isolée.
 - Ne jamais uploader un `.dump` non chiffré.
-- Ne jamais écrire `DATABASE_URL` dans les logs.
+- Ne jamais écrire `DATABASE_URL` dans les logs.\n- Ne jamais élargir la politique OIDC à une PR, un fork ou un workflow différent sans revue de sécurité.
 - Ne jamais stocker la clé privée dans le dépôt.
 - Une rotation de la clé publique nécessite de conserver les anciennes clés privées tant que les artifacts correspondants existent.
 
