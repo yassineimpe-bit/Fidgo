@@ -209,6 +209,13 @@ def run_router(agent: str, task: str) -> tuple[int, str]:
         combined = "\n".join(
             part for part in (result.stdout.strip(), result.stderr.strip()) if part
         )
+
+        # router.py is an interactive CLI and may exit 0 even when every
+        # configured agent failed. Treat its explicit failure summary as an
+        # actual worker failure so the GitHub issue is not closed as successful.
+        if "Tous les agents disponibles ont échoué." in combined:
+            return 1, combined
+
         return result.returncode, combined
     except subprocess.TimeoutExpired as exc:
         partial = "\n".join(
