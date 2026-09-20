@@ -41,7 +41,7 @@ test("équipe pilote : un Owner crée un Employé scanner qui se connecte et cr�
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
     await employeePage.getByRole("button", { name: "Se connecter" }).click();
-    await expect(employeePage).toHaveURL(/\/dashboard$/);
+    await expect(employeePage).toHaveURL(/\/s$/);
 
     // Chromium CI n'a pas de caméra. Le refus simulé doit conserver le parcours
     // caisse manuel, puis l'Employé doit pouvoir scanner/créditer sans droits admin.
