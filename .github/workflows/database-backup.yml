@@ -127,7 +127,7 @@ jobs:
           set -euo pipefail
           mkdir -p backup-output
 
-          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL"               --format=custom               --compress=9               --no-owner               --no-privileges               --file=/backup/retiko.dump'
+          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL"               --format=custom               --compress=9               --exclude-extension=pg_session_jwt               --no-owner               --no-privileges               --file=/backup/retiko.dump'
 
           test -s backup-output/retiko.dump
           size=$(stat -c%s backup-output/retiko.dump)
