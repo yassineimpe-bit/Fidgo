@@ -5,6 +5,10 @@ const CARD_TOKEN = /\bLOY1:[A-Za-z0-9_-]{20,64}\b/g;
 const SECRET = /\b(?:re_|Bearer\s+)[A-Za-z0-9._-]{12,}\b/gi;
 const SENSITIVE_LINK = /https?:\/\/[^\s]+\/(?:c|recover)\/[A-Za-z0-9_-]{20,}/gi;
 
+function deploymentVersion(): string {
+  return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev";
+}
+
 /**
  * Réduit une URL/route à une forme exploitable dans les logs sans y laisser
  * des identifiants de carte, liens magiques, UUID client ou autres segments
@@ -64,22 +68,74 @@ export function safeErrorCode(error: unknown, fallback: string): string {
   return `${fallback}_${fingerprint}`.slice(0, 80);
 }
 
+export function logApiMetric(route: string, status: number, durationMs: number) {
+  const payload = {
+    route: sanitizeAuditText(route, 80) || "UNKNOWN",
+    status,
+    durationMs: Math.max(0, Math.round(durationMs)),
+    slow: durationMs >= 1500,
+    version: deploymentVersion(),
+  };
+
+  if (status >= 500) {
+    console.error("RETIKO_API_METRIC", payload);
+  } else if (payload.slow) {
+    console.warn("RETIKO_API_METRIC", payload);
+  } else {
+    console.info("RETIKO_API_METRIC", payload);
+  }
+}
+
+export function logHealthSnapshot(input: {
+  ok: boolean;
+  database: string;
+  schema: string;
+  auth: string;
+  serverMs: number;
+}) {
+  const payload = {
+    ok: input.ok,
+    database: sanitizeAuditText(input.database, 32),
+    schema: sanitizeAuditText(input.schema, 32),
+    auth: sanitizeAuditText(input.auth, 32),
+    serverMs: Math.max(0, Math.round(input.serverMs)),
+    version: deploymentVersion(),
+  };
+
+  if (!input.ok) {
+    console.error("RETIKO_HEALTH_DEGRADED", payload);
+  } else if (payload.serverMs >= 1000) {
+    console.warn("RETIKO_HEALTH_SLOW", payload);
+  } else {
+    console.info("RETIKO_HEALTH_OK", payload);
+  }
+}
+
 /**
  * Filet de sécurité pour les routes API : une panne infra (base injoignable,
  * pool épuisé, timeout réseau) survenant avant ou après la logique métier ne
  * doit jamais atteindre le client sous forme de page vide / réponse non-JSON.
  * Les erreurs métier attendues (CARD_NOT_FOUND, COOLDOWN, ...) sont déjà
  * gérées par les catch internes de chaque route et ne remontent pas ici.
+ *
+ * Chaque route enveloppée émet aussi une métrique structurée (status +
+ * durationMs) exploitable directement dans les Runtime Logs Vercel. Les
+ * routes sensibles comme SCAN deviennent ainsi observables sans journaliser
+ * de token, d'identifiant client ou de contenu métier.
  */
 export function withApiErrorHandling<A extends unknown[]>(
   routeName: string,
   handler: (...args: A) => Promise<Response>,
 ): (...args: A) => Promise<Response> {
   return async (...args: A) => {
+    const started = Date.now();
     try {
-      return await handler(...args);
+      const response = await handler(...args);
+      logApiMetric(routeName, response.status, Date.now() - started);
+      return response;
     } catch (error) {
       console.error(`${routeName}_FAILED`, { code: safeErrorCode(error, `${routeName}_FAILED`) });
+      logApiMetric(routeName, 500, Date.now() - started);
       // Header inlined (plutôt qu'importé de lib/security) : ce module est
       // aussi importé côté client (sanitizeAuditText), et lib/security tire
       // node:crypto, ce que le bundle navigateur ne peut pas résoudre.
