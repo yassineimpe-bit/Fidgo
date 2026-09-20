@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
+import { createMerchant, enrollCustomer, origin, testClientIp, unique } from "./helpers";
 
 test.setTimeout(60_000);
 
@@ -7,9 +7,12 @@ test("export clients : recherche courante, colonnes, tenant et aucun token compl
   await createMerchant(page, "customers-csv-a");
   const firstEmail = `${unique("csv-marie")}@example.com`;
   const { cardUrl, shortCode } = await enrollCustomer(page, "Marie", firstEmail);
-  await page.goto("/dashboard");
+  const restaurant = await (await page.request.get("/api/restaurant")).json();
   const otherEmail = `${unique("csv-lina")}@example.com`;
-  await enrollCustomer(page, "Lina", otherEmail);
+  const secondEnroll = await page.request.post("/api/enroll", {
+    headers: { origin }, data: { slug: restaurant.slug, firstName: "Lina", email: otherEmail },
+  });
+  expect(secondEnroll.status()).toBe(201);
   await page.goto("/dashboard/clients?q=Marie");
   const link = page.getByRole("link", { name: "Télécharger le CSV clients" });
   await expect(link).toHaveAttribute("href", "/api/customers/export?q=Marie");
@@ -28,7 +31,15 @@ test("export clients : recherche courante, colonnes, tenant et aucun token compl
   const otherContext = await page.context().browser()!.newContext();
   const otherPage = await otherContext.newPage();
   try {
-    await createMerchant(otherPage, "customers-csv-b");
+    const signup = await otherPage.request.post("/api/auth/signup", {
+      headers: { origin, "x-real-ip": testClientIp() },
+      data: {
+        restaurantName: `Commerce ${unique("customers-csv-b")}`,
+        email: `${unique("customers-csv-b")}@example.com`,
+        password: "Password-test-123!",
+      },
+    });
+    expect(signup.ok()).toBeTruthy();
     const foreign = await otherPage.request.get("/api/customers/export");
     expect(foreign.status()).toBe(200);
     expect(await foreign.text()).not.toContain(firstEmail);
