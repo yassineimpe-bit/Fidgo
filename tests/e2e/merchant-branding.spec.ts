@@ -5,6 +5,7 @@ import { origin, testClientIp, unique } from "./helpers";
 const BRAND_NAME = "Le Café d'Ussel";
 const BRAND_COLOR = "#7A3E2D";
 const REWARD_LABEL = "Le 11e offert";
+const LOGO_URL = "https://example.com/retiko-test-logo.png";
 
 function hexToRgb(hex: string) {
   const value = hex.replace("#", "");
@@ -38,6 +39,7 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
 
   test.beforeAll(async ({ browser }: { browser: Browser }) => {
     merchantContext = await browser.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
+    await merchantContext.route(LOGO_URL, (route) => route.fulfill({ path: `${process.cwd()}/public/icon-192.png`, contentType: "image/png" }));
     merchantPage = await merchantContext.newPage();
 
     const marker = unique("cafe-ussel");
@@ -92,6 +94,61 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
     // noir (illisible) ni casser sur une couleur imprévue.
     expect(contrastTextColor(BRAND_COLOR)).toBe("#ffffff");
     await expect(preview).toHaveCSS("color", "rgb(255, 255, 255)");
+  });
+
+  test("identité : logo et coordonnées persistent, et une requête invalide ne les efface pas", async () => {
+    await merchantPage.goto("/dashboard/settings");
+    await merchantPage.getByLabel("URL du logo").fill(LOGO_URL);
+    await merchantPage.getByLabel("Adresse").fill("12 rue de la République, 19200 Ussel");
+    await merchantPage.getByLabel("Téléphone").fill("05 55 00 00 00");
+    await merchantPage.getByLabel("Instagram").fill("@cafe_ussel");
+    await merchantPage.getByLabel("Site web").fill("https://example.com/cafe");
+    await merchantPage.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(merchantPage.getByText("Commerce enregistré.")).toBeVisible();
+
+    await merchantPage.reload();
+    await expect(merchantPage.getByLabel("URL du logo")).toHaveValue(LOGO_URL);
+    await expect(merchantPage.getByLabel("Adresse")).toHaveValue("12 rue de la République, 19200 Ussel");
+    await expect(merchantPage.getByLabel("Téléphone")).toHaveValue("05 55 00 00 00");
+    await expect(merchantPage.getByLabel("Instagram")).toHaveValue("@cafe_ussel");
+    await expect(merchantPage.getByLabel("Site web")).toHaveValue("https://example.com/cafe");
+
+    for (const data of [
+      { logoUrl: "http://example.com/logo.png" },
+      { website: "javascript:alert(1)" },
+      { primaryColor: "red" },
+      { name: "  " },
+    ]) {
+      const rejected = await merchantPage.request.patch("/api/restaurant", {
+        headers: { origin }, data,
+      });
+      expect(rejected.status()).toBe(400);
+    }
+    // Un PATCH partiel légitime n'efface pas non plus les autres réglages.
+    const partial = await merchantPage.request.patch("/api/restaurant", {
+      headers: { origin }, data: { name: BRAND_NAME },
+    });
+    expect(partial.ok()).toBeTruthy();
+    const saved = await merchantPage.request.get("/api/restaurant").then((response) => response.json());
+    expect(saved).toMatchObject({
+      name: BRAND_NAME,
+      logo_url: LOGO_URL,
+      primary_color: BRAND_COLOR,
+      address: "12 rue de la République, 19200 Ussel",
+      phone: "05 55 00 00 00",
+      instagram: "@cafe_ussel",
+      website: "https://example.com/cafe",
+    });
+
+    const joinPage = await merchantContext.newPage();
+    try {
+      await joinPage.goto(`/j/${slug}`);
+      await expect(joinPage.locator(`img[src="${LOGO_URL}"]`)).toBeVisible();
+    } finally {
+      await joinPage.close();
+    }
+    await merchantPage.goto("/dashboard/poster");
+    await expect(merchantPage.locator(`.poster img[src="${LOGO_URL}"]`)).toBeVisible();
   });
 
   test("affiche : formats et styles reprennent la couleur et affichent le vrai QR", async () => {
