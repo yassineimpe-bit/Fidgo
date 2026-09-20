@@ -2,17 +2,25 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { getSession } from "@/lib/auth";
+import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
+import { canManageProgram } from "@/lib/loyalty";
 import { transactionTypeLabel } from "@/lib/transaction-history";
+
+export const dynamic = "force-dynamic";
 
 export default async function CustomerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string | string[] }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
   const { id } = await params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
+  const requestedPage = parseCustomerHistoryPage((await searchParams).page);
 
   const [restaurant] = await sql`
     select name from establishments where id=${session.establishmentId}
@@ -30,29 +38,43 @@ export default async function CustomerDetailPage({
   `;
   if (!customer) notFound();
 
+  const [stats] = await sql`
+    select
+      count(*)::int as count,
+      count(*) filter (where t.type='earn' and reversal.id is null)::int as earns,
+      count(*) filter (where t.type='redeem' and reversal.id is null)::int as redeems,
+      count(distinct (t.created_at at time zone 'Europe/Paris')::date)
+        filter (where t.type='earn' and reversal.id is null)::int as visit_days,
+      coalesce(sum(t.delta) filter (where t.type='earn' and reversal.id is null),0)::int as units_earned,
+      min(t.created_at) filter (where t.type='earn' and reversal.id is null) as first_visit,
+      max(t.created_at) filter (where t.type='earn' and reversal.id is null) as last_visit,
+      max(t.created_at) as last_transaction
+    from transactions t
+    left join transactions reversal on reversal.reversed_transaction_id=t.id
+      and reversal.establishment_id=t.establishment_id and reversal.type='reversal'
+    where t.establishment_id=${session.establishmentId}
+      and t.card_id=${customer.card_id}
+  `;
+  const count = Number(stats?.count || 0);
+  const totalPages = Math.max(1, Math.ceil(count / CUSTOMER_HISTORY_PAGE_SIZE));
+  const currentPage = Math.min(requestedPage, totalPages);
+  const offset = (currentPage - 1) * CUSTOMER_HISTORY_PAGE_SIZE;
+
   const transactions = await sql`
     select
       t.id,t.type,t.delta,t.balance_after,t.unit,t.created_at,
       st.email as staff_email,
-      exists(select 1 from transactions r where r.reversed_transaction_id=t.id) as reversed
+      exists(select 1 from transactions r where r.reversed_transaction_id=t.id
+        and r.establishment_id=t.establishment_id) as reversed
     from transactions t
-    left join staff_users st on st.id=t.staff_user_id
+    left join staff_users st on st.id=t.staff_user_id and st.establishment_id=t.establishment_id
     where t.establishment_id=${session.establishmentId}
       and t.card_id=${customer.card_id}
-    order by t.created_at desc
-    limit 50
+    order by t.created_at desc,t.id desc
+    limit ${CUSTOMER_HISTORY_PAGE_SIZE}
+    offset ${offset}
   `;
-
-  const total = await sql`
-    select
-      count(*)::int as count,
-      count(*) filter (where type='earn')::int as earns,
-      count(*) filter (where type='redeem')::int as redeems
-    from transactions
-    where establishment_id=${session.establishmentId}
-      and card_id=${customer.card_id}
-  `;
-  const stats = total[0] || { count: 0, earns: 0, redeems: 0 };
+  const formatDate = (value: unknown) => value ? new Date(String(value)).toLocaleString("fr-FR") : "Aucune";
 
   return <>
     <AppNav restaurantName={String(restaurant?.name || "Retiko")}/>
@@ -65,15 +87,26 @@ export default async function CustomerDetailPage({
         </div>
         <div className="actions">
           <Link className="btn" href="/dashboard/clients">← Clients</Link>
-          <a className="btn" href={`/api/customers/${customer.id}/export`}>Exporter RGPD</a>
+          {customer.active && <Link className="btn btn-primary" href="/s">Ouvrir le scanner · {customer.short_code}</Link>}
+          {canManageProgram(session.role) && <a className="btn" href={`/api/customers/${customer.id}/export`}>Exporter RGPD</a>}
         </div>
       </div>
 
       <section className="grid grid-4">
         <div className="card metric"><strong>{customer.balance ?? 0}</strong><span>solde actuel</span></div>
-        <div className="card metric"><strong>{stats.count}</strong><span>transactions</span></div>
-        <div className="card metric"><strong>{stats.earns}</strong><span>crédits</span></div>
-        <div className="card metric"><strong>{stats.redeems}</strong><span>récompenses</span></div>
+        <div className="card metric"><strong>{stats?.visit_days ?? 0}</strong><span>jours de visite crédités</span></div>
+        <div className="card metric"><strong>{stats?.units_earned ?? 0}</strong><span>unités créditées non annulées</span></div>
+        <div className="card metric"><strong>{stats?.redeems ?? 0}</strong><span>récompenses consommées</span></div>
+      </section>
+
+      <section className="card" style={{marginTop:18}}>
+        <h3>Activité</h3>
+        <dl className="grid grid-3">
+          <div><dt>Première visite créditée</dt><dd>{formatDate(stats?.first_visit)}</dd></div>
+          <div><dt>Dernière visite créditée</dt><dd>{formatDate(stats?.last_visit)}</dd></div>
+          <div><dt>Dernière transaction</dt><dd>{formatDate(stats?.last_transaction)}</dd></div>
+        </dl>
+        <p className="muted" style={{marginBottom:0}}>Une visite correspond ici à un jour avec au moins un crédit non annulé. Les transactions restent détaillées ci-dessous.</p>
       </section>
 
       <section className="grid grid-2" style={{marginTop:18}}>
@@ -82,7 +115,7 @@ export default async function CustomerDetailPage({
           <dl>
             <dt>Email</dt><dd>{customer.email || "Non fourni"}</dd>
             <dt>Téléphone</dt><dd>{customer.phone || "Non fourni"}</dd>
-            <dt>Marketing</dt><dd>{customer.marketing_consent ? "Consentement actif" : "Non consenti"}</dd>
+            <dt>Consentement marketing</dt><dd>{customer.marketing_consent ? "Actif" : "Non consenti"}</dd>
             <dt>Inscrit le</dt><dd>{new Date(String(customer.created_at)).toLocaleString("fr-FR")}</dd>
           </dl>
         </div>
@@ -97,7 +130,7 @@ export default async function CustomerDetailPage({
       </section>
 
       <section className="card" style={{marginTop:18}}>
-        <div className="section-head"><div><h3>Historique récent</h3><p className="muted">50 dernières écritures du ledger de cette carte.</p></div></div>
+        <div className="section-head"><div><h3>Historique des transactions</h3><p className="muted">{count} écriture{count > 1 ? "s" : ""} · page {currentPage}/{totalPages} · 50 par page.</p></div></div>
         {transactions.length === 0
           ? <div className="empty-state"><strong>Aucune transaction.</strong><p>Le premier passage apparaîtra ici.</p></div>
           : <div className="table-wrap"><table>
@@ -111,6 +144,11 @@ export default async function CustomerDetailPage({
               </tr>)}</tbody>
             </table></div>}
       </section>
+      {totalPages > 1 && <nav className="actions" aria-label="Pagination de l’historique client" style={{justifyContent:"space-between"}}>
+        <div>{currentPage > 1 && <Link className="btn" href={customerHistoryHref(id,currentPage-1)}>← Précédent</Link>}</div>
+        <span className="muted">Page {currentPage} sur {totalPages}</span>
+        <div>{currentPage < totalPages && <Link className="btn" href={customerHistoryHref(id,currentPage+1)}>Suivant →</Link>}</div>
+      </nav>}
     </main>
   </>;
 }
