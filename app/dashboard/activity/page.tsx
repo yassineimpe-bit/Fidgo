@@ -13,6 +13,7 @@ type Row = {
   entity_id?: string | null;
   created_at: string;
   staff_email?: string | null;
+  target_email?: string | null;
 };
 
 function href(filters: ReturnType<typeof parseActivityFilters>, page: number) {
@@ -40,7 +41,9 @@ export default async function ActivityPage({
   const [countRow] = await sql`
     select count(*)::int as total
     from audit_logs a
-    left join staff_users s on s.id=a.staff_user_id
+    left join staff_users s on s.id=a.staff_user_id and s.establishment_id=a.establishment_id
+    left join staff_users target on target.id::text=a.entity_id
+      and a.entity_type='staff_user' and target.establishment_id=a.establishment_id
     where a.establishment_id=${session.establishmentId}
       and a.created_at >= now() - (${filters.period.days}::int * interval '1 day')
       and (
@@ -48,6 +51,7 @@ export default async function ActivityPage({
         or lower(a.action) like ${pattern}
         or lower(coalesce(a.entity_type,'')) like ${pattern}
         or lower(coalesce(s.email,'')) like ${pattern}
+        or lower(coalesce(target.email,'')) like ${pattern}
       )
   `;
   const total = Number(countRow?.total || 0);
@@ -56,9 +60,12 @@ export default async function ActivityPage({
   const offset = (currentPage - 1) * filters.limit;
 
   const raw = await sql`
-    select a.id,a.action,a.entity_type,a.entity_id,a.created_at,s.email as staff_email
+    select a.id,a.action,a.entity_type,a.entity_id,a.created_at,
+      s.email as staff_email,target.email as target_email
     from audit_logs a
-    left join staff_users s on s.id=a.staff_user_id
+    left join staff_users s on s.id=a.staff_user_id and s.establishment_id=a.establishment_id
+    left join staff_users target on target.id::text=a.entity_id
+      and a.entity_type='staff_user' and target.establishment_id=a.establishment_id
     where a.establishment_id=${session.establishmentId}
       and a.created_at >= now() - (${filters.period.days}::int * interval '1 day')
       and (
@@ -66,6 +73,7 @@ export default async function ActivityPage({
         or lower(a.action) like ${pattern}
         or lower(coalesce(a.entity_type,'')) like ${pattern}
         or lower(coalesce(s.email,'')) like ${pattern}
+        or lower(coalesce(target.email,'')) like ${pattern}
       )
     order by a.created_at desc
     limit ${filters.limit}
@@ -79,6 +87,7 @@ export default async function ActivityPage({
     entity_id: row.entity_id ? String(row.entity_id) : null,
     created_at: String(row.created_at),
     staff_email: row.staff_email ? String(row.staff_email) : null,
+    target_email: row.target_email ? String(row.target_email) : null,
   }));
 
   return <>
@@ -122,7 +131,7 @@ export default async function ActivityPage({
                 <td>{new Date(row.created_at).toLocaleString("fr-FR")}</td>
                 <td><strong>{activityActionLabel(row.action)}</strong><div className="muted">{row.action}</div></td>
                 <td>{row.staff_email || "système"}</td>
-                <td>{row.entity_type || "—"}{row.entity_id ? <div className="muted">{row.entity_id.slice(0, 12)}…</div> : null}</td>
+                <td>{row.target_email || row.entity_type || "—"}{row.entity_id && !row.target_email ? <div className="muted">{row.entity_id.slice(0, 12)}…</div> : null}</td>
               </tr>)}</tbody>
             </table></div>}
       </section>
