@@ -36,7 +36,19 @@ test("création établissement : compte, OWNER, programme et essai sont atomique
     expect(joinPath).toBe(`/j/${rows[0].slug}`);
     expect((await sql`select count(*)::int as count from staff_users where establishment_id=${rows[0].id}`)[0].count).toBe(1);
 
-    const acceptances = await sql`\n      select document_type,document_version,source,accepted_at\n      from legal_acceptances\n      where staff_user_id=${rows[0].owner_id}\n      order by document_type\n    `;\n    expect(acceptances.map((row) => [row.document_type, row.document_version, row.source])).toEqual([\n      ["CGU", CGU_VERSION, "signup"],\n      ["CGV", CGV_VERSION, "signup"],\n    ]);\n    expect(acceptances.every((row) => row.accepted_at instanceof Date)).toBe(true);\n\n    const duplicateName = `Commerce ${unique("duplicate-establishment")}`;
+    const acceptances = await sql`
+      select document_type,document_version,source,accepted_at
+      from legal_acceptances
+      where staff_user_id=${rows[0].owner_id}
+      order by document_type
+    `;
+    expect(acceptances.map((row) => [row.document_type, row.document_version, row.source])).toEqual([
+      ["CGU", CGU_VERSION, "signup"],
+      ["CGV", CGV_VERSION, "signup"],
+    ]);
+    expect(acceptances.every((row) => row.accepted_at instanceof Date)).toBe(true);
+
+    const duplicateName = `Commerce ${unique("duplicate-establishment")}`;
     const duplicate = await page.request.post("/api/auth/signup", {
       headers: { origin },
       data: {
