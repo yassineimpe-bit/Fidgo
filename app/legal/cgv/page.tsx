@@ -35,8 +35,8 @@ export default function CgvPage() {
       <h2>9. Durée et résiliation</h2>
       <p>L’offre Flex peut être résiliée pour la prochaine période de facturation selon les modalités affichées dans le compte. L’offre Retiko 12 comporte un engagement initial de 12 mois. L’offre annuelle couvre la période annuelle payée. Les conditions particulières de la commande prévalent en cas de différence.</p>
 
-      <h2>10. Droit de rétractation des professionnels</h2>
-      <p>Les règles de rétractation réservées aux consommateurs ne s’appliquent pas en principe aux contrats conclus pour les besoins professionnels. Lorsqu’un texte accorde exceptionnellement un droit de rétractation à un professionnel dans une situation déterminée, ce droit demeure applicable dans les conditions prévues par ce texte.</p>
+      <h2>10. Contrats hors établissement et rétractation</h2>
+      <p>Les règles protectrices propres aux consommateurs ne s’appliquent pas de manière générale aux contrats professionnels. Toutefois, l’article L. 221-3 du Code de la consommation étend certaines de ces règles aux contrats conclus hors établissement entre professionnels lorsque l’objet du contrat n’entre pas dans le champ de l’activité principale du professionnel sollicité et que celui-ci emploie au plus cinq salariés. Lorsque ces conditions sont réunies, les règles légales applicables, notamment celles relatives au délai de rétractation et au paiement hors établissement, prévalent sur les présentes CGV.</p>
 
       <h2>11. Données et fin de contrat</h2>
       <p>La restitution, l’export, la suppression ou la pseudonymisation des données suivent le contrat, l’annexe RGPD et la politique de cycle de vie applicable. Les sauvegardes résiduelles suivent leur cycle technique normal de rétention.</p>
