@@ -55,7 +55,8 @@
 - [ ] compléter les coordonnées légales exactes des hébergeurs et sous-traitants réellement activés
 - [ ] documenter les régions d'hébergement et mécanismes de transfert hors EEE le cas échéant
 - [ ] faire relire CGU, CGV, DPA et politique de confidentialité par un professionnel du droit
-- [ ] valider le régime de rétractation éventuellement applicable à certains petits professionnels démarchés hors établissement
+- [ ] valider le régime éventuellement applicable à certains petits professionnels démarchés hors établissement (rétractation, informations précontractuelles et paiement J+7 le cas échéant)
+- [ ] préparer le formulaire de rétractation et la preuve de remise si ce régime s'applique
 - [ ] valider la clause définitive de responsabilité et de juridiction
 - [ ] signer l'accord pilote et le DPA avec chaque commerce pilote lorsque requis
 
