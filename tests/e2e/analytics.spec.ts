@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
+import { createMerchant, currentCustomerId, enrollCustomer, origin, unique } from "./helpers";
 
 test("analytics : période sélectionnable et état vide exploitable", async ({ page }) => {
   await createMerchant(page, "analytics");
@@ -20,9 +20,7 @@ test("dashboard : scans du jour et récompenses disponibles reflètent l'activit
   const enrolled = await enrollCustomer(page, "Métriques", `${unique("metrics-client")}@example.com`);
   const token = enrolled.cardUrl.split("/c/")[1];
 
-  const customers = await page.request.get("/api/customers").then((response) => response.json());
-  const customerId = customers.items?.[0]?.id ?? customers[0]?.id;
-  expect(customerId).toBeTruthy();
+  const customerId = await currentCustomerId(page);
 
   const program = await page.request.get("/api/program").then((response) => response.json());
   const adjusted = await page.request.post(`/api/customers/${customerId}/adjust`, {
