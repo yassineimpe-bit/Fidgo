@@ -1312,7 +1312,7 @@ Toute nouvelle dépendance frontend susceptible de déposer ou lire un identifia
 [ ] sous-traitants et transferts documentés
 [ ] CGU / CGV / DPA relus juridiquement
 [ ] clause responsabilité / juridiction validée
-[ ] régime de rétractation des petits professionnels démarchés hors établissement vérifié
+[ ] régime des petits professionnels démarchés hors établissement vérifié (rétractation, informations, paiement J+7 si applicable)
 [ ] procédure de retrait du consentement marketing opérationnelle avant première campagne
 ```
 
