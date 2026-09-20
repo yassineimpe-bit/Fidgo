@@ -34,14 +34,14 @@ Retiko vérifie notamment :
 
 - issuer GitHub Actions officiel ;
 - audience exacte `retiko-backup` ;
-- dépôt `yassineimpe-bit/Fidgo` et son repository ID ;
+- dépôt `yassineimpe-bit/Fidgo`, repository ID et owner ID ;
 - branche `refs/heads/main` ;
 - workflow exact `.github/workflows/database-backup.yml` sur `main` ;
 - environnement GitHub `production` ;
 - runner GitHub-hosted ;
 - événements autorisés : `push`, `schedule`, `workflow_dispatch`.
 
-Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner et n'est jamais enregistré comme secret GitHub.
+Le sujet OIDC accepte le format historique GitHub et le format immuable introduit pour les dépôts récents, mais les IDs sont dans tous les cas revérifiés séparément. Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner et n'est jamais enregistré comme secret GitHub.
 
 ## Chiffrement
 
