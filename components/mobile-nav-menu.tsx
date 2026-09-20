@@ -3,16 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { APP_NAV_LINKS } from "@/lib/app-nav-links";
 import { LogoutButton } from "@/components/logout-button";
 
-/**
- * En dessous de 820px, .navlinks masque tout sauf Scanner (voir globals.css) :
- * sans ce menu, un restaurateur mobile n'a aucun moyen d'atteindre Clients,
- * Programme, Équipe, Commerce, Wallet ou l'affiche QR autrement qu'en tapant
- * l'URL à la main.
- */
-export function MobileNavMenu() {
+type MobileLink = { href: string; label: string; keepMobile?: boolean };
+
+export function MobileNavMenu({ links }: { links: MobileLink[] }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -48,10 +43,9 @@ export function MobileNavMenu() {
         <span aria-hidden="true">{open ? "✕" : "☰"}</span>
       </button>
       <div id="mobile-nav-dropdown" className={open ? "nav-dropdown nav-open" : "nav-dropdown"}>
-        {APP_NAV_LINKS.filter((link) => !link.keepMobile).map((link) => (
+        {links.filter((link) => !link.keepMobile).map((link) => (
           <Link key={link.href} href={link.href}>{link.label}</Link>
         ))}
-        {/* Déconnexion est masqué en dehors de ce menu sur mobile (voir globals.css) : dupliqué ici pour rester atteignable. */}
         <LogoutButton/>
       </div>
     </div>
