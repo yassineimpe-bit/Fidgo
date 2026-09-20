@@ -1,7 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { parseCustomerNote } from "@/lib/customer-note";
 import { sql } from "@/lib/db";
-import { canManageProgram } from "@/lib/loyalty";
+import { canManageCustomers } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin } from "@/lib/security";
@@ -11,7 +11,7 @@ async function handlePatch(req: Request, { params }: { params: Promise<{ id: str
   if (originError) return originError;
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401, headers: PRIVATE_HEADERS });
-  if (!canManageProgram(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
+  if (!canManageCustomers(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE_HEADERS });
   const limited = await enforceRateLimit(req, `customer-note:${session.staffId}`, 60, 60 * 60);
   if (limited) return limited;
 
