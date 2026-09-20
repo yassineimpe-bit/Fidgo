@@ -59,7 +59,7 @@ Pré-requis :
 Télécharger l'artifact souhaité depuis GitHub Actions, puis :
 
 ```bash
-./scripts/restore-backup.sh \
+bash scripts/restore-backup.sh \
   retiko-postgres-YYYYMMDDTHHMMSSZ.dump.cms \
   /chemin/securise/retiko-backup-recovery-private.pem \
   'postgres://user:password@host:5432/database?sslmode=require'
