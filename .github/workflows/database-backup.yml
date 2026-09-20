@@ -1,0 +1,167 @@
+name: database-backup
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/database-backup.yml"
+      - "ops/backup/**"
+      - "scripts/restore-backup.sh"
+      - "docs/BACKUP_RESTORE.md"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/database-backup.yml"
+      - "ops/backup/**"
+      - "scripts/restore-backup.sh"
+      - "docs/BACKUP_RESTORE.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retiko-database-backup
+  cancel-in-progress: false
+
+jobs:
+  config-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate recovery certificate
+        run: |
+          openssl x509 -in ops/backup/retiko-backup-public.crt -noout -checkend 2592000
+          fingerprint=$(openssl x509 -in ops/backup/retiko-backup-public.crt -noout -fingerprint -sha256 | cut -d= -f2)
+          test "$fingerprint" = "9D:C6:75:2C:0D:38:1A:AD:36:8C:A5:63:BF:D6:29:0D:E8:06:E3:A8:47:00:9F:61:F8:1E:09:8C:7A:E4:A5:F8"
+      - name: Validate restore script syntax
+        run: bash -n scripts/restore-backup.sh
+
+  backup-restore:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: retiko_restore
+          POSTGRES_PASSWORD: retiko_restore
+          POSTGRES_DB: retiko_restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retiko_restore -d retiko_restore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RESTORE_DATABASE_URL: postgres://retiko_restore:retiko_restore@127.0.0.1:5432/retiko_restore
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate production backup secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SOURCE_DATABASE_URL:-}" || {
+            echo "::error::DATABASE_URL is missing from the production GitHub environment."
+            exit 1
+          }
+
+      - name: Create PostgreSQL 17 logical backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup-output
+
+          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --compress=9 --no-owner --no-privileges --file=/backup/retiko.dump'
+
+          test -s backup-output/retiko.dump
+          size=$(stat -c%s backup-output/retiko.dump)
+          test "$size" -ge 1024 || {
+            echo "::error::Backup is unexpectedly small: $size bytes"
+            exit 1
+          }
+
+          docker run --rm             -v "$PWD/backup-output:/backup:ro"             postgres:17             pg_restore --list /backup/retiko.dump >/dev/null
+
+          echo "Backup archive is readable ($size bytes)."
+
+      - name: Restore backup into isolated PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run --rm --network host             -v "$PWD/backup-output:/backup:ro"             -e RESTORE_DATABASE_URL             postgres:17             sh -ceu 'pg_restore --exit-on-error --no-owner --no-privileges --dbname "$RESTORE_DATABASE_URL" /backup/retiko.dump'
+
+      - name: Verify restored Retiko database integrity
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: npm run db:verify
+
+      - name: Encrypt backup for artifact storage
+        id: encrypt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stamp=$(date -u +'%Y%m%dT%H%M%SZ')
+          encrypted="backup-output/retiko-postgres-${stamp}.dump.cms"
+
+          openssl cms -encrypt -binary -aes256 -outform DER             -in backup-output/retiko.dump             -out "$encrypted"             ops/backup/retiko-backup-public.crt
+
+          openssl cms -cmsout -inform DER -in "$encrypted" -print >/dev/null
+
+          plain_sha=$(sha256sum backup-output/retiko.dump | awk '{print $1}')
+          encrypted_sha=$(sha256sum "$encrypted" | awk '{print $1}')
+          encrypted_size=$(stat -c%s "$encrypted")
+
+          cat > backup-output/manifest.txt <<EOF
+          Retiko PostgreSQL backup
+          created_at_utc=${stamp}
+          postgres_major=17
+          restore_test=passed
+          db_verify=passed
+          plaintext_sha256=${plain_sha}
+          encrypted_sha256=${encrypted_sha}
+          encrypted_size_bytes=${encrypted_size}
+          public_key_fingerprint_sha256=9D:C6:75:2C:0D:38:1A:AD:36:8C:A5:63:BF:D6:29:0D:E8:06:E3:A8:47:00:9F:61:F8:1E:09:8C:7A:E4:A5:F8
+          EOF
+
+          echo "encrypted_path=$encrypted" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=retiko-postgres-backup-${stamp}" >> "$GITHUB_OUTPUT"
+          rm -f backup-output/retiko.dump
+
+      - name: Ensure plaintext backup was removed
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e backup-output/retiko.dump
+
+      - name: Upload encrypted production backup
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.encrypt.outputs.artifact_name }}
+          path: |
+            ${{ steps.encrypt.outputs.encrypted_path }}
+            backup-output/manifest.txt
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
