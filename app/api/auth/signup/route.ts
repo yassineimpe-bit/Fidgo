@@ -9,6 +9,7 @@ import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
 import { createPilotSubscription } from "@/lib/billing";
 import { isValidNewPassword } from "@/lib/password-reset";
+import { CGU_VERSION, CGV_VERSION, LEGAL_VERSION } from "@/lib/legal";
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -18,10 +19,6 @@ export async function POST(request: Request) {
   const origin = requireSameOrigin(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
 
-  // Ne pas laisser le formulaire tenter une connexion localhost ou créer un
-  // compte sans pouvoir ensuite signer la session. En production mal
-  // configurée, on renvoie une indisponibilité explicite au lieu d'un 500
-  // générique après plusieurs secondes.
   if (!databaseConfigured || !process.env.AUTH_SECRET?.trim()) {
     return NextResponse.json(
       { error: "SERVICE_UNAVAILABLE" },
@@ -36,7 +33,16 @@ export async function POST(request: Request) {
   const restaurantName = String(body.restaurantName || "").trim().slice(0, 120);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  if (restaurantName.length < 2 || !isEmail(email) || !isValidNewPassword(password)) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+  const legalAccepted = body.legalAccepted === true;
+  const legalVersion = String(body.legalVersion || "");
+  const marketingOptIn = body.marketingOptIn === true;
+
+  if (restaurantName.length < 2 || !isEmail(email) || !isValidNewPassword(password)) {
+    return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+  }
+  if (!legalAccepted || legalVersion !== LEGAL_VERSION) {
+    return NextResponse.json({ error: "LEGAL_ACCEPTANCE_REQUIRED" }, { status: 400 });
+  }
 
   const baseSlug = slugify(restaurantName) || "commerce";
   const slug = `${baseSlug}-${id().slice(-4).toLowerCase()}`;
@@ -45,8 +51,27 @@ export async function POST(request: Request) {
   try {
     const result = await sql.begin(async (tx) => {
       const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
-      const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role,token_version`)[0];
+      const staff = (await tx`
+        insert into staff_users(
+          id, establishment_id, email, password_hash, role,
+          marketing_consent, marketing_consent_at
+        )
+        values(
+          ${id()}, ${establishment.id}, ${email}, ${passwordHash}, 'OWNER',
+          ${marketingOptIn}, case when ${marketingOptIn} then now() else null end
+        )
+        returning id,email,role,token_version
+      `)[0];
+
+      await tx`
+        insert into legal_acceptances(id, staff_user_id, document_type, document_version, source)
+        values
+          (${id()}, ${staff.id}, 'CGU', ${CGU_VERSION}, 'signup'),
+          (${id()}, ${staff.id}, 'CGV', ${CGV_VERSION}, 'signup')
+      `;
+
       await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
+
       // L'essai est un état local. Aucun appel Stripe n'est effectué pendant
       // l'inscription : une panne ou un flag désactivé ne peut donc pas créer
       // un commerce à moitié initialisé.
@@ -65,11 +90,9 @@ export async function POST(request: Request) {
     response.cookies.set(sessionCookie(token));
     return response;
   } catch (error) {
-    if (String(error).includes("staff_users_email_key")) return NextResponse.json({ error: "EMAIL_EXISTS" }, { status: 409 });
-    // Une exception ici (schema desynchronise, base injoignable, etc.) ne doit
-    // jamais remonter comme une page d'erreur Next.js sans corps JSON : le
-    // client ne saurait plus rien afficher. On journalise le detail cote
-    // serveur (visible dans les logs Vercel) et on renvoie un code stable.
+    if (String(error).includes("staff_users_email_key")) {
+      return NextResponse.json({ error: "EMAIL_EXISTS" }, { status: 409 });
+    }
     console.error("SIGNUP_FAILED", { code: safeErrorCode(error, "SIGNUP_FAILED") });
     return NextResponse.json({ error: "SIGNUP_FAILED" }, { status: 500 });
   }
