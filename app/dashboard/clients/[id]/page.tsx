@@ -5,7 +5,7 @@ import { CustomerNote } from "@/components/customer-note";
 import { getSession } from "@/lib/auth";
 import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
-import { canManageProgram } from "@/lib/loyalty";
+import { canAccessBackoffice } from "@/lib/loyalty";
 import { transactionTypeLabel } from "@/lib/transaction-history";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,7 @@ export default async function CustomerDetailPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canAccessBackoffice(session.role)) redirect("/s");
   const { id } = await params;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) notFound();
   const requestedPage = parseCustomerHistoryPage((await searchParams).page);
