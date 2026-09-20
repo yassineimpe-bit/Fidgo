@@ -6,7 +6,7 @@ import { getSession } from "@/lib/auth";
 import { parseCustomerListFilters } from "@/lib/customer-list";
 import { phoneLookupVariants } from "@/lib/customer-lookup";
 import { sql } from "@/lib/db";
-import { canManageProgram } from "@/lib/loyalty";
+import { canAccessBackoffice } from "@/lib/loyalty";
 
 type Customer = {
   id: string;
@@ -35,6 +35,7 @@ export default async function ClientsPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canAccessBackoffice(session.role)) redirect("/s");
 
   const filters = parseCustomerListFilters(await searchParams);
   const term = filters.q;
