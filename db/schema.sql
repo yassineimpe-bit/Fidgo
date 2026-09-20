@@ -111,7 +111,7 @@ create index if not exists transactions_card_idx on transactions (card_id, creat
 create index if not exists transactions_estab_idx on transactions (establishment_id, created_at desc);
 
 create or replace function protect_retiko_transaction_ledger()
-returns trigger language plpgsql as $
+returns trigger language plpgsql as $ledger$
 begin
   if tg_op = 'DELETE' then
     raise exception 'Transactions are append-only; use a compensating transaction.'
@@ -140,7 +140,7 @@ begin
   end if;
   return new;
 end;
-$;
+$ledger$;
 
 drop trigger if exists transactions_ledger_immutable on transactions;
 create trigger transactions_ledger_immutable
