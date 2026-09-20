@@ -36,12 +36,28 @@
 
 ## Juridique / exploitation
 
-- [ ] politique de confidentialité
-- [ ] mentions légales
-- [ ] CGU
-- [ ] accord pilote
-- [ ] annexe sous-traitance RGPD
-- [ ] procédure incident
+### Intégré techniquement
+
+- [x] politique de confidentialité publiée
+- [x] mentions légales publiées avec champs à compléter
+- [x] CGU versionnées
+- [x] CGV B2B versionnées
+- [x] politique cookies / traceurs publiée
+- [x] acceptation CGU + CGV obligatoire à la création du compte
+- [x] version et date d'acceptation conservées en base
+- [x] consentement marketing Retiko séparé et facultatif
+- [x] annexe de sous-traitance RGPD (DPA) prête en modèle
+- [x] procédure incident / violation de données documentée
+
+### Bloquants avant première facturation
+
+- [ ] créer l'entité juridique Retiko et compléter raison sociale, forme, siège, SIREN/RNE/RCS, TVA et contact
+- [ ] compléter les coordonnées légales exactes des hébergeurs et sous-traitants réellement activés
+- [ ] documenter les régions d'hébergement et mécanismes de transfert hors EEE le cas échéant
+- [ ] faire relire CGU, CGV, DPA et politique de confidentialité par un professionnel du droit
+- [ ] valider le régime de rétractation éventuellement applicable à certains petits professionnels démarchés hors établissement
+- [ ] valider la clause définitive de responsabilité et de juridiction
+- [ ] signer l'accord pilote et le DPA avec chaque commerce pilote lorsque requis
 
 ## Paiement
 
