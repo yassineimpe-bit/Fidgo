@@ -41,3 +41,12 @@ Principes retenus : conditions de règlement, pénalités de retard, barème de 
 - Loi n° 2004-575 du 21 juin 2004 pour la confiance dans l’économie numérique
 
 Avant publication finale, compléter l’identité juridique, le siège, les immatriculations, les coordonnées et les informations complètes de l’hébergeur.
+
+
+## Prospection physique / contrats hors établissement
+
+- Code de la consommation, article L. 221-3 : extension de certaines protections aux contrats hors établissement entre professionnels lorsque l'objet du contrat n'entre pas dans l'activité principale du professionnel sollicité et que celui-ci emploie au plus cinq salariés.
+- Code de la consommation, article L. 221-18 : délai de rétractation de quatorze jours pour les contrats concernés de prestation de services.
+- Code de la consommation, article L. 221-10 : interdiction de principe de recevoir un paiement ou une contrepartie pendant les sept premiers jours d'un contrat hors établissement, sous réserve des exceptions prévues par le texte.
+
+**Conséquence Retiko :** la prospection en personne dans les locaux d'un petit commerce doit comporter une qualification du régime applicable avant signature ou encaissement. La qualification « hors activité principale » et l'application exacte du régime doivent être validées juridiquement avant lancement.
