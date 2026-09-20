@@ -8,6 +8,7 @@ import { requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
 import { createPilotSubscription } from "@/lib/billing";
+import { isValidNewPassword } from "@/lib/password-reset";
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   const restaurantName = String(body.restaurantName || "").trim().slice(0, 120);
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  if (restaurantName.length < 2 || !isEmail(email) || password.length < 8) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
+  if (restaurantName.length < 2 || !isEmail(email) || !isValidNewPassword(password)) return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
 
   const baseSlug = slugify(restaurantName) || "commerce";
   const slug = `${baseSlug}-${id().slice(-4).toLowerCase()}`;
