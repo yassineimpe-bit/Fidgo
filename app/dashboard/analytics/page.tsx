@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { getSession } from "@/lib/auth";
+import { canManageProgram } from "@/lib/loyalty";
 import { sql } from "@/lib/db";
 import { ANALYTICS_PERIODS, parseAnalyticsPeriod } from "@/lib/analytics-period";
 
@@ -98,6 +99,7 @@ export default async function AnalyticsPage({
     <div className="section-head">
       <div><span className="eyebrow">Analytics</span><h2 style={{margin:"12px 0 4px"}}>Activité du programme</h2><p className="muted">Des indicateurs exploitables, pas un cockpit de centrale nucléaire.</p></div>
       <div className="actions">
+        {canManageProgram(session.role) && <Link className="btn" href="/dashboard/activity">Journal d’activité</Link>}
         {ANALYTICS_PERIODS.map((option) => <Link
           key={option.value}
           className={`btn ${option.value === period.value ? "btn-primary" : ""}`}
