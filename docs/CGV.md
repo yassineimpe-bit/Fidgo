@@ -60,9 +60,18 @@ Une indemnité forfaitaire de **40 €** pour frais de recouvrement est due dans
 
 Les éventuelles conditions particulières de la commande prévalent.
 
-## 10. Droit de rétractation professionnel
+## 10. Contrats hors établissement et rétractation
 
-Le droit de rétractation propre aux consommateurs ne s’applique pas en principe aux contrats conclus pour les besoins professionnels. Si un dispositif légal accorde exceptionnellement un droit de rétractation à un professionnel dans une situation donnée, celui-ci reste applicable selon ses conditions.
+Les protections propres aux consommateurs ne s’appliquent pas de manière générale aux contrats conclus pour les besoins professionnels.
+
+Cependant, l’article **L. 221-3 du Code de la consommation** étend certaines règles des contrats hors établissement aux relations entre professionnels lorsque **les deux conditions suivantes sont réunies** :
+
+- l’objet du contrat n’entre pas dans le champ de l’activité principale du professionnel sollicité ;
+- le professionnel sollicité emploie **au plus cinq salariés**.
+
+Lorsque ce régime est applicable, les dispositions légales concernées prévalent sur les présentes CGV. Elles peuvent notamment impliquer un **délai légal de rétractation de 14 jours** pour une prestation de services conclue hors établissement et des règles spécifiques interdisant, sauf exception légale, la perception d’un paiement ou d’une contrepartie avant l’expiration du délai prévu par l’article L. 221-10.
+
+Compte tenu du modèle de prospection physique de Retiko, l’éligibilité à ce régime doit être vérifiée dans le processus commercial avant toute signature et tout encaissement.
 
 ## 11. Données
 
