@@ -5,7 +5,7 @@ import { CustomerNote } from "@/components/customer-note";
 import { getSession } from "@/lib/auth";
 import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
-import { canAccessBackoffice } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
 import { transactionTypeLabel } from "@/lib/transaction-history";
 
 export const dynamic = "force-dynamic";
