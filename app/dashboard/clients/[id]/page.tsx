@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
+import { CustomerNote } from "@/components/customer-note";
 import { getSession } from "@/lib/auth";
 import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
@@ -27,7 +28,7 @@ export default async function CustomerDetailPage({
   `;
   const [customer] = await sql`
     select
-      u.id,u.first_name,u.email,u.phone,u.marketing_consent,u.created_at,
+      u.id,u.first_name,u.email,u.phone,u.internal_note,u.marketing_consent,u.created_at,
       c.id as card_id,c.short_code,c.balance,c.active,c.created_at as card_created_at
     from customers u
     left join cards c on c.customer_id=u.id and c.establishment_id=u.establishment_id
@@ -108,6 +109,8 @@ export default async function CustomerDetailPage({
         </dl>
         <p className="muted" style={{marginBottom:0}}>Une visite correspond ici à un jour avec au moins un crédit non annulé. Les transactions restent détaillées ci-dessous.</p>
       </section>
+
+      <CustomerNote customerId={id} initialNote={String(customer.internal_note || "")} canEdit={canManageProgram(session.role)} />
 
       <section className="grid grid-2" style={{marginTop:18}}>
         <div className="card">

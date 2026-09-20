@@ -41,6 +41,7 @@ async function handleDelete(req: Request, { params }: { params: Promise<{ id: st
         email=null,
         phone=null,
         first_name=null,
+        internal_note=null,
         marketing_consent=false,
         marketing_consent_at=null,
         deleted_at=now(),

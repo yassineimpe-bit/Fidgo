@@ -55,6 +55,7 @@ create table if not exists customers (
   email text,
   phone text,
   first_name text,
+  internal_note text,
   marketing_consent boolean not null default false,
   marketing_consent_at timestamptz,
   created_at timestamptz not null default now(),
@@ -65,6 +66,10 @@ create table if not exists customers (
       email is null and phone is null and first_name is null
       and marketing_consent = false and marketing_consent_at is null
     )
+  ),
+  constraint customers_internal_note_check check (
+    (internal_note is null or (char_length(internal_note) <= 500 and internal_note !~ '[<>]'))
+    and (deleted_at is null or internal_note is null)
   )
 );
 create unique index if not exists customers_estab_email_key on customers (establishment_id, lower(email)) where email is not null and deleted_at is null;
