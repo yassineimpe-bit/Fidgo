@@ -46,12 +46,6 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
     headers: { origin },
     data: { email: `${unique("owner-escalation")}@example.com`, password: employeePassword, role: "OWNER" },
   });
-  expect(createOwner.status()).toBe(400);
-
-  const createOwner = await page.request.post("/api/employees", {
-    headers: { origin },
-    data: { email: `${unique("owner-escalation-2")}@example.com`, password: employeePassword, role: "OWNER" },
-  });
   expect(createOwner.status()).toBe(403);
 
   // Nouvelle session, isolée du cookie OWNER, connectée en tant qu'EMPLOYEE.
