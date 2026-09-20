@@ -177,6 +177,11 @@ def body_is_untampered(issue: dict) -> bool:
         )
         data = json.loads(result.stdout or "{}")
         issue_node = data["data"]["repository"]["issue"]
+        # A schema/field-name change on GitHub's side must not silently
+        # degrade this into "never edited" -- treat an unexpectedly shaped
+        # response the same as a hard failure.
+        if not isinstance(issue_node, dict) or "lastEditedAt" not in issue_node or "editor" not in issue_node:
+            return False
     except Exception:
         # Fail closed: an integrity check we cannot evaluate is not a check.
         return False

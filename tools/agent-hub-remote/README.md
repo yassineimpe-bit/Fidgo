@@ -47,6 +47,22 @@ Valeurs possibles pour `agent` : `auto`, `claude`, `codex`, `agy`,
 
 Avec `auto`, le routeur local choisit lui-même l'agent et applique son fallback.
 
+## Tests
+
+Tests unitaires avec mocks (aucun appel `gh` réel, aucun réseau, aucun vrai
+secret dans les fixtures) — couvrent la vérification d'intégrité du corps
+(`editor`/`lastEditedAt`, y compris les réponses GraphQL incomplètes ou
+inattendues), l'anti-boucle sur échec, la redaction et les timeouts :
+
+```bash
+python3 -m unittest discover -s tools/agent-hub-remote/tests -v
+```
+
+Le check GraphQL d'intégrité lui-même reste à valider une fois en conditions
+réelles avec `--once` sur une issue effectivement éditée par un autre compte
+avant de merger cette PR — les tests ci-dessus vérifient sa logique contre
+des réponses simulées, pas le comportement réel de l'API GitHub.
+
 ## Installation sur la tour WSL
 
 Le worker suppose que :
