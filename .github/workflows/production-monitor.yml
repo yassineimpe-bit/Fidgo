@@ -72,10 +72,10 @@ jobs:
           {
             echo "### Retiko production probe"
             echo
-            echo "- Health: `$healthy`"
-            echo "- HTTP: `$http_code`"
-            echo "- Latency: `${latency_ms} ms`"
-            echo "- Reason: `$reason`"
+            echo "- Health: $healthy"
+            echo "- HTTP: $http_code"
+            echo "- Latency: ${latency_ms} ms"
+            echo "- Reason: $reason"
             echo "- Endpoint: $HEALTH_URL"
           } >> "$GITHUB_STEP_SUMMARY"
 
