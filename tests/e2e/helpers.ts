@@ -25,6 +25,7 @@ export async function createMerchant(page: Page, label: string) {
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(`${marker}@example.com`);
   await page.getByLabel("Mot de passe").fill("Password-test-123!");
+  await page.getByRole("checkbox", { name: /J’accepte les CGU/ }).check();
   await page.getByRole("button", { name: "Créer mon espace" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
