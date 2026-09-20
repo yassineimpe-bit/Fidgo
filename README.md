@@ -60,4 +60,4 @@ Puis ouvrir `/signup`.
 
 Le cahier des charges consolidé se trouve dans `SPEC-V0.md`. Documentation technique : `docs/INSTALLATION.md`, `docs/ARCHITECTURE.md`, `docs/API.md`, `docs/RGPD.md`, `docs/DATA_LIFECYCLE.md`, `docs/OBSERVABILITY.md`, `docs/WALLETS.md`, `docs/BILLING.md`, `docs/PILOT.md`.
 
-Documentation juridique de travail : `docs/CGU.md`, `docs/CGV.md`, `docs/COOKIE_POLICY.md`, `docs/DPA_TEMPLATE.md`, `docs/PRIVACY_POLICY_TEMPLATE.md`, `docs/MENTIONS_LEGALES_TEMPLATE.md`, `docs/LEGAL_SOURCES.md`. Les versions publiques sont accessibles sous `/legal/*`.
+Documentation juridique de travail : `docs/CGU.md`, `docs/CGV.md`, `docs/COOKIE_POLICY.md`, `docs/DPA_TEMPLATE.md`, `docs/PRIVACY_POLICY_TEMPLATE.md`, `docs/MENTIONS_LEGALES_TEMPLATE.md`, `docs/LEGAL_SOURCES.md`, `docs/PROSPECTION_HORS_ETABLISSEMENT.md`. Les versions publiques sont accessibles sous `/legal/*`.
