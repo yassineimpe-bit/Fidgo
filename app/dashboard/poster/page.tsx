@@ -3,11 +3,13 @@ import QRCode from "qrcode";
 import { getAppUrl } from "@/lib/app-url";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { canManageProgram } from "@/lib/loyalty";
 import { PosterView } from "@/components/poster-view";
 
 export default async function PosterPage() {
   const session = await getSession();
   if (!session) redirect("/login");
+  if (!canManageProgram(session.role)) redirect(session.role === "EMPLOYEE" ? "/s" : "/dashboard");
 
   const [restaurant] = await sql`
     select e.name, e.slug, e.logo_url, e.primary_color,
