@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/database-backup.yml"
+      - "app/api/internal/backup-credentials/**"
+      - "lib/backup-oidc.ts"
       - "ops/backup/**"
       - "scripts/restore-backup.sh"
       - "docs/BACKUP_RESTORE.md"
@@ -15,12 +17,16 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/database-backup.yml"
+      - "app/api/internal/backup-credentials/**"
+      - "lib/backup-oidc.ts"
       - "ops/backup/**"
       - "scripts/restore-backup.sh"
       - "docs/BACKUP_RESTORE.md"
+      - "tests/backup-oidc.test.ts"
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: retiko-database-backup
@@ -61,8 +67,8 @@ jobs:
           --health-retries 10
 
     env:
-      SOURCE_DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RESTORE_DATABASE_URL: postgres://retiko_restore:retiko_restore@127.0.0.1:5432/retiko_restore
+      BACKUP_CREDENTIAL_URL: https://retiko.fr/api/internal/backup-credentials
 
     steps:
       - uses: actions/checkout@v5
@@ -75,14 +81,45 @@ jobs:
       - name: Install project dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Validate production backup secret
+      - name: Request GitHub OIDC identity
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken("retiko-backup");
+            core.setSecret(token);
+            core.setOutput("token", token);
+
+      - name: Exchange OIDC identity for short-lived backup access
         shell: bash
+        env:
+          RETIKO_BACKUP_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -euo pipefail
-          test -n "${SOURCE_DATABASE_URL:-}" || {
-            echo "::error::DATABASE_URL is missing from the production GitHub environment."
+          response_file=$(mktemp)
+          trap 'rm -f "$response_file"' EXIT
+
+          success=false
+          for attempt in $(seq 1 24); do
+            code=$(curl --silent --show-error --max-time 15               --output "$response_file"               --write-out '%{http_code}'               --request POST               --header "Authorization: Bearer $RETIKO_BACKUP_OIDC_TOKEN"               "$BACKUP_CREDENTIAL_URL" || true)
+
+            if [ "$code" = "200" ]; then
+              success=true
+              break
+            fi
+
+            echo "Backup credential broker not ready (HTTP $code), attempt $attempt/24."
+            sleep 10
+          done
+
+          if [ "$success" != "true" ]; then
+            echo "::error::Retiko backup credential broker did not become ready."
             exit 1
-          }
+          fi
+
+          database_url=$(jq -er '.databaseUrl | select(type == "string" and length > 0)' "$response_file")
+          echo "::add-mask::$database_url"
+          printf 'SOURCE_DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
 
       - name: Create PostgreSQL 17 logical backup
         shell: bash
@@ -90,7 +127,7 @@ jobs:
           set -euo pipefail
           mkdir -p backup-output
 
-          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL" --format=custom --compress=9 --no-owner --no-privileges --file=/backup/retiko.dump'
+          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL"               --format=custom               --compress=9               --no-owner               --no-privileges               --file=/backup/retiko.dump'
 
           test -s backup-output/retiko.dump
           size=$(stat -c%s backup-output/retiko.dump)
@@ -108,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker run --rm --network host             -v "$PWD/backup-output:/backup:ro"             -e RESTORE_DATABASE_URL             postgres:17             sh -ceu 'pg_restore --exit-on-error --no-owner --no-privileges --dbname "$RESTORE_DATABASE_URL" /backup/retiko.dump'
+          docker run --rm --network host             -v "$PWD/backup-output:/backup:ro"             -e RESTORE_DATABASE_URL             postgres:17             sh -ceu 'pg_restore               --exit-on-error               --no-owner               --no-privileges               --dbname "$RESTORE_DATABASE_URL"               /backup/retiko.dump'
 
       - name: Verify restored Retiko database integrity
         env:
@@ -124,7 +161,7 @@ jobs:
           stamp=$(date -u +'%Y%m%dT%H%M%SZ')
           encrypted="backup-output/retiko-postgres-${stamp}.dump.cms"
 
-          openssl cms -encrypt -binary -aes256 -outform DER             -in backup-output/retiko.dump             -out "$encrypted"             ops/backup/retiko-backup-public.crt
+          openssl cms -encrypt             -binary             -aes256             -outform DER             -in backup-output/retiko.dump             -out "$encrypted"             ops/backup/retiko-backup-public.crt
 
           openssl cms -cmsout -inform DER -in "$encrypted" -print >/dev/null
 
@@ -155,7 +192,6 @@ jobs:
           test ! -e backup-output/retiko.dump
 
       - name: Upload encrypted production backup
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.encrypt.outputs.artifact_name }}
