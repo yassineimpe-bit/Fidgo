@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type Customer = {
@@ -80,7 +81,7 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
       <div className="empty-state">
         {searchActive ? <>
           <strong>Aucun résultat pour cette recherche.</strong>
-          <p>Essaie un autre nom, email ou code court.</p>
+          <p>Essaie un autre nom, email, téléphone ou code court.</p>
         </> : <>
           <strong>Aucun client pour l’instant.</strong>
           <p>Imprime ton QR pour inscrire le premier client depuis ta caisse ou ta vitrine.</p>
@@ -94,7 +95,7 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
     <div className="table-wrap"><table>
       <thead><tr><th>Client</th><th>Contact</th><th>Carte</th><th>Solde</th><th>Marketing</th>{canManage && <th>Actions</th>}</tr></thead>
       <tbody>{rows.map((customer) => <tr key={customer.id}>
-        <td>{customer.first_name || "Sans prénom"}</td>
+        <td><Link href={`/dashboard/clients/${customer.id}`}><strong>{customer.first_name || "Sans prénom"}</strong></Link></td>
         <td>{customer.email || customer.phone || "Non fourni"}</td>
         <td>{customer.short_code || "—"}</td>
         <td>{customer.balance ?? 0}</td>
