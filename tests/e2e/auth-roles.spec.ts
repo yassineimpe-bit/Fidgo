@@ -48,11 +48,11 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
   });
   expect(createOwner.status()).toBe(400);
 
-  const createManager = await page.request.post("/api/employees", {
+  const createOwner = await page.request.post("/api/employees", {
     headers: { origin },
-    data: { email: `${unique("manager-escalation")}@example.com`, password: employeePassword, role: "MANAGER" },
+    data: { email: `${unique("owner-escalation-2")}@example.com`, password: employeePassword, role: "OWNER" },
   });
-  expect(createManager.status()).toBe(400);
+  expect(createOwner.status()).toBe(403);
 
   // Nouvelle session, isolée du cookie OWNER, connectée en tant qu'EMPLOYEE.
   const employeeContext = await page.context().browser()!.newContext();
@@ -138,63 +138,131 @@ test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER",
   }
 });
 
-test("rôle : un MANAGER administre le pilote mais ne peut pas modifier OWNER/MANAGER", async ({ page }) => {
+test("rôle : OWNER délègue à MANAGER avec limites fines et audit complet", async ({ page }) => {
   await createMerchant(page, "manager-boundary");
   const managerEmail = `${unique("manager")}@example.com`;
   const targetEmail = `${unique("manager-target")}@example.com`;
   const password = "Password-test-123!";
 
-  const manager = await page.request.post("/api/employees", {
+  const managerResponse = await page.request.post("/api/employees", {
     headers: { origin },
-    data: { email: managerEmail, password, role: "EMPLOYEE" },
-  }).then((response) => response.json());
-  const target = await page.request.post("/api/employees", {
+    data: { email: managerEmail, password, role: "MANAGER" },
+  });
+  expect(managerResponse.status()).toBe(201);
+  const manager = await managerResponse.json();
+
+  const targetResponse = await page.request.post("/api/employees", {
     headers: { origin },
     data: { email: targetEmail, password, role: "EMPLOYEE" },
-  }).then((response) => response.json());
+  });
+  expect(targetResponse.status()).toBe(201);
+  const target = await targetResponse.json();
+
   const employees = await page.request.get("/api/employees").then((response) => response.json());
   const owner = employees.find((employee: { role: string }) => employee.role === "OWNER");
+  expect(owner).toBeTruthy();
 
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
   const managerContext = await page.context().browser()!.newContext();
   const managerPage = await managerContext.newPage();
   try {
-    await sql`update staff_users set role='MANAGER',updated_at=now() where id=${manager.id}`;
+    const [managerCreatedAudit] = await sql`
+      select action,metadata from audit_logs
+      where entity_type='staff_user' and entity_id=${manager.id}
+      order by created_at desc limit 1
+    `;
+    expect(managerCreatedAudit.action).toBe("STAFF_CREATE");
+    expect(managerCreatedAudit.metadata).toMatchObject({ role: "MANAGER", active: true });
+
     await managerPage.goto("/login");
     await managerPage.getByLabel("Email").fill(managerEmail);
     await managerPage.getByLabel("Mot de passe").fill(password);
     await managerPage.getByRole("button", { name: "Se connecter" }).click();
     await expect(managerPage).toHaveURL(/\/dashboard$/);
 
+    const managerCreatesEmployee = await managerPage.request.post("/api/employees", {
+      headers: { origin },
+      data: { email: `${unique("manager-child")}@example.com`, password, role: "EMPLOYEE" },
+    });
+    expect(managerCreatesEmployee.status()).toBe(201);
+
+    const managerCreatesManager = await managerPage.request.post("/api/employees", {
+      headers: { origin },
+      data: { email: `${unique("manager-escalation")}@example.com`, password, role: "MANAGER" },
+    });
+    expect(managerCreatesManager.status()).toBe(403);
+
+    const promoteToManager = await managerPage.request.patch(`/api/employees/${target.id}`, {
+      headers: { origin },
+      data: { role: "MANAGER" },
+    });
+    expect(promoteToManager.status()).toBe(403);
+
     const disableEmployee = await managerPage.request.patch(`/api/employees/${target.id}`, {
       headers: { origin },
       data: { active: false },
     });
     expect(disableEmployee.ok()).toBeTruthy();
+
+    const [disableAudit] = await sql`
+      select action,metadata from audit_logs
+      where entity_type='staff_user' and entity_id=${target.id}
+      order by created_at desc limit 1
+    `;
+    expect(disableAudit.action).toBe("STAFF_UPDATE");
+    expect(disableAudit.metadata).toMatchObject({
+      previousRole: "EMPLOYEE",
+      role: "EMPLOYEE",
+      previousActive: true,
+      active: false,
+      activeChanged: true,
+      roleChanged: false,
+    });
+
     const touchOwner = await managerPage.request.patch(`/api/employees/${owner.id}`, {
       headers: { origin },
       data: { active: false },
     });
     expect(touchOwner.status()).toBe(403);
+
     const touchSelf = await managerPage.request.patch(`/api/employees/${manager.id}`, {
       headers: { origin },
       data: { active: false },
     });
     expect(touchSelf.status()).toBe(409);
+
     const suspendAsManager = await managerPage.request.post("/api/restaurant/suspend", {
       headers: { origin },
       data: { confirmation: "SUSPENDRE", confirmationSlug: "injected" },
     });
     expect(suspendAsManager.status()).toBe(403);
 
-    // Une rétrogradation en base s'applique à la session existante dès la
-    // requête suivante, même si le JWT contient encore l'ancien rôle.
-    await sql`update staff_users set role='EMPLOYEE',updated_at=now() where id=${manager.id}`;
-    const afterDemotion = await managerPage.request.patch("/api/restaurant", {
+    const billingAsManager = await managerPage.request.post("/api/billing/checkout", {
       headers: { origin },
-      data: { name: "Ancien manager" },
+      data: { plan: "MONTHLY" },
     });
-    expect(afterDemotion.status()).toBe(403);
+    expect(billingAsManager.status()).toBe(403);
+
+    const ownerDemotesManager = await page.request.patch(`/api/employees/${manager.id}`, {
+      headers: { origin },
+      data: { role: "EMPLOYEE" },
+    });
+    expect(ownerDemotesManager.ok()).toBeTruthy();
+
+    const [roleAudit] = await sql`
+      select action,metadata from audit_logs
+      where entity_type='staff_user' and entity_id=${manager.id}
+      order by created_at desc limit 1
+    `;
+    expect(roleAudit.action).toBe("STAFF_UPDATE");
+    expect(roleAudit.metadata).toMatchObject({
+      previousRole: "MANAGER",
+      role: "EMPLOYEE",
+      roleChanged: true,
+    });
+
+    // Le changement de rôle révoque immédiatement l'ancienne session MANAGER.
+    expect((await managerPage.request.get("/api/dashboard")).status()).toBe(401);
   } finally {
     await sql.end({ timeout: 5 });
     await managerContext.close();
