@@ -24,6 +24,7 @@ export function parseActivityFilters(input: {
 const ACTION_LABELS: Record<string, string> = {
   STAFF_CREATE: "Employé créé",
   STAFF_ACCESS_UPDATE: "Accès employé modifié",
+  STAFF_UPDATE: "Rôle ou accès équipe modifié",
   PASSWORD_RESET_EMAIL_SENT: "Email de réinitialisation envoyé",
   PASSWORD_RESET_EMAIL_FAILED: "Échec email de réinitialisation",
   PASSWORD_RESET_COMPLETED: "Mot de passe réinitialisé",
