@@ -118,6 +118,7 @@ test("programme : une carte existante survit aux r√©glages et le mode points cr√
   });
   expect(pointsUpdate.ok()).toBeTruthy();
 
+  await page.goto("/dashboard");
   const second = await enrollCustomer(page, "Client points", `${unique("points-card")}@example.com`);
   const secondToken = second.cardUrl.split("/c/")[1];
   const pointsCredit = await page.request.post("/api/credit", {
