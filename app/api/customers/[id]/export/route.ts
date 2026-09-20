@@ -17,7 +17,7 @@ async function handleGet(req: Request, { params }: { params: Promise<{ id: strin
 
   const { id } = await params;
   const [customer] = await sql`
-    select id,email,phone,first_name,marketing_consent,marketing_consent_at,created_at,updated_at
+    select id,email,phone,first_name,internal_note,marketing_consent,marketing_consent_at,created_at,updated_at
     from customers
     where id=${id} and establishment_id=${session.establishmentId} and deleted_at is null
   `;
