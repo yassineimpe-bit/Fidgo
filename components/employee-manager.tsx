@@ -1,8 +1,9 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { staffRoleLabel, type StaffRole } from "@/lib/loyalty";
 
-type Employee = { id: string; email: string; role: string; active: boolean; created_at: string };
+type Employee = { id: string; email: string; role: StaffRole; active: boolean; created_at: string };
 
 export function EmployeeManager({ initial }: { initial: Employee[] }) {
   const [rows, setRows] = useState(initial);
@@ -55,7 +56,7 @@ export function EmployeeManager({ initial }: { initial: Employee[] }) {
   return <div className="grid grid-2">
     <section className="card">
       <h3>Ajouter un accès caisse</h3>
-      <p className="muted">Crée uniquement les accès nécessaires. Un employé peut scanner et créditer, pas modifier le programme.</p>
+      <p className="muted">Le propriétaire garde l’administration. Un employé peut scanner et créditer les passages sans accéder aux réglages du commerce.</p>
       <form className="form" onSubmit={createEmployee}>
         <div className="field"><label htmlFor="employee-email">Email</label><input className="input" id="employee-email" name="email" type="email" required autoComplete="off"/></div>
         <div className="field"><label htmlFor="employee-password">Mot de passe temporaire</label><input className="input" id="employee-password" name="password" type="password" minLength={8} required autoComplete="new-password"/></div>
@@ -66,11 +67,11 @@ export function EmployeeManager({ initial }: { initial: Employee[] }) {
     </section>
     <section className="card">
       <h3>Équipe</h3>
-      {rows.every((row) => ['OWNER', 'MANAGER'].includes(row.role)) && <div className="notice" style={{marginBottom:12}}>
-        Aucun accès caisse créé. Ajoute un accès pour que ton équipe puisse scanner sans partager ton mot de passe owner.
+      {rows.every((row) => ["OWNER", "MANAGER"].includes(row.role)) && <div className="notice" style={{marginBottom:12}}>
+        Aucun accès caisse créé. Ajoute un employé pour éviter de partager le compte propriétaire.
       </div>}
       <div className="table-wrap"><table><thead><tr><th>Email</th><th>Rôle</th><th>État</th><th></th></tr></thead><tbody>
-        {rows.map((employee) => <tr key={employee.id}><td>{employee.email}</td><td>{employee.role}</td><td>{employee.active ? "Actif" : "Coupé"}</td><td>{!['OWNER','MANAGER'].includes(employee.role) && <button className="btn" disabled={busy} onClick={() => toggle(employee)}>{employee.active ? "Désactiver" : "Réactiver"}</button>}</td></tr>)}
+        {rows.map((employee) => <tr key={employee.id}><td>{employee.email}</td><td>{staffRoleLabel(employee.role)}</td><td>{employee.active ? "Actif" : "Coupé"}</td><td>{!["OWNER","MANAGER"].includes(employee.role) && <button className="btn" disabled={busy} onClick={() => toggle(employee)}>{employee.active ? "Désactiver" : "Réactiver"}</button>}</td></tr>)}
       </tbody></table></div>
     </section>
   </div>;
