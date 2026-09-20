@@ -121,7 +121,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
               type="checkbox"
               style={{ marginTop: 3, width: 18, height: 18, flex: "0 0 auto" }}
             />
-            <span>Je souhaite recevoir par email les nouveautés et offres Retiko. <span className="muted">(facultatif)</span></span>
+            <span>Je souhaite recevoir par courrier électronique les nouveautés et offres Retiko. <span className="muted">(facultatif)</span></span>
           </label>
         </>
       )}
