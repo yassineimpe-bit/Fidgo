@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { CustomerTable } from "@/components/customer-table";
 import { getSession } from "@/lib/auth";
+import { parseCustomerListFilters } from "@/lib/customer-list";
 import { phoneLookupVariants } from "@/lib/customer-lookup";
 import { sql } from "@/lib/db";
 import { canManageProgram } from "@/lib/loyalty";
@@ -18,16 +20,24 @@ type Customer = {
   active?: boolean | null;
 };
 
+function pageHref(q: string, page: number) {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/dashboard/clients?${query}` : "/dashboard/clients";
+}
+
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[] }>;
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { q = "" } = await searchParams;
-  const term = q.trim().slice(0, 120);
+  const filters = parseCustomerListFilters(await searchParams);
+  const term = filters.q;
   const pattern = `%${term.toLowerCase()}%`;
   const [phone1, phone2, phone3] = phoneLookupVariants(term);
 
@@ -35,40 +45,54 @@ export default async function ClientsPage({
     select name from establishments where id=${session.establishmentId}
   `;
 
-  const rows = term
-    ? await sql`
-        select
-          u.id,u.first_name,u.email,u.phone,u.marketing_consent,u.created_at,
-          c.short_code,c.balance,c.active
-        from customers u
-        left join cards c on c.customer_id=u.id
-        where u.establishment_id=${session.establishmentId}
-          and u.deleted_at is null
-          and (
-            lower(coalesce(u.first_name,'')) like ${pattern}
-            or lower(coalesce(u.email,'')) like ${pattern}
-            or lower(coalesce(u.phone,'')) like ${pattern}
-            or lower(coalesce(c.short_code,'')) like ${pattern}
-            or (
-              ${phone1}::text is not null
-              and regexp_replace(coalesce(u.phone, ''), '[^0-9]', '', 'g')
-                in (${phone1}, ${phone2}, ${phone3})
-            )
-          )
-        order by u.created_at desc
-        limit 100
-      `
-    : await sql`
-        select
-          u.id,u.first_name,u.email,u.phone,u.marketing_consent,u.created_at,
-          c.short_code,c.balance,c.active
-        from customers u
-        left join cards c on c.customer_id=u.id
-        where u.establishment_id=${session.establishmentId}
-          and u.deleted_at is null
-        order by u.created_at desc
-        limit 100
-      `;
+  const [countRow] = await sql`
+    select count(distinct u.id)::int as total
+    from customers u
+    left join cards c on c.customer_id=u.id and c.establishment_id=u.establishment_id
+    where u.establishment_id=${session.establishmentId}
+      and u.deleted_at is null
+      and (
+        ${term} = ''
+        or lower(coalesce(u.first_name,'')) like ${pattern}
+        or lower(coalesce(u.email,'')) like ${pattern}
+        or lower(coalesce(u.phone,'')) like ${pattern}
+        or lower(coalesce(c.short_code,'')) like ${pattern}
+        or (
+          ${phone1}::text is not null
+          and regexp_replace(coalesce(u.phone, ''), '[^0-9]', '', 'g')
+            in (${phone1}, ${phone2}, ${phone3})
+        )
+      )
+  `;
+  const total = Number(countRow?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / filters.limit));
+  const currentPage = Math.min(filters.page, totalPages);
+  const offset = (currentPage - 1) * filters.limit;
+
+  const rows = await sql`
+    select
+      u.id,u.first_name,u.email,u.phone,u.marketing_consent,u.created_at,
+      c.short_code,c.balance,c.active
+    from customers u
+    left join cards c on c.customer_id=u.id and c.establishment_id=u.establishment_id
+    where u.establishment_id=${session.establishmentId}
+      and u.deleted_at is null
+      and (
+        ${term} = ''
+        or lower(coalesce(u.first_name,'')) like ${pattern}
+        or lower(coalesce(u.email,'')) like ${pattern}
+        or lower(coalesce(u.phone,'')) like ${pattern}
+        or lower(coalesce(c.short_code,'')) like ${pattern}
+        or (
+          ${phone1}::text is not null
+          and regexp_replace(coalesce(u.phone, ''), '[^0-9]', '', 'g')
+            in (${phone1}, ${phone2}, ${phone3})
+        )
+      )
+    order by u.created_at desc
+    limit ${filters.limit}
+    offset ${offset}
+  `;
 
   const customers: Customer[] = rows.map((row) => ({
     id: String(row.id),
@@ -106,11 +130,21 @@ export default async function ClientsPage({
           />
         </form>
       </div>
+
+      <p className="muted">{total} client{total > 1 ? "s" : ""} · page {currentPage}/{totalPages}</p>
+
       <CustomerTable
+        key={`${term}:${currentPage}`}
         initial={customers}
         canManage={canManageProgram(session.role)}
         searchActive={Boolean(term)}
       />
+
+      {totalPages > 1 && <nav className="actions" aria-label="Pagination des clients" style={{justifyContent:"space-between"}}>
+        <div>{currentPage > 1 && <Link className="btn" href={pageHref(term,currentPage-1)}>← Précédent</Link>}</div>
+        <span className="muted">Page {currentPage} sur {totalPages}</span>
+        <div>{currentPage < totalPages && <Link className="btn" href={pageHref(term,currentPage+1)}>Suivant →</Link>}</div>
+      </nav>}
     </main>
   </>;
 }
