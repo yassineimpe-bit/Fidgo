@@ -8,6 +8,13 @@ export function computeEarnDelta(rules: LoyaltyProgramRules,input:{purchaseAmoun
 export function unitLabel(mode:LoyaltyMode,count:number):string{const word=mode==="STAMPS"?"tampon":"point";return `${count} ${word}${count>1?"s":""}`;}
 export function canManageProgram(role:StaffRole):boolean{return role==="OWNER"||role==="MANAGER";}
 export function canManageStaff(role:StaffRole):boolean{return role==="OWNER"||role==="MANAGER";}
+export function canAccessBackoffice(role:StaffRole):boolean{return role!=="EMPLOYEE";}
 export function canScan(role:StaffRole):boolean{return role!=="VIEWER";}
 export function canReverse(role:StaffRole):boolean{return role==="OWNER"||role==="MANAGER";}
 export function canSuspendEstablishment(role:StaffRole):boolean{return role==="OWNER";}
+export function staffRoleLabel(role:StaffRole):string {
+  if (role==="OWNER") return "Propriétaire";
+  if (role==="MANAGER") return "Manager";
+  if (role==="EMPLOYEE") return "Employé";
+  return "Lecture seule";
+}
