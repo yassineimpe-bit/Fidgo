@@ -23,6 +23,17 @@ export default async function DashboardPage() {
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='JOIN_PAGE_VIEW') join_views,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='JOIN_SUBMIT') join_submits,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_success,
+      (select count(*)::int from product_events
+        where establishment_id=${session.establishmentId}
+          and event_type='SCAN_SUCCESS'
+          and created_at >= (date_trunc('day', now() at time zone 'Europe/Paris') at time zone 'Europe/Paris')) scan_today,
+      (select count(*)::int
+        from cards c
+        join loyalty_programs p on p.establishment_id=c.establishment_id
+        join customers u on u.id=c.customer_id
+        where c.establishment_id=${session.establishmentId}
+          and c.active=true and u.deleted_at is null and p.active=true
+          and c.balance >= p.reward_threshold) rewards_available,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_FAILED') scan_failed,
       (select coalesce(percentile_cont(0.5) within group (order by duration_ms),0)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_p50,
       (select coalesce(percentile_cont(0.95) within group (order by duration_ms),0)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_p95,
@@ -84,6 +95,10 @@ export default async function DashboardPage() {
       <div className="card metric"><strong>{stats.active_cards}</strong><span>cartes actives</span></div>
       <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
       <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
+    </section>
+    <section className="grid grid-2" style={{marginTop:18}}>
+      <div className="card metric"><strong>{stats.scan_today}</strong><span>scans du jour</span></div>
+      <div className="card metric"><strong>{stats.rewards_available}</strong><span>récompenses disponibles</span></div>
     </section>
     <section className="grid grid-4" style={{marginTop:18}}>
       <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
