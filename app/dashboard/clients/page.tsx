@@ -6,7 +6,7 @@ import { getSession } from "@/lib/auth";
 import { parseCustomerListFilters } from "@/lib/customer-list";
 import { phoneLookupVariants } from "@/lib/customer-lookup";
 import { sql } from "@/lib/db";
-import { canAccessBackoffice } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
 
 type Customer = {
   id: string;
