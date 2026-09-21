@@ -20,7 +20,7 @@ function healthResponse(
     auth: "up" | "down";
     wallet: { https: boolean; apple: boolean; google: boolean };
     billing: { enabled: boolean; configured: boolean };
-    email: { recovery: boolean; passwordReset: boolean };
+    email: { recovery: boolean; passwordReset: boolean; verification: boolean };
     serverMs: number;
   },
   status: number,
@@ -52,7 +52,7 @@ export async function GET() {
     google: wallet.google.configured,
   };
   const billingState = { enabled: billing.enabled, configured: billing.configured };
-  const emailState = { recovery: emailConfigured, passwordReset: emailConfigured };
+  const emailState = { recovery: emailConfigured, passwordReset: emailConfigured, verification: emailConfigured };
 
   if (!databaseConfigured || !authConfigured) {
     return healthResponse({
@@ -73,12 +73,17 @@ export async function GET() {
       select
         to_regclass('public.card_recovery_tokens') is not null as recovery_table,
         to_regclass('public.password_reset_tokens') is not null as password_reset_table,
+        to_regclass('public.email_verification_tokens') is not null as email_verification_table,
         to_regclass('public.product_events') is not null as product_events_table,
         to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
         exists(
           select 1 from information_schema.columns
           where table_schema='public' and table_name='staff_users' and column_name='token_version'
         ) as token_version,
+        exists(
+          select 1 from information_schema.columns
+          where table_schema='public' and table_name='staff_users' and column_name='email_verified_at'
+        ) as email_verified_at,
         exists(
           select 1 from information_schema.columns
           where table_schema='public' and table_name='cards' and column_name='last_earn_at'
