@@ -118,9 +118,18 @@ test("programme : une carte existante survit aux rÃ©glages et le mode points crÃ
   });
   expect(pointsUpdate.ok()).toBeTruthy();
 
-  await page.goto("/dashboard");
-  const second = await enrollCustomer(page, "Client points", `${unique("points-card")}@example.com`);
-  const secondToken = second.cardUrl.split("/c/")[1];
+  const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
+  const enrollment = await page.request.post("/api/enroll", {
+    headers: { origin },
+    data: {
+      slug: restaurant.slug,
+      firstName: "Client points",
+      email: `${unique("points-card")}@example.com`,
+      marketingConsent: false,
+    },
+  });
+  expect(enrollment.status()).toBe(201);
+  const secondToken = String((await enrollment.json()).token);
   const pointsCredit = await page.request.post("/api/credit", {
     headers: { origin },
     data: { token: secondToken, idempotencyKey: crypto.randomUUID() },
