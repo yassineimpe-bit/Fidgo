@@ -128,3 +128,105 @@ test("enroll : un slug inconnu ne cree pas de compteur de rate-limit", async ({ 
     await sql.end({ timeout: 5 });
   }
 });
+
+
+test("XSS stocké : le branding reste du texte inerte et la CSP bloque l'exécution inline", async ({ page }) => {
+  await createMerchant(page, "xss-stored");
+  const payload = `<img src=x onerror="window.__retikoXss=1">`;
+
+  const updated = await page.request.patch("/api/restaurant", {
+    headers: { origin },
+    data: { name: payload },
+  });
+  expect(updated.ok()).toBeTruthy();
+
+  await page.goto("/dashboard");
+  await expect(page.getByText(payload, { exact: true })).toBeVisible();
+  expect(await page.locator('img[src="x"]').count()).toBe(0);
+  expect(await page.evaluate(() => (window as Window & { __retikoXss?: number }).__retikoXss)).toBeUndefined();
+
+  const response = await page.request.get("/dashboard");
+  const csp = response.headers()["content-security-policy"] || "";
+  expect(csp).toContain("object-src 'none'");
+  expect(csp).toContain("frame-ancestors 'none'");
+  expect(csp).toContain("'strict-dynamic'");
+  expect(csp).toMatch(/script-src 'self' 'nonce-[^']+'/);
+  expect(csp).not.toContain("'unsafe-inline'");
+});
+
+test("session fixation : le login remplace un cookie attaquant par une nouvelle session signée", async ({ page }) => {
+  const marker = unique("session-fixation");
+  const email = `${marker}@example.com`;
+  const password = "Password-test-123!";
+
+  await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
+  await page.goto("/signup");
+  await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Créer mon espace" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.request.post("/api/auth/logout", { headers: { origin } });
+
+  const attackerCookie = "attacker-controlled-session";
+  await page.context().addCookies([{
+    name: "loyalty_staff",
+    value: attackerCookie,
+    url: origin,
+    httpOnly: false,
+    sameSite: "Lax",
+  }]);
+
+  const before = await page.context().cookies(origin);
+  expect(before.find((cookie) => cookie.name === "loyalty_staff")?.value).toBe(attackerCookie);
+
+  const login = await page.request.post("/api/auth/login", {
+    headers: { origin, "x-real-ip": testClientIp() },
+    data: { email, password },
+  });
+  expect(login.status()).toBe(200);
+
+  const after = await page.context().cookies(origin);
+  const session = after.find((cookie) => cookie.name === "loyalty_staff");
+  expect(session).toBeTruthy();
+  expect(session?.value).not.toBe(attackerCookie);
+  expect(session?.httpOnly).toBe(true);
+  expect(session?.sameSite).toBe("Lax");
+
+  const dashboard = await page.request.get("/api/dashboard");
+  expect(dashboard.status()).toBe(200);
+});
+
+test("client bundle : aucun secret serveur connu n'est exposé au navigateur", async ({ page }) => {
+  const knownSecrets = [
+    process.env.AUTH_SECRET || "fidgo-playwright-secret-at-least-32-characters",
+    "sk_test_e2e_placeholder",
+    "whsec_retiko_e2e",
+    process.env.DATABASE_URL || "",
+  ].filter((value) => value.length >= 12);
+
+  const login = await page.request.get("/login");
+  expect(login.ok()).toBeTruthy();
+  const html = await login.text();
+
+  const chunkPaths = Array.from(new Set(
+    html.match(/\/_next\/static\/[^"'\s]+\.js/g) || [],
+  ));
+
+  const payloads = [html];
+  for (const chunkPath of chunkPaths) {
+    const response = await page.request.get(chunkPath);
+    if (response.ok()) payloads.push(await response.text());
+  }
+
+  const browserPayload = payloads.join("\n");
+  for (const secret of knownSecrets) {
+    expect(browserPayload.includes(secret)).toBe(false);
+  }
+
+  expect(browserPayload).not.toContain("STRIPE_SECRET_KEY");
+  expect(browserPayload).not.toContain("STRIPE_WEBHOOK_SECRET");
+  expect(browserPayload).not.toContain("DATABASE_URL");
+  expect(browserPayload).not.toContain("AUTH_SECRET");
+});
