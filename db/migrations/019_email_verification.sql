@@ -1,12 +1,29 @@
 -- Vérification d'adresse email pour les comptes commerçants créés via
 -- l'inscription publique. Les comptes déjà provisionnés restent utilisables.
+--
+-- IMPORTANT : db:setup rejoue les migrations. Le backfill legacy doit donc
+-- s'exécuter uniquement lors de la création initiale de la colonne. Sinon un
+-- futur replay marquerait à tort les nouveaux comptes non vérifiés comme
+-- vérifiés.
 
-alter table staff_users
-  add column if not exists email_verified_at timestamptz;
+do $$
+begin
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'staff_users'
+      and column_name = 'email_verified_at'
+  ) then
+    alter table staff_users
+      add column email_verified_at timestamptz;
 
-update staff_users
-set email_verified_at = coalesce(email_verified_at, created_at)
-where email_verified_at is null;
+    update staff_users
+    set email_verified_at = created_at
+    where email_verified_at is null;
+  end if;
+end
+$$;
 
 -- Les comptes créés par un OWNER (équipe) sont provisionnés explicitement et
 -- restent considérés comme approuvés. /api/auth/signup force NULL pour les
