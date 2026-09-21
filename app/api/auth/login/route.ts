@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
+    const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version, email_verified_at from staff_users where lower(email)=${email} limit 1`;
     const user = users[0];
     const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hash);
@@ -72,6 +72,13 @@ export async function POST(request: Request) {
     // mot de passe correct n'est jamais rejete, il ne peut plus etre maintenu
     // dehors par les tentatives d'un tiers.
     await resetRateLimit(accountKey);
+
+    if (!user.email_verified_at) {
+      return NextResponse.json(
+        { error: "EMAIL_NOT_VERIFIED" },
+        { status: 403, headers: { "cache-control": "no-store" } },
+      );
+    }
 
     const token = await signSession({
       staffId: String(user.id),
