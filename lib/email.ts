@@ -17,6 +17,12 @@ export type PasswordResetEmailInput = {
   idempotencyKey: string;
 };
 
+export type EmailVerificationEmailInput = {
+  to: string;
+  verificationUrl: string;
+  idempotencyKey: string;
+};
+
 export type EmailDeliveryResult = {
   messageId: string;
 };
@@ -77,6 +83,23 @@ function validPasswordResetUrl(value: string, env: EmailEnv) {
     return env.NODE_ENV !== "production"
       && url.protocol === "http:"
       && ["127.0.0.1", "localhost"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function validEmailVerificationUrl(value: string, env: EmailEnv) {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.hash || url.pathname !== "/verify-email") return false;
+    if ([...url.searchParams.keys()].some((key) => key !== "token")) return false;
+    const token = url.searchParams.get("token") || "";
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return false;
+    if (env.NODE_ENV === "production") {
+      return url.protocol === "https:" && url.origin === "https://retiko.fr";
+    }
+    return url.protocol === "https:"
+      || (url.protocol === "http:" && ["127.0.0.1", "localhost"].includes(url.hostname));
   } catch {
     return false;
   }
@@ -156,12 +179,43 @@ function passwordResetDocument(resetUrl: string) {
 </html>`;
 }
 
-export function recoveryEmailConfigured(env: EmailEnv = process.env) {
+function emailVerificationDocument(verificationUrl: string) {
+  const safeUrl = escapeHtml(verificationUrl);
+  return `<!doctype html>
+<html lang="fr" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vérifiez votre adresse e-mail Retiko</title>
+  </head>
+  <body lang="fr" dir="ltr" style="margin:0;background:#f6f7f9;color:#172033;font-family:Arial,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Activez votre espace commerçant Retiko. Ce lien expire dans 24 heures.</div>
+    <main style="max-width:600px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border-radius:16px;padding:32px 24px;">
+        <p style="margin:0 0 20px;color:#5b6475;font-weight:700;">RETIKO</p>
+        <h1 style="margin:0 0 16px;font-size:26px;line-height:1.25;">Vérifiez votre adresse e-mail</h1>
+        <p style="margin:0 0 24px;line-height:1.6;">Confirmez votre adresse e-mail pour activer la connexion à votre espace commerçant Retiko.</p>
+        <p style="margin:0 0 24px;">
+          <a href="${safeUrl}" style="display:inline-block;background:#1f5eff;color:#ffffff;text-decoration:none;font-weight:700;border-radius:10px;padding:14px 22px;">Vérifier mon adresse e-mail</a>
+        </p>
+        <p style="margin:0 0 12px;line-height:1.6;">Ce lien expire dans 24 heures et ne fonctionne qu’une seule fois.</p>
+        <p style="margin:0;line-height:1.6;color:#5b6475;">Vous n’avez pas créé de compte Retiko ? Vous pouvez ignorer cet e-mail.</p>
+      </div>
+    </main>
+  </body>
+</html>`;
+}
+
+export function emailDeliveryConfigured(env: EmailEnv = process.env) {
   return Boolean(
     env.RESEND_API_KEY?.trim()
     && env.EMAIL_FROM?.trim()
     && env.EMAIL_REPLY_TO?.trim(),
   );
+}
+
+export function recoveryEmailConfigured(env: EmailEnv = process.env) {
+  return emailDeliveryConfigured(env);
 }
 
 export async function sendCardRecoveryEmail(
@@ -280,6 +334,90 @@ export async function sendPasswordResetEmail(
       "Vous n'avez pas demandé cette réinitialisation ? Vous pouvez ignorer cet email en toute sécurité : votre mot de passe actuel reste inchangé.",
     ].join("\n"),
     html: passwordResetDocument(input.resetUrl),
+  };
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const sleep = options.sleep ?? wait;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response | undefined;
+    try {
+      response = await fetchImpl(RESEND_API, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        const result = await response.json().catch(() => null) as { id?: unknown } | null;
+        const messageId = typeof result?.id === "string" ? result.id.trim().slice(0, 200) : "";
+        if (!messageId) throw new EmailDeliveryError("EMAIL_INVALID_RESPONSE");
+        return { messageId };
+      }
+
+      if (!shouldRetry(response.status) || attempt === maxAttempts) {
+        throw new EmailDeliveryError(`EMAIL_SEND_${response.status}`);
+      }
+    } catch (error) {
+      if (error instanceof EmailDeliveryError) throw error;
+      if (attempt === maxAttempts) {
+        const code = controller.signal.aborted ? "EMAIL_SEND_TIMEOUT" : "EMAIL_SEND_NETWORK";
+        throw new EmailDeliveryError(code);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await sleep(retryDelay(response, attempt));
+  }
+
+  throw new EmailDeliveryError("EMAIL_SEND_FAILED");
+}
+
+export async function sendEmailVerificationEmail(
+  input: EmailVerificationEmailInput,
+  env: EmailEnv = process.env,
+  options: SendEmailOptions = {},
+): Promise<EmailDeliveryResult> {
+  const apiKey = env.RESEND_API_KEY?.trim();
+  const from = env.EMAIL_FROM?.trim();
+  const replyTo = env.EMAIL_REPLY_TO?.trim();
+  if (!apiKey || !from || !replyTo) throw new EmailDeliveryError("EMAIL_NOT_CONFIGURED");
+
+  const to = input.to.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new EmailDeliveryError("EMAIL_INVALID_RECIPIENT");
+  if (!validEmailVerificationUrl(input.verificationUrl, env)) {
+    throw new EmailDeliveryError("EMAIL_INVALID_VERIFICATION_URL");
+  }
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(input.idempotencyKey)) {
+    throw new EmailDeliveryError("EMAIL_INVALID_IDEMPOTENCY_KEY");
+  }
+
+  const payload = {
+    from,
+    to: [to],
+    reply_to: replyTo,
+    subject: "Vérifiez votre adresse e-mail Retiko",
+    text: [
+      "Vérifiez votre adresse e-mail",
+      "",
+      "Confirmez votre adresse e-mail pour activer la connexion à votre espace commerçant Retiko.",
+      "",
+      `Vérifier mon adresse e-mail : ${input.verificationUrl}`,
+      "",
+      "Ce lien expire dans 24 heures et ne fonctionne qu'une seule fois.",
+      "Vous n'avez pas créé de compte Retiko ? Vous pouvez ignorer cet e-mail.",
+    ].join("\n"),
+    html: emailVerificationDocument(input.verificationUrl),
   };
 
   const fetchImpl = options.fetchImpl ?? fetch;
