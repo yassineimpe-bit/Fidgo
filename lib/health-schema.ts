@@ -5,6 +5,8 @@ export function healthSchemaIsReady(schema: HealthSchemaFlags, billingRequired: 
   return Boolean(
     schema?.recovery_table
     && schema?.password_reset_table
+    && schema?.email_verification_table
+    && schema?.email_verified_at
     && schema?.product_events_table
     && schema?.token_version
     && schema?.last_earn_at
