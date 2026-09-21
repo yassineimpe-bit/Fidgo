@@ -13,9 +13,9 @@ describe("email verification migration", () => {
   it("backfills legacy accounts only when the column is created for the first time", () => {
     expect(migration).toContain("if not exists (");
     expect(migration).toContain("column_name = 'email_verified_at'");
-    expect(migration).toContain("add column email_verified_at");
-    expect(migration).toContain("set email_verified_at = created_at");
-    expect(migration.indexOf("set email_verified_at = created_at")).toBeLessThan(migration.indexOf("end\n$;"));
+    expect(migration).toMatch(
+      /if not exists \([\s\S]*add column email_verified_at[\s\S]*set email_verified_at = created_at[\s\S]*alter table staff_users/,
+    );
   });
 });
 
