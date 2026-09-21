@@ -24,10 +24,9 @@ export async function POST(request: Request) {
   const origin = requireSameOrigin(request);
   if (!origin.ok) return NextResponse.json({ error: origin.error }, { status: origin.status });
 
-  // Ne pas laisser le formulaire tenter une connexion localhost ou créer un
-  // compte sans pouvoir ensuite signer la session. En production mal
-  // configurée, on renvoie une indisponibilité explicite au lieu d'un 500
-  // générique après plusieurs secondes.
+  // Ne pas créer un compte si l'authentification de l'application n'est pas
+  // exploitable. En production mal configurée, on renvoie une indisponibilité
+  // explicite au lieu de laisser un compte inutilisable derrière nous.
   if (!databaseConfigured || !process.env.AUTH_SECRET?.trim()) {
     return NextResponse.json(
       { error: "SERVICE_UNAVAILABLE" },
@@ -91,23 +90,14 @@ export async function POST(request: Request) {
     }
 
     const verificationUrl = `${appUrl}/verify-email?token=${verification.token}`;
+    let messageId: string;
     try {
       const delivered = await sendEmailVerificationEmail({
         to: email,
         verificationUrl,
         idempotencyKey: `email-verification-${verification.tokenHash}`,
       });
-      await sql`
-        insert into audit_logs(establishment_id, staff_user_id, action, entity_type, entity_id, metadata)
-        values(
-          ${result.establishment.id},
-          ${result.staff.id},
-          'EMAIL_VERIFICATION_EMAIL_SENT',
-          'staff_user',
-          ${result.staff.id},
-          ${sql.json({ provider: "resend", messageId: delivered.messageId })}
-        )
-      `;
+      messageId = delivered.messageId;
     } catch (error) {
       const code = safeErrorCode(error, "EMAIL_SEND_FAILED");
       console.error("SIGNUP_VERIFICATION_EMAIL_FAILED", { code });
@@ -128,6 +118,26 @@ export async function POST(request: Request) {
         { error: "EMAIL_VERIFICATION_SEND_FAILED", accountCreated: true },
         { status: 503, headers: { "cache-control": "no-store" } },
       );
+    }
+
+    // L'audit ne doit jamais transformer un e-mail effectivement remis par
+    // Resend en faux échec côté utilisateur.
+    try {
+      await sql`
+        insert into audit_logs(establishment_id, staff_user_id, action, entity_type, entity_id, metadata)
+        values(
+          ${result.establishment.id},
+          ${result.staff.id},
+          'EMAIL_VERIFICATION_EMAIL_SENT',
+          'staff_user',
+          ${result.staff.id},
+          ${sql.json({ provider: "resend", messageId })}
+        )
+      `;
+    } catch (error) {
+      console.error("SIGNUP_VERIFICATION_AUDIT_FAILED", {
+        code: safeErrorCode(error, "EMAIL_VERIFICATION_AUDIT_FAILED"),
+      });
     }
 
     return NextResponse.json(
