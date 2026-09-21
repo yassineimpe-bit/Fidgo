@@ -4,8 +4,10 @@ import { healthSchemaIsReady } from "@/lib/health-schema";
 const coreSchema = {
   recovery_table: true,
   password_reset_table: true,
+  email_verification_table: true,
   product_events_table: true,
   token_version: true,
+  email_verified_at: true,
   last_earn_at: true,
   cooldown_seconds: true,
   tenant_integrity: true,
@@ -19,6 +21,11 @@ const coreSchema = {
 describe("health schema", () => {
   it("échoue fermé si la migration password reset 015 manque", () => {
     expect(healthSchemaIsReady({ ...coreSchema, password_reset_table: false }, false)).toBe(false);
+  });
+
+  it("échoue fermé si la migration email verification 019 manque", () => {
+    expect(healthSchemaIsReady({ ...coreSchema, email_verification_table: false }, false)).toBe(false);
+    expect(healthSchemaIsReady({ ...coreSchema, email_verified_at: false }, false)).toBe(false);
   });
 
   describe("Stripe optionnel", () => {
