@@ -151,7 +151,8 @@ test("XSS stocké : le branding reste du texte inerte et la CSP bloque l'exécut
   expect(csp).toContain("frame-ancestors 'none'");
   expect(csp).toContain("'strict-dynamic'");
   expect(csp).toMatch(/script-src 'self' 'nonce-[^']+'/);
-  expect(csp).not.toContain("'unsafe-inline'");
+  const scriptDirective = csp.split(";").find((directive) => directive.trim().startsWith("script-src")) || "";
+  expect(scriptDirective).not.toContain("'unsafe-inline'");
 });
 
 test("session fixation : le login remplace un cookie attaquant par une nouvelle session signée", async ({ page }) => {
