@@ -1,0 +1,31 @@
+-- Vérification d'adresse email pour les comptes commerçants créés via
+-- l'inscription publique. Les comptes déjà provisionnés restent utilisables.
+
+alter table staff_users
+  add column if not exists email_verified_at timestamptz;
+
+update staff_users
+set email_verified_at = coalesce(email_verified_at, created_at)
+where email_verified_at is null;
+
+-- Les comptes créés par un OWNER (équipe) sont provisionnés explicitement et
+-- restent considérés comme approuvés. /api/auth/signup force NULL pour les
+-- nouveaux comptes OWNER issus de l'inscription publique.
+alter table staff_users
+  alter column email_verified_at set default now();
+
+create table if not exists email_verification_tokens (
+  id uuid primary key default gen_random_uuid(),
+  staff_user_id uuid not null references staff_users(id) on delete cascade,
+  token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists email_verification_tokens_staff_idx
+  on email_verification_tokens (staff_user_id, created_at desc);
+
+create index if not exists email_verification_tokens_expiry_idx
+  on email_verification_tokens (expires_at)
+  where used_at is null;
