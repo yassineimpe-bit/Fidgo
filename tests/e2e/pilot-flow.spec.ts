@@ -53,3 +53,93 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   await expect(scanSuccessMetric).toBeVisible();
   await expect(scanSuccessMetric).not.toHaveText("0");
 });
+
+
+test("programme : une carte existante survit aux réglages et le mode points crédite réellement", async ({ page }) => {
+  await createMerchant(page, "program-change");
+  const first = await enrollCustomer(page, "Carte existante", `${unique("existing-card")}@example.com`);
+  const firstToken = first.cardUrl.split("/c/")[1];
+
+  const firstCredit = await page.request.post("/api/credit", {
+    headers: { origin },
+    data: { token: firstToken, idempotencyKey: crypto.randomUUID() },
+  });
+  expect(firstCredit.ok()).toBeTruthy();
+  await expect(firstCredit.json()).resolves.toMatchObject({ balance: 1, delta: 1, mode: "STAMPS" });
+
+  const current = await page.request.get("/api/program").then((response) => response.json());
+  const stampUpdate = await page.request.patch("/api/program", {
+    headers: { origin },
+    data: {
+      programName: current.program_name,
+      mode: "STAMPS",
+      pointsRule: "PER_PURCHASE",
+      rewardThreshold: 5,
+      rewardLabel: "Cookie offert",
+      cardMessage: "Toujours la même carte",
+      stampsPerVisit: 1,
+      pointsPerPurchase: 7,
+      pointsPerEuro: 1,
+      dailyEarnLimit: 0,
+      cooldownSeconds: 120,
+      expiresAfterDays: null,
+    },
+  });
+  expect(stampUpdate.ok()).toBeTruthy();
+
+  const existingCard = await page.request.post("/api/scan", {
+    headers: { origin },
+    data: { token: firstToken },
+  });
+  expect(existingCard.ok()).toBeTruthy();
+  await expect(existingCard.json()).resolves.toMatchObject({
+    balance: 1,
+    mode: "STAMPS",
+    threshold: 5,
+    rewardLabel: "Cookie offert",
+  });
+
+  const pointsUpdate = await page.request.patch("/api/program", {
+    headers: { origin },
+    data: {
+      programName: "Carte points",
+      mode: "POINTS",
+      pointsRule: "PER_PURCHASE",
+      rewardThreshold: 20,
+      rewardLabel: "Boisson offerte",
+      cardMessage: null,
+      stampsPerVisit: 1,
+      pointsPerPurchase: 7,
+      pointsPerEuro: 1,
+      dailyEarnLimit: 0,
+      cooldownSeconds: 120,
+      expiresAfterDays: null,
+    },
+  });
+  expect(pointsUpdate.ok()).toBeTruthy();
+
+  const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
+  const enrollment = await page.request.post("/api/enroll", {
+    headers: { origin },
+    data: {
+      slug: restaurant.slug,
+      firstName: "Client points",
+      email: `${unique("points-card")}@example.com`,
+      marketingConsent: false,
+    },
+  });
+  expect(enrollment.status()).toBe(201);
+  const secondToken = String((await enrollment.json()).token);
+  const pointsCredit = await page.request.post("/api/credit", {
+    headers: { origin },
+    data: { token: secondToken, idempotencyKey: crypto.randomUUID() },
+  });
+  expect(pointsCredit.ok()).toBeTruthy();
+  await expect(pointsCredit.json()).resolves.toMatchObject({
+    balance: 7,
+    delta: 7,
+    mode: "POINTS",
+    threshold: 20,
+    rewardLabel: "Boisson offerte",
+  });
+});

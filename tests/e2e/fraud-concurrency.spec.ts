@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, origin, unique } from "./helpers";
+import { createMerchant, origin, testClientIp, unique } from "./helpers";
 
 async function tokenForNewCustomer(page: Page, label: string, slug: string) {
   const response = await page.request.post("/api/enroll", {
@@ -156,5 +156,61 @@ test("fraude/concurrence : idempotence, cooldown, redemption et ledger restent c
   } finally {
     await sql.end({ timeout: 5 });
     await secondDevice.close();
+  }
+});
+
+
+test("concurrence staff : deux EMPLOYEE sur la même carte ne doublent jamais un passage", async ({ page, browser }) => {
+  test.setTimeout(90_000);
+  await createMerchant(page, "multi-staff-race");
+  const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
+  const token = await tokenForNewCustomer(page, "multi-staff-card", restaurant.slug);
+  const password = "Password-test-123!";
+
+  const firstEmployee = await page.request.post("/api/employees", {
+    headers: { origin },
+    data: { email: `${unique("cashier-a")}@example.com`, password, role: "EMPLOYEE" },
+  }).then((response) => response.json());
+  const secondEmployee = await page.request.post("/api/employees", {
+    headers: { origin },
+    data: { email: `${unique("cashier-b")}@example.com`, password, role: "EMPLOYEE" },
+  }).then((response) => response.json());
+
+  const firstContext = await browser.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
+  const secondContext = await browser.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
+  const firstPage = await firstContext.newPage();
+  const secondPage = await secondContext.newPage();
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
+
+  try {
+    for (const [employeePage, employee] of [[firstPage, firstEmployee], [secondPage, secondEmployee]] as const) {
+      await employeePage.goto("/login");
+      await employeePage.getByLabel("Email").fill(String(employee.email));
+      await employeePage.getByLabel("Mot de passe").fill(password);
+      await employeePage.getByRole("button", { name: "Se connecter" }).click();
+      await expect(employeePage).toHaveURL(/\/s$/);
+    }
+
+    const responses = await Promise.all([
+      credit(firstPage, token, crypto.randomUUID()),
+      credit(secondPage, token, crypto.randomUUID()),
+    ]);
+    expect(responses.map((response) => response.status()).sort()).toEqual([200, 409]);
+    expect((await scanBalance(page, token)).balance).toBe(1);
+
+    const [ledger] = await sql`
+      select
+        count(*) filter (where type='earn')::int as earn_count,
+        min(staff_user_id::text) filter (where type='earn') as credited_by
+      from transactions t
+      join cards c on c.id=t.card_id
+      where c.token=${token}
+    `;
+    expect(Number(ledger.earn_count)).toBe(1);
+    expect([String(firstEmployee.id), String(secondEmployee.id)]).toContain(String(ledger.credited_by));
+  } finally {
+    await sql.end({ timeout: 5 });
+    await firstContext.close();
+    await secondContext.close();
   }
 });
