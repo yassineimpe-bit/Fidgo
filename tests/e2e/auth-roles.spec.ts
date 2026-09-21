@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { createMerchant, logout, origin, randomizeClientIp, unique } from "./helpers";
 
-test("auth : signup, logout puis login redonnent accès au dashboard", async ({ page }) => {
+test("auth : signup vérifié, logout puis login redonnent accès au dashboard", async ({ page }) => {
   const marker = unique("auth");
   const email = `${marker}@example.com`;
   const password = "Password-test-123!";
@@ -12,7 +12,36 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  // L'inscription ne crée plus de session avant vérification.
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login$/);
+
+  const blockedLogin = await page.request.post("/api/auth/login", {
+    headers: { origin },
+    data: { email, password },
+  });
+  expect(blockedLogin.status()).toBe(403);
+  expect((await blockedLogin.json()).error).toBe("EMAIL_NOT_VERIFIED");
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: signup.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await logout(page);
