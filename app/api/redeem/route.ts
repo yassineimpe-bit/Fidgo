@@ -6,6 +6,7 @@ import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
+import { getBillingAccess } from "@/lib/billing";
 
 const KNOWN_REDEEM_ERRORS = new Set(["INSUFFICIENT_BALANCE", "CARD_NOT_FOUND", "CARD_EXPIRED"]);
 
@@ -16,6 +17,7 @@ async function handlePost(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canScan(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!(await getBillingAccess(session.establishmentId)).operational) return Response.json({ error: "BILLING_REQUIRED" }, { status: 402 });
   const limited = await enforceRateLimit(req, `redeem:${session.staffId}`, 120, 60);
   if (limited) return limited;
   const body = await req.json();

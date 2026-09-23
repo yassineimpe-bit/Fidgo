@@ -31,6 +31,12 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     network: false,
     sessionExpired: false,
   },
+  BILLING_REQUIRED: {
+    message: "Les opérations de fidélité sont suspendues. Demande au responsable d’activer l’abonnement.",
+    retryable: false,
+    network: false,
+    sessionExpired: false,
+  },
   TOO_MANY_ATTEMPTS: {
     message: "Trop de tentatives en peu de temps. Attends quelques secondes puis réessaie.",
     retryable: true,

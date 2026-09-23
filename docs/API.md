@@ -1,5 +1,12 @@
 # API MVP Retiko
 
+Lorsque Stripe est activé et entièrement configuré, les routes opérationnelles
+`/api/scan`, `/api/lookup`, `/api/credit` et `/api/redeem` renvoient
+`402 { "error": "BILLING_REQUIRED" }` si l'essai est expiré ou si l'abonnement
+n'est plus actif. `/api/enroll` renvoie alors `403 { "error":
+"PROGRAM_UNAVAILABLE" }`. La connexion et les lectures du dashboard restent
+accessibles afin que le commerce puisse consulter ses données et se réabonner.
+
 ## Public
 
 ### `POST /api/auth/signup`

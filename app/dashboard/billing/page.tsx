@@ -6,6 +6,7 @@ import {
   BILLING_PLANS,
   BILLING_TRIAL_DAYS,
   type BillingPlan,
+  billingAccess,
   getBillingRuntimeStatus,
   getSubscription,
 } from "@/lib/billing";
@@ -20,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
   past_due: "Paiement en retard",
   canceled: "Résilié",
   unpaid: "Impayé",
+  trial_expired: "Essai terminé",
 };
 
 function formatDate(value: unknown) {
@@ -36,7 +38,8 @@ export default async function BillingPage() {
   `;
   const subscription = await getSubscription(session.establishmentId);
   const runtime = getBillingRuntimeStatus();
-  const status = String(subscription?.status || "trial");
+  const access = billingAccess(subscription, { enforce: runtime.configured });
+  const status = access.status;
   const plan = String(subscription?.plan || "PILOT");
   const planDefinition = plan === "PILOT" ? null : BILLING_PLANS[plan as BillingPlan];
   const canSubscribe = !subscription?.external_subscription_id || status === "canceled";
