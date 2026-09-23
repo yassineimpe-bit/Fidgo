@@ -31,6 +31,8 @@ const ACTION_LABELS: Record<string, string> = {
   PASSWORD_CHANGED: "Mot de passe modifié",
   CUSTOMER_ERASE: "Client effacé",
   ESTABLISHMENT_SUSPEND: "Commerce suspendu",
+  PLATFORM_SUSPEND: "Commerce suspendu par Retiko",
+  PLATFORM_REACTIVATE: "Commerce réactivé par Retiko",
 };
 
 export function activityActionLabel(action: string) {

@@ -11,6 +11,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   SERVICE_UNAVAILABLE: "Le service de connexion n’est pas encore disponible. Réessaie un peu plus tard.",
   SIGNUP_FAILED: "Impossible de créer le compte pour le moment.",
   LOGIN_FAILED: "Connexion impossible pour le moment.",
+  ESTABLISHMENT_SUSPENDED: "Ce commerce est suspendu. Contacte le support Retiko pour le réactiver.",
 };
 
 function describeError(code: string | undefined) {
