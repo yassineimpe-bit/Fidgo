@@ -73,6 +73,7 @@ export async function GET() {
       select
         to_regclass('public.card_recovery_tokens') is not null as recovery_table,
         to_regclass('public.password_reset_tokens') is not null as password_reset_table,
+        exists (select 1 from information_schema.columns where table_schema='public' and table_name='establishments' and column_name='onboarding_step') as onboarding_step,
         to_regclass('public.product_events') is not null as product_events_table,
         to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
         exists(

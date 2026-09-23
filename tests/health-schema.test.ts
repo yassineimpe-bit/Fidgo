@@ -3,6 +3,7 @@ import { healthSchemaIsReady } from "@/lib/health-schema";
 
 const coreSchema = {
   recovery_table: true,
+  onboarding_step: true,
   password_reset_table: true,
   product_events_table: true,
   token_version: true,
@@ -17,6 +18,9 @@ const coreSchema = {
 };
 
 describe("health schema", () => {
+  it("échoue fermé si la migration onboarding 019 manque", () => {
+    expect(healthSchemaIsReady({ ...coreSchema, onboarding_step: false }, false)).toBe(false);
+  });
   it("échoue fermé si la migration password reset 015 manque", () => {
     expect(healthSchemaIsReady({ ...coreSchema, password_reset_table: false }, false)).toBe(false);
   });

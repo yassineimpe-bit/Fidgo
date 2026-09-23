@@ -33,7 +33,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(describeError(data.error)); return; }
-      router.replace("/dashboard"); router.refresh();
+      router.replace(mode === "signup" ? "/onboarding" : "/dashboard"); router.refresh();
     } catch {
       // Une perte réseau pendant l'envoi ne doit jamais laisser le bouton
       // bloqué sur "Chargement…" sans explication.

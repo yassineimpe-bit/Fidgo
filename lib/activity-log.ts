@@ -22,6 +22,7 @@ export function parseActivityFilters(input: {
 }
 
 const ACTION_LABELS: Record<string, string> = {
+  ONBOARDING_ADVANCE: "Configuration du commerce avancée",
   STAFF_CREATE: "Employé créé",
   STAFF_ACCESS_UPDATE: "Accès employé modifié",
   STAFF_UPDATE: "Rôle ou accès équipe modifié",
