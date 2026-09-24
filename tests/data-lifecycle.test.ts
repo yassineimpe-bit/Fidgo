@@ -30,20 +30,16 @@ describe("data lifecycle database contract", () => {
     expect(workflow).toContain("github.event_name == 'workflow_dispatch'");
   });
 
-  it("invalide les liens password reset lorsqu'un employé est désactivé", () => {
-    expect(employeeRoute).toContain("update password_reset_tokens");
+  it("invalide les credentials temporaires lorsqu\'un employé est désactivé", () => {\n    expect(employeeRoute).toContain("update password_reset_tokens");\n    expect(employeeRoute).toContain("update email_verification_tokens");
     expect(employeeRoute).toContain("where staff_user_id=");
     expect(employeeRoute).toContain("if (!nextActive || roleChanged)");
   });
 
-  it("invalide aussi les liens password reset à la suspension du commerce", () => {
-    expect(restaurantSuspendRoute).toContain("update password_reset_tokens");
+  it("invalide aussi les credentials temporaires à la suspension du commerce", () => {\n    expect(restaurantSuspendRoute).toContain("update password_reset_tokens");\n    expect(restaurantSuspendRoute).toContain("update email_verification_tokens");
     expect(restaurantSuspendRoute).toContain("select id from staff_users where establishment_id=");
   });
 
-  it("checks active password-reset credentials against revoked staff/establishments", () => {
-    expect(verify).toContain("active_orphan_password_reset_tokens");
-    expect(verify).toContain("password_reset_tokens");
+  it("checks active auth credentials against revoked staff/establishments", () => {\n    expect(verify).toContain("active_orphan_password_reset_tokens");\n    expect(verify).toContain("password_reset_tokens");\n    expect(verify).toContain("active_orphan_email_verification_tokens");\n    expect(verify).toContain("email_verification_tokens");
   });
 
   it("keeps maintenance purges bounded and excludes business ledger tables", () => {
@@ -51,7 +47,7 @@ describe("data lifecycle database contract", () => {
     expect(purge).toContain("--execute");
     expect(purge).toContain("pg_try_advisory_lock");
     expect(purge).toContain("password_reset_tokens");
-    expect(purge).toContain("passwordResetTokensDays: 30");
+    expect(purge).toContain("passwordResetTokensDays: 30");\n    expect(purge).toContain("email_verification_tokens");\n    expect(purge).toContain("emailVerificationTokensDays: 30");
     expect(purge).not.toMatch(/delete\s+from\s+transactions/i);
     expect(purge).not.toMatch(/delete\s+from\s+cards/i);
     expect(purge).not.toMatch(/delete\s+from\s+customers/i);
