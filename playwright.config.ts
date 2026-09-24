@@ -29,7 +29,7 @@ export default defineConfig({
       CARD_RECOVERY_ENABLED: "true",
       RESEND_API_KEY: "re_test_dummy_key",
       EMAIL_FROM: "Fidgo <cards@fidgo.test>",
-      EMAIL_REPLY_TO: "support@fidgo.test",
+      EMAIL_REPLY_TO: "support@fidgo.test",\n      EMAIL_VERIFICATION_TEST_MODE: "true",
       STRIPE_ENABLED: "true",
       STRIPE_SECRET_KEY: "sk_test_e2e_placeholder",
       STRIPE_WEBHOOK_SECRET: "whsec_retiko_e2e",
