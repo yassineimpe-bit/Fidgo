@@ -52,10 +52,12 @@ Vous pouvez demander l'accès, la rectification, l'effacement ou l'export de vos
 
 - **Vercel** — hébergement applicatif ;
 - **Neon** — base de données PostgreSQL ;
-- **Resend** — envoi des emails de récupération de carte, une fois activé ;
-- [Outil d'observabilité retenu], s'il traite des données pour Retiko.
+- **GitHub** — sauvegardes quotidiennes chiffrées de la base ;
+- **Resend** — envoi des emails de récupération de carte et de réinitialisation, une fois activé ;
+- **Google** — carte dans Google Wallet, si vous choisissez de l'y ajouter et une fois activé ;
+- **Apple** — mises à jour des cartes Apple Wallet, si vous choisissez de l'y ajouter et une fois activé.
 
-Cette liste est tenue à jour dans `docs/RGPD.md` et n'inclut que les sous-traitants réellement activés en production.
+Cette liste est tenue à jour dans `docs/REGISTRE_TRAITEMENTS.md` et n'inclut que les sous-traitants réellement activés en production.
 
 ## 8. Sécurité
 

@@ -35,16 +35,15 @@ Modèles de travail présents dans le dépôt :
 - `DPA_TEMPLATE.md` pour l'annexe de sous-traitance ;
 - `RGPD_PROCEDURES.md` pour l'exercice des droits, les violations de données et la fin de relation ;
 - `PRIVACY_POLICY_TEMPLATE.md` pour la politique de confidentialité publique ;
-- `MENTIONS_LEGALES_TEMPLATE.md` pour les mentions légales.
+- `MENTIONS_LEGALES_TEMPLATE.md` pour les mentions légales ;
+- `REGISTRE_TRAITEMENTS.md` pour le registre des activités de traitement (art. 30) et ses écarts ouverts.
 
 ## Sous-traitants techniques
 
-Documenter uniquement les fournisseurs réellement activés. Pour le pilote, la liste attendue comprend au minimum :
+Documenter uniquement les fournisseurs réellement activés. La liste de référence, avec les données transmises à chacun, est tenue dans `REGISTRE_TRAITEMENTS.md` :
 
-- Vercel pour l'hébergement applicatif ;
-- Neon pour PostgreSQL ;
-- Resend pour les emails transactionnels de récupération, une fois activé ;
-- l'outil d'observabilité retenu, s'il traite des données pour Retiko.
+- **actifs dès le déploiement** : Vercel (hébergement), Neon (PostgreSQL), GitHub Actions (sauvegardes quotidiennes : dump en clair sur le runner le temps du job, artefacts chiffrés 14 jours) ;
+- **si activés** : Resend (emails transactionnels), Stripe (facturation), Google Wallet, Apple APNs (mises à jour des passes).
 
 Éviter toute donnée personnelle inutile dans les logs et outils de monitoring. Les secrets, JWT, tokens de carte et liens magiques ne doivent pas être journalisés.
 
