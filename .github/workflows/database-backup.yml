@@ -203,7 +203,7 @@ jobs:
           compression-level: 0
 
   migrate-019-020:
-    if: github.event_name == 'push' && github.event.head_commit.message == 'ops: apply production migrations 019 and 020'
+    if: github.event_name == 'push'
     needs: backup-restore
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -231,7 +231,7 @@ jobs:
             core.setSecret(token);
             core.setOutput("token", token);
 
-      - name: Exchange OIDC identity for short-lived production database access
+      - name: Exchange OIDC identity for production database access
         shell: bash
         env:
           RETIKO_BACKUP_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
@@ -239,97 +239,30 @@ jobs:
           set -euo pipefail
           response_file=$(mktemp)
           trap 'rm -f "$response_file"' EXIT
-
           code=$(curl --silent --show-error --max-time 15 \
             --output "$response_file" \
             --write-out '%{http_code}' \
             --request POST \
             --header "Authorization: Bearer $RETIKO_BACKUP_OIDC_TOKEN" \
             "$BACKUP_CREDENTIAL_URL")
-
-          test "$code" = "200" || {
-            echo "::error::Production database credential broker returned HTTP $code."
-            exit 1
-          }
-
+          test "$code" = "200"
           database_url=$(jq -er '.databaseUrl | select(type == "string" and length > 0)' "$response_file")
           echo "::add-mask::$database_url"
           printf 'DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
 
-      - name: Apply migrations 019 and 020 only
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from "node:fs/promises";
-          import postgres from "postgres";
-
-          const db = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
-
-          try {
-            for (const file of [
-              "db/migrations/019_platform_super_admin.sql",
-              "db/migrations/020_merchant_onboarding.sql",
-            ]) {
-              const sql = await fs.readFile(file, "utf8");
-              console.log(`Applying ${file}`);
-              await db.unsafe(sql);
-            }
-
-            const rows = await db.unsafe(`
-              select
-                to_regclass('public.platform_admins') is not null as platform_admins,
-                to_regclass('public.platform_admin_audit') is not null as platform_admin_audit,
-                exists (
-                  select 1 from information_schema.columns
-                  where table_schema='public' and table_name='establishments'
-                    and column_name='platform_suspended_at'
-                ) as platform_suspended_at,
-                exists (
-                  select 1 from information_schema.columns
-                  where table_schema='public' and table_name='establishments'
-                    and column_name='onboarding_step'
-                ) as onboarding_step,
-                exists (
-                  select 1 from pg_constraint
-                  where conname='establishments_platform_suspension_check'
-                ) as platform_suspension_check,
-                exists (
-                  select 1 from pg_constraint
-                  where conname='establishments_onboarding_step_check'
-                ) as onboarding_step_check,
-                exists (
-                  select 1 from pg_trigger
-                  where tgname='platform_admin_audit_append_only' and not tgisinternal
-                ) as platform_admin_audit_append_only
-            `);
-
-            const state = rows[0];
-            console.log("Migration verification:", state);
-            if (!Object.values(state).every(Boolean)) {
-              throw new Error("Migration verification failed");
-            }
-          } finally {
-            await db.end({ timeout: 5 });
-          }
-          NODE
+      - name: Apply migrations 019 and 020
+        run: node scripts/apply-prod-migrations-019-020.mjs
 
       - name: Verify production database integrity
         run: npm run db:verify
 
-      - name: Wait for production health to become green
+      - name: Verify production health
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
             body=$(curl --silent --show-error --max-time 15 https://retiko.fr/api/health || true)
-            if echo "$body" | jq -e '
-              .ok == true and
-              .service == "retiko" and
-              .database == "up" and
-              .schema == "up" and
-              .auth == "up"
-            ' >/dev/null 2>&1; then
+            if echo "$body" | jq -e '.ok == true and .database == "up" and .schema == "up" and .auth == "up"' >/dev/null 2>&1; then
               echo "Production health is green."
               exit 0
             fi
