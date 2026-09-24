@@ -10,7 +10,7 @@ import {
 const env = {
   NODE_ENV: "production",
   RESEND_API_KEY: "re_test_secret",
-  EMAIL_FROM: "Retiko <cartes@send.retiko.fr>",
+  EMAIL_FROM: "Retiko <cartes@retiko.fr>",
   EMAIL_REPLY_TO: "contact@retiko.fr",
 };
 

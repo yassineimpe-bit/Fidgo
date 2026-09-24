@@ -7,7 +7,13 @@ import { hashRateKey, requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
 
+/**
+ * Hash factice (mot de passe aleatoire, meme cout que la production) compare
+ * quand le compte n'existe pas ou est desactive. Sans lui, la reponse revenait
+ * en ~2 ms au lieu de ~300 ms et permettait d'enumerer les comptes au timing.
+ */
 const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEe.7jbm1Av7B9VrPX1i8EQnE6ZBqJfFqcO";
+
 const ACCOUNT_ATTEMPT_LIMIT = 20;
 const ACCOUNT_WINDOW_SECONDS = 15 * 60;
 
@@ -29,6 +35,16 @@ export async function POST(request: Request) {
   const byIp = await rateLimit(request, "login", 10, 15 * 60);
   if (!byIp.allowed) return NextResponse.json({ error: "TOO_MANY_ATTEMPTS" }, { status: 429 });
 
+  // Second compteur par compte : sans lui, un brute-force distribue sur
+  // plusieurs IP contourne entierement la limite par IP.
+  //
+  // Il n'est plus consulte AVANT la verification du mot de passe. Un blocage
+  // en amont transformait ce garde-fou en arme : 20 requetes suffisaient pour
+  // empecher un commercant de se connecter pendant 15 minutes, en connaissant
+  // seulement son email — et une caisse bloquee en plein service est un degat
+  // bien plus concret que les tentatives qu'on cherchait a freiner. Le
+  // compteur gouverne desormais les ECHECS, pas l'acces : un mot de passe
+  // correct passe toujours (cf. plus bas).
   const accountKey = `login-account:${email}`;
 
   if (!isEmail(email) || !password || password.length > 256) {
@@ -47,15 +63,20 @@ export async function POST(request: Request) {
     const passwordOk = await bcrypt.compare(password, hash);
 
     if (!user || !user.active || !passwordOk) {
+      // Seul l'echec consomme un jeton.
       const { allowed } = await consumeRateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_WINDOW_SECONDS);
       if (!allowed) {
+        // Compensation du blocage retire : l'acharnement sur un compte devient
+        // un signal exploitable dans les logs, sans journaliser l'adresse.
         console.warn("LOGIN_ACCOUNT_THROTTLED", { account: hashRateKey(email).slice(0, 12) });
         return NextResponse.json({ error: "TOO_MANY_ATTEMPTS" }, { status: 429 });
       }
       return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
     }
 
-    // On ne révèle les états de compte qu'après preuve du mot de passe.
+    // On ne révèle les états de compte (suspendu, e-mail non vérifié)
+    // qu'après preuve du mot de passe : aucun signal d'énumération. Aucune
+    // session n'est émise pour un commerce suspendu.
     const [establishment] = await sql`
       select status from establishments where id=${user.establishment_id}
     `;
@@ -66,6 +87,9 @@ export async function POST(request: Request) {
       );
     }
 
+    // Le titulaire legitime repart d'un compteur vierge. Combine au fait qu'un
+    // mot de passe correct n'est jamais rejete, il ne peut plus etre maintenu
+    // dehors par les tentatives d'un tiers.
     await resetRateLimit(accountKey);
 
     if (!user.email_verified_at) {
@@ -89,6 +113,8 @@ export async function POST(request: Request) {
     response.cookies.set(sessionCookie(token));
     return response;
   } catch (error) {
+    // Meme logique que /api/auth/signup : ne jamais laisser une exception
+    // (base injoignable, schema desynchronise) remonter sans corps JSON.
     console.error("LOGIN_FAILED", { code: safeErrorCode(error, "LOGIN_FAILED") });
     return NextResponse.json({ error: "LOGIN_FAILED" }, { status: 500 });
   }

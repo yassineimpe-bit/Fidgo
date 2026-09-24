@@ -37,8 +37,10 @@ export async function createMerchant(page: Page, label: string) {
   const signup = await signupResponse.json() as { verificationToken?: string };
   expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
 
+  // page.request n'hérite pas de l'IP logique de la page : sans elle, chaque
+  // vérification consommerait le même bucket 127.0.0.1 (30/h) pour toute la suite.
   const verified = await page.request.post("/api/auth/verify-email", {
-    headers: { origin },
+    headers: { origin, "x-real-ip": testClientIp() },
     data: { token: signup.verificationToken },
   });
   expect(verified.ok()).toBeTruthy();
