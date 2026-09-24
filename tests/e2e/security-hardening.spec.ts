@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, currentCustomerId, enrollCustomer, origin, testClientIp, unique } from "./helpers";
+import { createMerchant, currentCustomerId, enrollCustomer, origin, submitSignupAndVerify, testClientIp, unique } from "./helpers";
 
 /**
  * Regressions du durcissement de securite. Chaque test correspond a une faille
@@ -17,8 +17,7 @@ test("login : 20 echecs d'un tiers ne verrouillent pas le titulaire du compte", 
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await submitSignupAndVerify(page, email, password);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 

@@ -43,6 +43,9 @@ test("auth : signup vérifié, logout puis login redonnent accès au dashboard",
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
+  // Configuration guidée encore en cours : le login y ramène le propriétaire.
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await logout(page);
@@ -54,7 +57,7 @@ test("auth : signup vérifié, logout puis login redonnent accès au dashboard",
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/onboarding$/);
 });
 
 test("auth : une nouvelle inscription reprend proprement une adresse encore non vérifiée", async ({ page }) => {
@@ -118,6 +121,7 @@ test("auth : une nouvelle inscription reprend proprement une adresse encore non 
     data: { email, password: newPassword },
   });
   expect(goodLogin.ok()).toBeTruthy();
+  expect((await goodLogin.json()).onboardingPending).toBe(true);
 
   const duplicateVerified = await page.request.post("/api/auth/signup", {
     headers,

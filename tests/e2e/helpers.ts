@@ -18,16 +18,12 @@ export async function randomizeClientIp(page: Page) {
   await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
 }
 
-export async function createMerchant(page: Page, label: string) {
-  const marker = unique(label);
-  const email = `${marker}@example.com`;
-  const password = "Password-test-123!";
-  await randomizeClientIp(page);
-  await page.goto("/signup");
-  await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Mot de passe").fill(password);
-
+/**
+ * Soumet le formulaire d'inscription déjà rempli, vérifie l'adresse avec le
+ * jeton renvoyé en mode E2E, puis se connecte via le formulaire. Un OWNER
+ * fraîchement inscrit atterrit sur la configuration guidée.
+ */
+export async function submitSignupAndVerify(page: Page, email: string, password: string) {
   const signupResponsePromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
   );
@@ -49,6 +45,20 @@ export async function createMerchant(page: Page, label: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+}
+
+export async function createMerchant(page: Page, label: string) {
+  const marker = unique(label);
+  const email = `${marker}@example.com`;
+  const password = "Password-test-123!";
+  await randomizeClientIp(page);
+  await page.goto("/signup");
+  await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await submitSignupAndVerify(page, email, password);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 

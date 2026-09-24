@@ -68,7 +68,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         return;
       }
 
-      router.replace("/dashboard");
+      router.replace(data.onboardingPending ? "/onboarding" : "/dashboard");
       router.refresh();
     } catch {
       setError("Connexion impossible. Vérifie le réseau puis réessaie.");

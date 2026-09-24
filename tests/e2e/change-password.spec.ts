@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createMerchant, origin, randomizeClientIp, unique } from "./helpers";
+import { createMerchant, origin, randomizeClientIp, submitSignupAndVerify, unique } from "./helpers";
 
 test("sécurité compte : changement de mot de passe révoque la session et remplace l'ancien secret", async ({ page }) => {
   const email = `${unique("change-password")}@example.com`;
@@ -11,8 +11,7 @@ test("sécurité compte : changement de mot de passe révoque la session et remp
   await page.getByLabel("Nom du commerce").fill("Commerce changement mot de passe");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(oldPassword);
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await submitSignupAndVerify(page, email, oldPassword);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 

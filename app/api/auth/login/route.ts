@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     // qu'après preuve du mot de passe : aucun signal d'énumération. Aucune
     // session n'est émise pour un commerce suspendu.
     const [establishment] = await sql`
-      select status from establishments where id=${user.establishment_id}
+      select status, onboarding_step from establishments where id=${user.establishment_id}
     `;
     if (establishment?.status !== "active") {
       return NextResponse.json(
@@ -106,8 +106,13 @@ export async function POST(request: Request) {
       email: String(user.email),
       tokenVersion: Number(user.token_version),
     });
+    // Même règle que le dashboard : un OWNER dont la configuration guidée est
+    // en cours y retourne directement (NULL = commerce historique, terminé).
+    const onboardingPending = String(user.role) === "OWNER"
+      && establishment.onboarding_step !== null
+      && Number(establishment.onboarding_step) < 5;
     const response = NextResponse.json(
-      { ok: true, role: user.role },
+      { ok: true, role: user.role, onboardingPending },
       { headers: { "cache-control": "no-store" } },
     );
     response.cookies.set(sessionCookie(token));
