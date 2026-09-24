@@ -47,6 +47,8 @@ export async function createMerchant(page: Page, label: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
