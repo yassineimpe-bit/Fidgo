@@ -52,7 +52,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
+    const users = await sql`
+      select s.id, s.establishment_id, s.email, s.password_hash, s.role, s.active, s.token_version,
+        e.status as establishment_status
+      from staff_users s join establishments e on e.id = s.establishment_id
+      where lower(s.email)=${email} limit 1
+    `;
     const user = users[0];
     const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hash);
@@ -72,6 +77,12 @@ export async function POST(request: Request) {
     // mot de passe correct n'est jamais rejete, il ne peut plus etre maintenu
     // dehors par les tentatives d'un tiers.
     await resetRateLimit(accountKey);
+
+    // Révélé seulement après preuve du mot de passe : aucun signal
+    // d'énumération. Aucune session n'est émise pour un commerce suspendu.
+    if (user.establishment_status !== "active") {
+      return NextResponse.json({ error: "ESTABLISHMENT_SUSPENDED" }, { status: 403, headers: { "cache-control": "no-store" } });
+    }
 
     const token = await signSession({
       staffId: String(user.id),
