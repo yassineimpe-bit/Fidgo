@@ -12,6 +12,7 @@ const retention = {
   auditLogsDays: 730,
   recoveryTokensDays: 30,
   passwordResetTokensDays: 30,
+  emailVerificationTokensDays: 30,
   revokedAppleRegistrationsDays: 30,
   rateLimitsDays: 2,
 };
@@ -32,6 +33,9 @@ try {
         (select count(*)::int from password_reset_tokens where
           expires_at < now() - (${retention.passwordResetTokensDays}::int * interval '1 day')
           or used_at < now() - (${retention.passwordResetTokensDays}::int * interval '1 day')) as password_reset_tokens,
+        (select count(*)::int from email_verification_tokens where
+          expires_at < now() - (${retention.emailVerificationTokensDays}::int * interval '1 day')
+          or used_at < now() - (${retention.emailVerificationTokensDays}::int * interval '1 day')) as email_verification_tokens,
         (select count(*)::int from apple_wallet_registrations r join wallet_passes wp on wp.id=r.wallet_pass_id
           where wp.status='revoked' and wp.updated_at < now() - (${retention.revokedAppleRegistrationsDays}::int * interval '1 day')) as apple_registrations,
         (select count(*)::int from rate_limits where window_started_at < now() - (${retention.rateLimitsDays}::int * interval '1 day')) as rate_limits
@@ -69,6 +73,14 @@ try {
           order by created_at limit ${batch}
         ) returning id
       `;
+      const emailVerificationTokens = await tx`
+        delete from email_verification_tokens where id in (
+          select id from email_verification_tokens
+          where expires_at < now() - (${retention.emailVerificationTokensDays}::int * interval '1 day')
+            or used_at < now() - (${retention.emailVerificationTokensDays}::int * interval '1 day')
+          order by created_at limit ${batch}
+        ) returning id
+      `;
       const appleRegistrations = await tx`
         delete from apple_wallet_registrations where id in (
           select r.id from apple_wallet_registrations r
@@ -90,6 +102,7 @@ try {
         auditLogs: auditLogs.length,
         recoveryTokens: recoveryTokens.length,
         passwordResetTokens: passwordResetTokens.length,
+        emailVerificationTokens: emailVerificationTokens.length,
         appleRegistrations: appleRegistrations.length,
         rateLimits: rateLimits.length,
       };

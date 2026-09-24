@@ -44,11 +44,23 @@ create table if not exists staff_users (
   password_hash text not null,
   role text not null default 'EMPLOYEE' check (role in ('OWNER','MANAGER','EMPLOYEE','VIEWER')),
   active boolean not null default true,
+  email_verified_at timestamptz default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 create unique index if not exists staff_users_email_key on staff_users (lower(email));
 create unique index if not exists staff_users_one_owner_per_establishment on staff_users (establishment_id) where role = 'OWNER';
+
+create table if not exists email_verification_tokens (
+  id uuid primary key default gen_random_uuid(),
+  staff_user_id uuid not null references staff_users(id) on delete cascade,
+  token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists email_verification_tokens_staff_idx on email_verification_tokens (staff_user_id, created_at desc);
+create index if not exists email_verification_tokens_expiry_idx on email_verification_tokens (expires_at) where used_at is null;
 
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),
