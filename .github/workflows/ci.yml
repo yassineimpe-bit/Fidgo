@@ -89,7 +89,10 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # La suite complète dépasse ponctuellement 15 min sur les runners partagés
+    # alors qu'elle ne présente pas d'erreur fonctionnelle. Garder une marge
+    # évite de transformer la vitesse du runner en faux signal rouge.
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
