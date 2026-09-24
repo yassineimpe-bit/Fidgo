@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { createMerchant, origin, unique } from "./helpers";
 
+// Régression de sécurité : les payloads stockés doivent rester du texte inerte dans React.
 type XssWindow = Window & { __retikoXss?: number };
 
 async function armXssSentinel(page: Page) {
