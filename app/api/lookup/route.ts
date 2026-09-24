@@ -5,6 +5,7 @@ import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS } from "@/lib/security";
 import { phoneLookupVariants } from "@/lib/customer-lookup";
+import { getBillingAccess } from "@/lib/billing";
 
 async function handleGet(req: Request) {
   const session = await getSession();
@@ -12,6 +13,7 @@ async function handleGet(req: Request) {
   // Cette route renvoie un token de carte : reservee aux roles qui scannent.
   // Un VIEWER (lecture seule) n'a aucune raison de pouvoir l'obtenir.
   if (!canScan(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!(await getBillingAccess(session.establishmentId)).operational) return Response.json({ error: "BILLING_REQUIRED" }, { status: 402 });
 
   // Sans limite, un compte employe pouvait enumerer les codes courts et tester
   // l'existence d'adresses email en masse.

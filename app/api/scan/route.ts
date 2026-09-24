@@ -4,6 +4,7 @@ import { canManageProgram, canScan, parseCardToken } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
+import { getBillingAccess } from "@/lib/billing";
 
 async function handlePost(req: Request) {
   const started = Date.now();
@@ -12,6 +13,7 @@ async function handlePost(req: Request) {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   if (!canScan(session.role)) return Response.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (!(await getBillingAccess(session.establishmentId)).operational) return Response.json({ error: "BILLING_REQUIRED" }, { status: 402 });
   const limited = await enforceRateLimit(req, `scan:${session.staffId}`, 240, 60);
   if (limited) return limited;
 

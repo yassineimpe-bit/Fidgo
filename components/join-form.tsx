@@ -74,6 +74,10 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
           setError("Trop de tentatives. Réessaie plus tard.");
           return;
         }
+        if (data.error === "PROGRAM_UNAVAILABLE") {
+          setError("Le programme de fidélité est temporairement indisponible.");
+          return;
+        }
         setError("Impossible de créer la carte pour le moment.");
         return;
       }

@@ -21,6 +21,8 @@ button { cursor: pointer; }
 .scanner-page :focus-visible { outline-color: #fff; }
 .shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
 .topbar { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding-top: env(safe-area-inset-top); }
+.billing-alert { background:#fff7e8; border-bottom:1px solid #f7dca4; color:#714900; padding:10px 0; font-size:14px; }
+.billing-alert a { font-weight:800; text-decoration:underline; margin-left:6px; }
 .topbar-inner { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: nowrap; padding: 10px 0; }
 .brand { font-weight: 900; letter-spacing: -.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex-shrink: 1; }
 .navlinks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex-shrink: 0; }

@@ -17,6 +17,11 @@ describe("scannerErrorInfo", () => {
       code: "STALE_CARD_STATE",
       retryable: false,
     });
+    expect(scannerErrorInfo(new Error("BILLING_REQUIRED"))).toMatchObject({
+      retryable: false,
+      sessionExpired: false,
+      message: expect.stringContaining("abonnement"),
+    });
   });
 
   it("recognizes browser fetch failures as safe network retries", () => {

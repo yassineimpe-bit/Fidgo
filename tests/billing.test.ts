@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type Stripe from "stripe";
 import {
   BILLING_PLANS,
+  billingAccess,
   BillingInputError,
   type BillingStripeClient,
   checkoutPlanFromRequest,
@@ -30,6 +31,24 @@ beforeEach(() => {
 });
 
 describe("configuration Stripe v2", () => {
+  it("suspend les opérations à l'expiration de l'essai lorsque la facturation est active", () => {
+    const now = new Date("2026-09-23T12:00:00Z");
+    expect(billingAccess({ status: "trial", trial_ends_at: "2026-09-23T11:59:59Z" }, { enforce: true, now }))
+      .toEqual({ operational: false, status: "trial_expired" });
+    expect(billingAccess({ status: "trial", trial_ends_at: "2026-09-24T12:00:00Z" }, { enforce: true, now }))
+      .toEqual({ operational: true, status: "trial" });
+    expect(billingAccess({ status: "active", trial_ends_at: null }, { enforce: true, now }).operational).toBe(true);
+    expect(billingAccess({ status: "past_due", trial_ends_at: null }, { enforce: true, now }).operational).toBe(false);
+  });
+
+  it("ne bloque jamais le pilote lorsque Stripe n'est pas complètement activé", () => {
+    const result = billingAccess(
+      { status: "trial", trial_ends_at: "2020-01-01T00:00:00Z" },
+      { enforce: false, now: new Date("2026-09-23T12:00:00Z") },
+    );
+    expect(result).toEqual({ operational: true, status: "trial_expired" });
+  });
+
   it("garde Stripe Tax automatique désactivé tant que le flag dédié n'est pas activé", () => {
     expect(stripeAutomaticTaxEnabled({})).toBe(false);
     expect(stripeAutomaticTaxEnabled({ STRIPE_AUTOMATIC_TAX_ENABLED: "false" })).toBe(false);

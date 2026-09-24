@@ -4,6 +4,7 @@ import { isEmail } from "@/lib/input";
 import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
+import { getBillingAccess } from "@/lib/billing";
 
 /**
  * Detecte un client deja inscrit SANS jamais exposer son token de carte.
@@ -59,6 +60,9 @@ async function handlePost(req: Request) {
   `;
   if (!establishment || establishment.status !== "active") {
     return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404 });
+  }
+  if (!(await getBillingAccess(String(establishment.id))).operational) {
+    return Response.json({ error: "PROGRAM_UNAVAILABLE" }, { status: 403, headers: PRIVATE_HEADERS });
   }
 
   // 200/h laissait tout le loisir d'enumerer une base d'emails. 15/h suffit

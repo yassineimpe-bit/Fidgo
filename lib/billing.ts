@@ -33,6 +33,30 @@ export const BILLING_PLANS = {
 export type BillingPlan = keyof typeof BILLING_PLANS;
 export type BillingInterval = "monthly" | "annual";
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "unpaid";
+export type EffectiveSubscriptionStatus = SubscriptionStatus | "trial_expired";
+
+type SubscriptionAccessInput = { status?: unknown; trial_ends_at?: unknown } | null | undefined;
+
+export function billingAccess(
+  subscription: SubscriptionAccessInput,
+  options: { enforce?: boolean; now?: Date } = {},
+) {
+  const status = String(subscription?.status || "trial") as SubscriptionStatus;
+  const trialEnd = subscription?.trial_ends_at
+    ? new Date(subscription.trial_ends_at as string | Date).getTime()
+    : Number.NaN;
+  const expiredTrial = status === "trial" && Number.isFinite(trialEnd)
+    && trialEnd <= (options.now ?? new Date()).getTime();
+  const effectiveStatus: EffectiveSubscriptionStatus = expiredTrial ? "trial_expired" : status;
+
+  // Fail open unless Stripe is explicitly enabled and fully configured: a
+  // deployment mistake must never stop a pilot at the till.
+  if (options.enforce !== true) return { operational: true, status: effectiveStatus };
+  return {
+    operational: status === "active" || (status === "trial" && !expiredTrial),
+    status: effectiveStatus,
+  };
+}
 
 const REQUIRED_STRIPE_ENV = [
   "STRIPE_SECRET_KEY",
@@ -212,6 +236,11 @@ export async function getSubscription(establishmentId: string) {
     limit 1
   `;
   return row ?? null;
+}
+
+export async function getBillingAccess(establishmentId: string, now = new Date()) {
+  const subscription = await getSubscription(establishmentId);
+  return billingAccess(subscription, { enforce: getBillingRuntimeStatus().configured, now });
 }
 
 export async function createCheckoutSession(input: {
