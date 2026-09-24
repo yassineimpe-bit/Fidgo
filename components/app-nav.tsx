@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileNavMenu } from "@/components/mobile-nav-menu";
+import { AppNavList } from "@/components/app-nav-list";
 import { APP_NAV_LINKS } from "@/lib/app-nav-links";
 import { getSession } from "@/lib/auth";
 
@@ -21,9 +22,7 @@ export async function AppNav({ restaurantName }: { restaurantName?: string }) {
         {scanner ? <Link className="app-nav-mobile-primary" href="/s">Scanner</Link> : null}
         <MobileNavMenu links={links}/>
       </div>
-      <nav className="app-sidebar-links" aria-label="Navigation commerçant">
-        {links.map((link) => <Link key={link.href} href={link.href} className={link.href === "/s" ? "app-sidebar-link app-sidebar-link-primary" : "app-sidebar-link"}>{link.label}</Link>)}
-      </nav>
+      <AppNavList links={links}/>
       <div className="app-sidebar-footer">
         <LogoutButton/>
       </div>
