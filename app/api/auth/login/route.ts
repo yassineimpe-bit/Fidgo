@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
     // Révélé seulement après preuve du mot de passe : aucun signal
     // d'énumération. Aucune session n'est émise pour un commerce suspendu.
-    const [establishment] = await sql`select status from establishments where id=${user.establishment_id}`;
+    const [establishment] = await sql`select status,onboarding_step from establishments where id=${user.establishment_id}`;
     if (establishment?.status !== "active") {
       return NextResponse.json({ error: "ESTABLISHMENT_SUSPENDED" }, { status: 403, headers: { "cache-control": "no-store" } });
     }
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       email: String(user.email),
       tokenVersion: Number(user.token_version),
     });
-    const response = NextResponse.json({ ok: true, role: user.role }, { headers: { "cache-control": "no-store" } });
+    const onboardingPending = String(user.role) === "OWNER" && Number(establishment?.onboarding_step || 5) < 5;\n    const response = NextResponse.json({ ok: true, role: user.role, onboardingPending }, { headers: { "cache-control": "no-store" } });
     response.cookies.set(sessionCookie(token));
     return response;
   } catch (error) {
