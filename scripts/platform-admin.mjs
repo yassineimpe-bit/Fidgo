@@ -4,6 +4,7 @@
 //   npm run admin:platform -- list
 //   npm run admin:platform -- grant <email> "<motif>"
 //   npm run admin:platform -- revoke <email> "<motif>"
+import os from "node:os";
 import postgres from "postgres";
 
 const [, , command, rawEmail, ...noteParts] = process.argv;
@@ -52,12 +53,13 @@ try {
           on conflict (staff_user_id) do update set note = excluded.note
         `;
       } else {
-        await tx`delete from platform_admins where staff_user_id = ${staff.id}`;
+        const removed = await tx`delete from platform_admins where staff_user_id = ${staff.id} returning staff_user_id`;
+        if (!removed.length) throw new Error("Ce compte n'est pas super-admin : rien à retirer.");
       }
       await tx`
         insert into platform_admin_audit(admin_staff_user_id, admin_email, action, target_type, target_id, reason, metadata)
-        values(null, 'cli', ${command === "grant" ? "PLATFORM_ADMIN_GRANT" : "PLATFORM_ADMIN_REVOKE"},
-          'staff_user', ${String(staff.id)}, ${note}, ${tx.json({ email: String(staff.email) })})
+        values(null, ${`cli:${os.userInfo().username}`.slice(0, 120)}, ${command === "grant" ? "PLATFORM_ADMIN_GRANT" : "PLATFORM_ADMIN_REVOKE"},
+          'staff_user', ${String(staff.id)}, ${note}, ${tx.json({})})
       `;
     });
     console.log(command === "grant" ? `Super-admin accordé à ${staff.email}.` : `Super-admin retiré à ${staff.email}.`);

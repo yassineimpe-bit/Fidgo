@@ -58,55 +58,42 @@ export async function readHealthSchemaFlags(): Promise<HealthSchemaFlags> {
 export type ServiceState = "up" | "down" | "off" | "incomplete";
 export type ServiceLine = { name: string; state: ServiceState; detail: string };
 
-/** Vue opérateur : mêmes contrôles que /api/health, avec le détail des variables manquantes (noms seulement). */
+/**
+ * Vue opérateur construite sur les mêmes contrôles que /api/health, sans rien
+ * exposer de plus : libellés génériques, jamais de nom de variable ou de
+ * credential, ni de version, ni de détail PostgreSQL.
+ */
 export async function collectServiceStatus(): Promise<ServiceLine[]> {
-  const started = Date.now();
-  const lines: ServiceLine[] = [];
-  const authOk = (process.env.AUTH_SECRET?.trim().length ?? 0) >= 32;
-
   let database: ServiceState = "down";
   let schema: ServiceState = "down";
-  let dbDetail = databaseConfigured ? "Connexion impossible" : "DATABASE_URL absent";
   if (databaseConfigured) {
     try {
       const flags = await readHealthSchemaFlags();
       database = "up";
-      dbDetail = `Réponse en ${Date.now() - started} ms`;
       schema = healthSchemaIsReady(flags, process.env.STRIPE_ENABLED === "true") ? "up" : "incomplete";
     } catch {
-      schema = "down";
+      database = "down";
     }
   }
-  lines.push({ name: "PostgreSQL", state: database, detail: dbDetail });
-  lines.push({
-    name: "Schéma et contraintes",
-    state: schema,
-    detail: schema === "up" ? "Migrations critiques présentes" : schema === "incomplete" ? "Migration manquante : lancer db:setup puis db:verify" : "Non vérifiable",
-  });
-  lines.push({ name: "Authentification", state: authOk ? "up" : "down", detail: authOk ? "AUTH_SECRET configuré" : "AUTH_SECRET absent ou trop court" });
-
+  const authOk = (process.env.AUTH_SECRET?.trim().length ?? 0) >= 32;
   const wallet = getWalletRuntimeStatus();
-  lines.push({
-    name: "URL publique HTTPS",
-    state: wallet.appUrlConfigured && wallet.appUrlHttps ? "up" : "down",
-    detail: wallet.appUrlConfigured ? (wallet.appUrlHttps ? "NEXT_PUBLIC_APP_URL en HTTPS" : "NEXT_PUBLIC_APP_URL non HTTPS") : "NEXT_PUBLIC_APP_URL absent",
-  });
-  for (const [name, provider] of [["Apple Wallet", wallet.apple], ["Google Wallet", wallet.google]] as const) {
-    lines.push({
-      name,
-      state: !provider.enabled ? "off" : provider.configured ? "up" : "incomplete",
-      detail: !provider.enabled ? "Désactivé" : provider.configured ? "Configuré" : `À compléter : ${[...provider.missing, ...provider.invalid].join(", ")}`,
-    });
-  }
-
+  const https = wallet.appUrlConfigured && wallet.appUrlHttps;
   const billing = getBillingRuntimeStatus();
-  lines.push({
-    name: "Stripe",
-    state: !billing.enabled ? "off" : billing.configured ? "up" : "incomplete",
-    detail: !billing.enabled ? "Désactivé" : billing.configured ? "Configuré" : `À compléter : ${[...billing.missing, ...billing.invalid].join(", ")}`,
-  });
-
   const email = recoveryEmailConfigured();
-  lines.push({ name: "Email transactionnel", state: email ? "up" : "off", detail: email ? "Resend configuré" : "Récupération / reset par email désactivés" });
-  return lines;
+  const provider = (enabled: boolean, configured: boolean): ServiceState => !enabled ? "off" : configured ? "up" : "incomplete";
+  const providerDetail = (state: ServiceState) => state === "off" ? "Désactivé" : state === "up" ? "Configuré" : "Configuration incomplète";
+  const apple = provider(wallet.apple.enabled, wallet.apple.configured);
+  const google = provider(wallet.google.enabled, wallet.google.configured);
+  const stripe = provider(billing.enabled, billing.configured);
+
+  return [
+    { name: "Base de données", state: database, detail: database === "up" ? "Connexion vérifiée" : "Injoignable ou non configurée" },
+    { name: "Schéma et contraintes", state: schema, detail: schema === "up" ? "Migrations critiques présentes" : schema === "incomplete" ? "Migration manquante" : "Non vérifiable" },
+    { name: "Authentification", state: authOk ? "up" : "down", detail: authOk ? "Configurée" : "Configuration manquante" },
+    { name: "URL publique HTTPS", state: https ? "up" : "down", detail: https ? "Configurée" : "Absente ou non HTTPS" },
+    { name: "Apple Wallet", state: apple, detail: providerDetail(apple) },
+    { name: "Google Wallet", state: google, detail: providerDetail(google) },
+    { name: "Stripe", state: stripe, detail: providerDetail(stripe) },
+    { name: "Email transactionnel", state: email ? "up" : "off", detail: email ? "Configuré" : "Récupération / reset par email désactivés" },
+  ];
 }
