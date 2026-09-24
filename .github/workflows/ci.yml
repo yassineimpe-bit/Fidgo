@@ -84,8 +84,24 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
-      - name: Build without production secrets
-        run: npm run build
+      - name: Build with secret sentinels and audit browser artifacts
+        env:
+          DATABASE_URL: postgres://retiko_build:client-secret-db-sentinel@db.example.test:5432/retiko
+          AUTH_SECRET: retiko-client-secret-auth-sentinel-at-least-32-bytes
+          CRON_SECRET: retiko-client-secret-cron-sentinel
+          RESEND_API_KEY: re_retiko_client_secret_sentinel
+          STRIPE_SECRET_KEY: sk_test_retiko_client_secret_sentinel
+          STRIPE_WEBHOOK_SECRET: whsec_retiko_client_secret_sentinel
+          APPLE_WWDR_CERT_BASE64: retiko-client-secret-wwdr-sentinel
+          APPLE_SIGNER_CERT_BASE64: retiko-client-secret-cert-sentinel
+          APPLE_SIGNER_KEY_BASE64: retiko-client-secret-key-sentinel
+          APPLE_SIGNER_KEY_PASSPHRASE: retiko-client-secret-passphrase-sentinel
+          GOOGLE_WALLET_SERVICE_ACCOUNT_JSON_BASE64: retiko-client-secret-google-sentinel
+          FIDGO_GITHUB_TOKEN: github_pat_retiko_client_secret_sentinel
+          NEON_API_KEY: napi_retiko_client_secret_sentinel
+          VAPID_PRIVATE_KEY: retiko-client-secret-vapid-sentinel
+          DEMO_OWNER_PASSWORD: retiko-client-secret-demo-password-sentinel
+        run: npm run build && npm run security:client-secrets
 
   e2e:
     runs-on: ubuntu-latest
