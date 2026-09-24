@@ -105,10 +105,18 @@ if (envValue("GOOGLE_WALLET_ENABLED") === "true") {
   }
 }
 
-if (envValue("CARD_RECOVERY_ENABLED") === "true") {
-  const recovery = ["RESEND_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO"];
-  const recoveryMissing = recovery.filter((key) => !envValue(key));
-  if (recoveryMissing.length) fail(`Récupération email activée mais variables manquantes: ${recoveryMissing.join(", ")}`);
+const transactionalEmailRequired =
+  process.env.NODE_ENV === "production" || envValue("CARD_RECOVERY_ENABLED") === "true";
+
+if (transactionalEmailRequired) {
+  const email = ["RESEND_API_KEY", "EMAIL_FROM", "EMAIL_REPLY_TO"];
+  const emailMissing = email.filter((key) => !envValue(key));
+  if (emailMissing.length) {
+    const reason = process.env.NODE_ENV === "production"
+      ? "Vérification e-mail commerçant"
+      : "Récupération email";
+    fail(`${reason} requise mais variables manquantes: ${emailMissing.join(", ")}`);
+  }
 
   if (!envValue("RESEND_API_KEY").startsWith("re_")) {
     fail("RESEND_API_KEY doit être une clé Resend valide commençant par re_.");
