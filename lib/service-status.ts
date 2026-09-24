@@ -96,6 +96,6 @@ export async function collectServiceStatus(): Promise<ServiceLine[]> {
     { name: "Apple Wallet", state: apple, detail: providerDetail(apple) },
     { name: "Google Wallet", state: google, detail: providerDetail(google) },
     { name: "Stripe", state: stripe, detail: providerDetail(stripe) },
-    { name: "Email transactionnel", state: email ? "up" : "off", detail: email ? "Configuré" : "Récupération / reset par email désactivés" },
+    { name: "Email transactionnel", state: email ? "up" : "down", detail: email ? "Configuré" : "Requis pour la vérification des comptes commerçants" },
   ];
 }
