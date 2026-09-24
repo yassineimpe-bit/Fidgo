@@ -36,6 +36,17 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
         ],
       },
+      // Le jeton de vérification e-mail est lui aussi un secret à usage unique
+      // porté par l'URL. Il ne doit ni être mis en cache, ni fuiter en referrer,
+      // ni être indexé.
+      {
+        source: "/verify-email",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        ],
+      },
     ];
   },
 };
