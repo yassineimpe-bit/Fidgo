@@ -44,7 +44,7 @@ test("XSS stocké commerçant : nom et récompense restent du texte sur la page 
   await page.goto(`/j/${restaurant.slug}`);
 
   await expect(page.locator("h2")).toHaveText(merchantPayload);
-  await expect(page.locator("p.muted")).toContainText(rewardPayload);
+  await expect(page.locator("section.auth-card > p.muted")).toContainText(rewardPayload);
   await expectNoXssExecution(page);
 
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
