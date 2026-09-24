@@ -45,9 +45,25 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
     const marker = unique("cafe-ussel");
     await merchantPage.goto("/signup");
     await merchantPage.getByLabel("Nom du commerce").fill(BRAND_NAME);
-    await merchantPage.getByLabel("Email").fill(`${marker}@example.com`);
-    await merchantPage.getByLabel("Mot de passe").fill("Password-test-123!");
+    const email = `${marker}@example.com`;
+    const password = "Password-test-123!";
+    await merchantPage.getByLabel("Email").fill(email);
+    await merchantPage.getByLabel("Mot de passe").fill(password);
+    const responsePromise = merchantPage.waitForResponse(
+      (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+    );
     await merchantPage.getByRole("button", { name: "Créer mon espace" }).click();
+    const response = await responsePromise;
+    expect(response.status()).toBe(202);
+    const signup = await response.json() as { verificationToken?: string };
+    expect((await merchantPage.request.post("/api/auth/verify-email", {
+      headers: { origin },
+      data: { token: signup.verificationToken, password },
+    })).ok()).toBeTruthy();
+    await merchantPage.goto("/login");
+    await merchantPage.getByLabel("Email").fill(email);
+    await merchantPage.getByLabel("Mot de passe").fill(password);
+    await merchantPage.getByRole("button", { name: "Se connecter" }).click();
     await expect(merchantPage).toHaveURL(/\/onboarding$/);
 
     // Programme : 10 cafés = le 11e offert (le seuil par défaut est déjà 10).
