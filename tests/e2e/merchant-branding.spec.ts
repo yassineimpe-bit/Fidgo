@@ -48,7 +48,7 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
     await merchantPage.getByLabel("Email").fill(`${marker}@example.com`);
     await merchantPage.getByLabel("Mot de passe").fill("Password-test-123!");
     await merchantPage.getByRole("button", { name: "Créer mon espace" }).click();
-    await expect(merchantPage).toHaveURL(/\/dashboard$/);
+    await expect(merchantPage).toHaveURL(/\/onboarding$/);
 
     // Programme : 10 cafés = le 11e offert (le seuil par défaut est déjà 10).
     await merchantPage.goto("/dashboard/program");

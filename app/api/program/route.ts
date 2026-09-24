@@ -24,7 +24,9 @@ async function handlePatch(req: Request) {
   const limited = await enforceRateLimit(req, `program-patch:${session.staffId}`, 30, 60 * 60);
   if (limited) return limited;
 
-  const b = await req.json().catch(() => ({}));
+  const body: unknown = await req.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  const b = body as Record<string, unknown>;
   const mode = b.mode === "POINTS" ? "POINTS" : b.mode === "STAMPS" ? "STAMPS" : null;
   const pointsRule = b.pointsRule === "PER_EURO" ? "PER_EURO" : b.pointsRule === "PER_PURCHASE" ? "PER_PURCHASE" : null;
   const threshold = boundedInt(b.rewardThreshold, { min: 1, max: 100_000 });
@@ -55,6 +57,9 @@ async function handlePatch(req: Request) {
       returning *
     `;
     if (!updated) throw new Error("PROGRAM_NOT_FOUND");
+    if (b.onboarding === true && session.role === "OWNER") {
+      await tx`update establishments set onboarding_step=3, updated_at=now() where id=${session.establishmentId} and onboarding_step=2`;
+    }
     await tx`insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id) values (${session.establishmentId}, ${session.staffId}, 'PROGRAM_UPDATE', 'loyalty_program', ${updated.id})`;
     return updated;
   });

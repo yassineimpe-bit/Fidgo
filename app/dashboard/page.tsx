@@ -10,7 +10,7 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (!canAccessBackoffice(session.role)) redirect("/s");
-  const [restaurant] = await sql`select name, slug, logo_url from establishments where id = ${session.establishmentId}`;
+  const [restaurant] = await sql`select name, slug, logo_url, onboarding_step from establishments where id = ${session.establishmentId}`;
   const [program] = await sql`select mode, program_name, reward_threshold, reward_label from loyalty_programs where establishment_id = ${session.establishmentId}`;
   const [stats] = await sql`
     select
@@ -55,12 +55,13 @@ export default async function DashboardPage() {
   const scanErrorRate = scans > 0 ? Math.round((Number(stats.scan_failed) / scans) * 100) : 0;
   const recurringRate = Number(stats.cards_with_activity) > 0 ? Math.round((Number(stats.cards_recurring) / Number(stats.cards_with_activity)) * 100) : 0;
 
-  const commerceDone = Boolean(restaurant.logo_url);
+  const onboardingPending = session.role === "OWNER" && restaurant.onboarding_step !== null && Number(restaurant.onboarding_step) < 5;
+  const commerceDone = Number(restaurant.onboarding_step) >= 2 || Boolean(restaurant.logo_url);
   const testDone = Number(stats.transactions) > 0;
   const checklist: { label: string; done: boolean; href: string }[] = [
     { label: "Compte créé", done: true, href: "/dashboard" },
     { label: "Commerce configuré", done: commerceDone, href: "/dashboard/settings" },
-    { label: "Programme fidélité configuré", done: true, href: "/dashboard/program" },
+    { label: "Programme fidélité configuré", done: restaurant.onboarding_step === null || Number(restaurant.onboarding_step) >= 3, href: "/dashboard/program" },
     { label: "Imprimer le QR", done: false, href: "/dashboard/poster" },
     { label: "Installer Retiko sur le téléphone caisse", done: false, href: "/s" },
     { label: "Faire un premier test", done: testDone, href: "/s" },
@@ -73,6 +74,7 @@ export default async function DashboardPage() {
 
   return <><AppNav restaurantName={restaurant.name}/><main className="shell page">
     <div className="section-head"><div><span className="eyebrow">{program.mode === "STAMPS" ? "Tampons" : "Points"}</span><h2 style={{margin:"12px 0 4px"}}>{program.program_name}</h2><p className="muted">{program.reward_threshold} unités = {program.reward_label}</p></div><Link className="btn btn-primary" href="/s">Ouvrir le scanner</Link></div>
+    {onboardingPending && <section className="notice" style={{marginBottom:18}}><p>La configuration de ton commerce est en cours. Reprends là où tu t’es arrêté.</p><Link className="btn btn-primary" href="/onboarding">Reprendre la configuration</Link></section>}
     <PwaInstallHint/>
     <section className="card" style={{marginTop:18, borderColor:"var(--accent)"}}>
       <div className="section-head"><div><span className="eyebrow">Étape suivante</span><p style={{margin:"10px 0 0", fontSize:17, fontWeight:700}}>{nextStep.text}</p></div><Link className="btn btn-primary" href={nextStep.href}>{nextStep.cta}</Link></div>

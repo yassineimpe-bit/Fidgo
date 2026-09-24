@@ -14,6 +14,8 @@ async function signup(page: Page, label: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill("Password-test-123!");
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
   return email;
 }

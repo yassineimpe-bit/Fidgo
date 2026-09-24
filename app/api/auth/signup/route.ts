@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await sql.begin(async (tx) => {
-      const establishment = (await tx`insert into establishments(id,slug,name) values(${id()},${slug},${restaurantName}) returning id,slug,name`)[0];
+      const establishment = (await tx`insert into establishments(id,slug,name,onboarding_step) values(${id()},${slug},${restaurantName},1) returning id,slug,name`)[0];
       const staff = (await tx`insert into staff_users(id,establishment_id,email,password_hash,role) values(${id()},${establishment.id},${email},${passwordHash},'OWNER') returning id,email,role,token_version`)[0];
       await tx`insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label) values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')`;
       // L'essai est un état local. Aucun appel Stripe n'est effectué pendant

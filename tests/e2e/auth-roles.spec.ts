@@ -13,6 +13,8 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await logout(page);

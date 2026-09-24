@@ -78,6 +78,7 @@ async function handlePatch(req: Request) {
         phone = case when ${values.phone !== undefined} then ${phone} else phone end,
         instagram = case when ${values.instagram !== undefined} then ${instagram} else instagram end,
         website = case when ${values.website !== undefined} then ${website} else website end,
+        onboarding_step = case when ${values.onboarding === true && session.role === "OWNER"} and onboarding_step = 1 then 2 else onboarding_step end,
         updated_at = now()
       where id = ${session.establishmentId}
       returning *

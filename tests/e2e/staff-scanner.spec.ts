@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createMerchant, enrollCustomer, origin, unique } from "./helpers";
+import { createMerchant, enrollCustomer, origin, randomizeClientIp, unique } from "./helpers";
 
 test("scanner auth : la page et l'API refusent une session absente", async ({ page, request }) => {
   await page.goto("/s");
@@ -37,6 +37,7 @@ test("équipe pilote : un Owner crée un Employé scanner qui se connecte et cr�
   const employeeContext = await page.context().browser()!.newContext();
   const employeePage = await employeeContext.newPage();
   try {
+    await randomizeClientIp(employeePage);
     await employeePage.goto("/login");
     await employeePage.getByLabel("Email").fill(employeeEmail);
     await employeePage.getByLabel("Mot de passe").fill(employeePassword);
