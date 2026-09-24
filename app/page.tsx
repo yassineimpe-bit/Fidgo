@@ -9,11 +9,11 @@ export default function Home() {
             <h1>Le QR fidélité pensé pour le rush.</h1>
             <p className="lead">Tampons ou points, carte web mobile, scanner commerçant et base Wallet prête. Le cœur du produit est volontairement simple : présenter, scanner, créditer, terminé.</p>
             <div className="actions">
-              <Link className="btn btn-primary" href="/signup">Créer un restaurant</Link>
+              <Link className="btn btn-accent" href="/signup">Créer un restaurant</Link>
               <Link className="btn" href="/login">Connexion</Link>
             </div>
           </div>
-          <div className="card">
+          <div className="card hero-showcase">
             <span className="eyebrow">Objectif terrain</span>
             <h2 style={{marginTop:16}}>Moins de 3 secondes</h2>
             <p className="muted">Caméra déjà ouverte, fiche client immédiate, un bouton principal. Pas de tunnel administratif pendant qu’une file de douze personnes juge silencieusement le serveur.</p>
