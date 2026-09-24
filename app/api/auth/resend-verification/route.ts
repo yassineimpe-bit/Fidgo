@@ -25,7 +25,7 @@ async function auditDeliveryFailure(establishmentId: string, staffId: string, co
 async function processResend(email: string) {
   try {
     const [staff] = await sql`
-      select s.id as staff_id, s.establishment_id
+      select s.id as staff_id, s.establishment_id, e.name as establishment_name
       from staff_users s
       join establishments e on e.id = s.establishment_id
       where lower(s.email) = ${email}
@@ -38,6 +38,7 @@ async function processResend(email: string) {
 
     const staffId = String(staff.staff_id);
     const establishmentId = String(staff.establishment_id);
+    const restaurantName = String(staff.establishment_name || "votre commerce");
     const base = getAppUrl();
     if (!base || !emailDeliveryConfigured()) {
       await auditDeliveryFailure(establishmentId, staffId, "EMAIL_NOT_CONFIGURED");
@@ -59,6 +60,7 @@ async function processResend(email: string) {
     try {
       const delivered = await sendEmailVerificationEmail({
         to: email,
+        restaurantName,
         verificationUrl: verifyUrl,
         idempotencyKey: `email-verification-${verification.tokenHash}`,
       });
