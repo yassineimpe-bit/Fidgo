@@ -36,7 +36,7 @@ jobs:
           GOOGLE_WALLET_ENABLED: "false"
           CARD_RECOVERY_ENABLED: "false"
           RESEND_API_KEY: re_ci_placeholder
-          EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
+          EMAIL_FROM: "Retiko <cartes@retiko.fr>"
           EMAIL_REPLY_TO: contact@retiko.fr
         run: npm run env:check
       - name: Validate enabled Resend recovery contract
@@ -49,7 +49,7 @@ jobs:
           GOOGLE_WALLET_ENABLED: "false"
           CARD_RECOVERY_ENABLED: "true"
           RESEND_API_KEY: re_ci_placeholder
-          EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
+          EMAIL_FROM: "Retiko <cartes@retiko.fr>"
           EMAIL_REPLY_TO: contact@retiko.fr
         run: npm run env:check
       - name: Validate enabled Stripe billing contract
@@ -62,7 +62,7 @@ jobs:
           GOOGLE_WALLET_ENABLED: "false"
           CARD_RECOVERY_ENABLED: "false"
           RESEND_API_KEY: re_ci_placeholder
-          EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
+          EMAIL_FROM: "Retiko <cartes@retiko.fr>"
           EMAIL_REPLY_TO: contact@retiko.fr
           STRIPE_ENABLED: "true"
           STRIPE_SECRET_KEY: sk_test_ci_placeholder
@@ -81,7 +81,7 @@ jobs:
           GOOGLE_WALLET_ENABLED: "false"
           CARD_RECOVERY_ENABLED: "false"
           RESEND_API_KEY: re_ci_placeholder
-          EMAIL_FROM: "Retiko <cartes@send.retiko.fr>"
+          EMAIL_FROM: "Retiko <cartes@retiko.fr>"
           EMAIL_REPLY_TO: contact@retiko.fr
         shell: bash
         run: |
