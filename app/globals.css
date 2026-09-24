@@ -162,6 +162,24 @@ tbody tr:hover { background: var(--surface-muted); }
 .wallet-actions-card { margin-top: 16px; }
 .brand-preview { border-radius: 20px; padding: 22px 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: 320px; margin: 0 auto; box-shadow: 0 16px 40px rgba(23,23,23,.12); }
 
+
+.dashboard-next-step { border-color: #d8d3ca; background: #fffdf9; }
+.scanner-top .scanner-pill { pointer-events: auto; }
+.scanner-stats-page {
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
+  padding-left: max(16px, calc((100vw - 1120px) / 2));
+  padding-right: max(16px, calc((100vw - 1120px) / 2));
+  background: #09090b;
+  color: #fff;
+}
+.scanner-stats-page .muted { color: #a1a1aa; }
+.scanner-stats-page .card { background: #18181b; border-color: #27272a; }
+.scanner-stats-page .metric span { color: #a1a1aa; }
+.scanner-stats-page .btn:not(.btn-accent) { background: #18181b; border-color: #3f3f46; color: #fff; }
+
 /* Scanner: POS first, decorative second */
 .scanner-page { min-height: 100dvh; background:#09090b; color:white; position:relative; overflow:hidden; }
 .scanner-video { position:fixed; inset:0; width:100%; height:100dvh; object-fit:cover; }
@@ -214,7 +232,10 @@ tbody tr:hover { background: var(--surface-muted); }
   .admin-sidebar { background: rgba(23,23,23,.96); border-bottom-color:#2f2f2f; }
   .app-sidebar-inner { height: auto; display: block; }
   .app-sidebar-head { min-height: 46px; }
-  .app-sidebar-links, .app-sidebar-footer, .admin-sidebar-links, .admin-meta { display: none; }
+  .app-sidebar-links, .app-sidebar-footer, .admin-meta { display: none; }
+  .admin-sidebar-links { display:flex; gap:6px; overflow-x:auto; padding:6px 0 2px; scrollbar-width:none; }
+  .admin-sidebar-links::-webkit-scrollbar { display:none; }
+  .admin-sidebar-links .badge { flex:0 0 auto; background:#242424; color:#d8d6d1; }
   .app-nav-mobile-primary { display: inline-flex; margin-left: auto; min-height: 40px; align-items:center; padding:0 12px; border-radius:8px; background:var(--retiko-coral); color:#fff; font-weight:750; font-size:13px; }
   .nav-menu { display: inline-flex; }
   .app-sidebar + .shell, .admin-sidebar + .shell { width: min(1120px, calc(100% - 32px)); margin-left:auto; margin-right:auto; }
