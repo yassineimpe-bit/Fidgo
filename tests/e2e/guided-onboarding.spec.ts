@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { origin, randomizeClientIp, unique } from "./helpers";
+import { origin, randomizeClientIp, testClientIp, unique } from "./helpers";
 
 async function signup(page: Page) {
   const marker = unique("guided");
@@ -191,7 +191,7 @@ test("onboarding : MANAGER et VIEWER ne peuvent pas avancer la configuration du 
     expect((await page.request.post("/api/employees", { headers: { origin }, data: { email, password: "Password-test-123!", role } })).status()).toBe(201);
     const staffContext = await browser.newContext({ baseURL: origin });
     try {
-      expect((await staffContext.request.post("/api/auth/login", { headers: { origin }, data: { email, password: "Password-test-123!" } })).ok()).toBeTruthy();
+      expect((await staffContext.request.post("/api/auth/login", { headers: { origin, "x-real-ip": testClientIp() }, data: { email, password: "Password-test-123!" } })).ok()).toBeTruthy();
       expect((await staffContext.request.post("/api/onboarding", { headers: { origin }, data: { action: "team-skip" } })).status()).toBe(403);
       // A manager can edit branding, but cannot validate the owner's guided step.
       const update = await staffContext.request.patch("/api/restaurant", { headers: { origin }, data: { name: restaurant.name, onboarding: true } });
