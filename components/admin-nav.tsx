@@ -8,17 +8,26 @@ const LINKS = [
   { href: "/admin/audit", label: "Journal admin" },
 ];
 
-// .navlinks ne rétrécit pas (flex-shrink:0) : cinq liens y débordent sur mobile.
 export function AdminNav({ email }: { email: string }) {
-  return <header className="topbar no-print" style={{position:"static"}}>
-    <div className="shell topbar-inner">
-      <Link className="brand" href="/admin">Retiko · Super-admin</Link>
-      <Link className="btn" href="/dashboard" style={{flexShrink:0}}>Mon commerce</Link>
+  return <header className="app-sidebar admin-sidebar no-print">
+    <div className="app-sidebar-inner">
+      <div className="app-sidebar-head">
+        <Link className="brand" href="/admin">
+          <span className="brand-mark" aria-hidden="true">R</span>
+          <span className="brand-copy">Retiko · Super-admin</span>
+        </Link>
+      </div>
+      <nav className="admin-sidebar-links" aria-label="Navigation super-admin">
+        {LINKS.map((link) => <Link key={link.href} href={link.href} className="badge">{link.label}</Link>)}
+      </nav>
+      <div className="admin-meta">
+        <p className="muted" style={{fontSize:13,overflowWrap:"anywhere"}}>Connecté en super-admin : {email}</p>
+        <p className="muted" style={{fontSize:12}}>Chaque consultation et action est journalisée.</p>
+      </div>
+      <div className="app-sidebar-footer">
+        <Link className="btn" href="/dashboard">Mon commerce</Link>
+      </div>
     </div>
-    <nav className="shell" aria-label="Navigation super-admin" style={{display:"flex",flexWrap:"wrap",gap:8,paddingBottom:10}}>
-      {LINKS.map((link) => <Link key={link.href} href={link.href} className="badge">{link.label}</Link>)}
-    </nav>
-    <div className="shell"><p className="muted" style={{margin:"0 0 10px",fontSize:13,overflowWrap:"anywhere"}}>Connecté en super-admin : {email} · chaque consultation et action est journalisée.</p></div>
   </header>;
 }
 
