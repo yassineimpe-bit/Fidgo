@@ -9,10 +9,24 @@ export async function AppNav({ restaurantName }: { restaurantName?: string }) {
   const links = session
     ? APP_NAV_LINKS.filter((link) => link.roles.includes(session.role))
     : [];
+  const scanner = links.find((link) => link.href === "/s");
 
-  return <header className="topbar no-print"><div className="shell topbar-inner"><Link className="brand" href={session?.role === "EMPLOYEE" ? "/s" : "/dashboard"}>{restaurantName || "Retiko"}</Link><nav className="navlinks">
-    {links.map((link) => <Link key={link.href} href={link.href} className={link.keepMobile ? "keep-mobile" : undefined}>{link.label}</Link>)}
-    <MobileNavMenu links={links}/>
-    <LogoutButton/>
-  </nav></div></header>;
+  return <header className="app-sidebar no-print">
+    <div className="app-sidebar-inner">
+      <div className="app-sidebar-head">
+        <Link className="brand" href={session?.role === "EMPLOYEE" ? "/s" : "/dashboard"}>
+          <span className="brand-mark" aria-hidden="true">R</span>
+          <span className="brand-copy">{restaurantName || "Retiko"}</span>
+        </Link>
+        {scanner ? <Link className="app-nav-mobile-primary" href="/s">Scanner</Link> : null}
+        <MobileNavMenu links={links}/>
+      </div>
+      <nav className="app-sidebar-links" aria-label="Navigation commerçant">
+        {links.map((link) => <Link key={link.href} href={link.href} className={link.href === "/s" ? "app-sidebar-link app-sidebar-link-primary" : "app-sidebar-link"}>{link.label}</Link>)}
+      </nav>
+      <div className="app-sidebar-footer">
+        <LogoutButton/>
+      </div>
+    </div>
+  </header>;
 }
