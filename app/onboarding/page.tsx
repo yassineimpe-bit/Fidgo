@@ -27,11 +27,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const reward = { rewardThreshold: Number(row.reward_threshold), rewardLabel: String(row.reward_label), unit: row.mode === "STAMPS" ? "tampons" : "points" };
   const employees = step === 3 ? await sql`select email from staff_users where establishment_id=${session.establishmentId} and role='EMPLOYEE' and active=true order by created_at` : [];
 
-  return <main className="shell page" style={{maxWidth:1000}}>
+  return <main className="shell page onboarding-shell">
     <Link href="/" className="eyebrow">Retiko</Link>
     <h1>Prépare ton commerce</h1>
     <p className="muted">Ton compte est créé. Chaque étape enregistrée est conservée pour reprendre quand tu veux.</p>
-    <nav aria-label="Étapes de configuration" style={{margin:"24px 0"}}>
+    <nav className="onboarding-steps" aria-label="Étapes de configuration">
       <ol style={{display:"flex",flexWrap:"wrap",gap:16,listStyle:"none",padding:0}}>
         {ONBOARDING_STEPS.map((label, index) => <li key={label} aria-current={step === index + 1 ? "step" : undefined}>
           {index + 1 <= savedStep ? <Link href={`/onboarding?step=${index + 1}`} style={{fontWeight:step === index + 1 ? 800 : 400}}>{index + 1 < savedStep ? "✓" : index + 1} · {label}</Link> : <span className="muted">{index + 1} · {label}</span>}
