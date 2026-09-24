@@ -1,0 +1,88 @@
+name: capture-ui-quiet-premium
+
+on:
+  push:
+    branches:
+      - ui/gemini-global-lift
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fidgo
+          POSTGRES_PASSWORD: fidgo
+          POSTGRES_DB: fidgo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fidgo -d fidgo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://fidgo:fidgo@127.0.0.1:5432/fidgo_test
+      AUTH_SECRET: fidgo-ui-capture-secret-at-least-32-characters
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      CARD_RECOVERY_ENABLED: "true"
+      RESEND_API_KEY: re_test_dummy_key
+      EMAIL_FROM: "Retiko <cards@retiko.test>"
+      EMAIL_REPLY_TO: support@retiko.test
+      STRIPE_ENABLED: "true"
+      STRIPE_SECRET_KEY: sk_test_ui_capture_placeholder
+      STRIPE_WEBHOOK_SECRET: whsec_ui_capture_placeholder
+      STRIPE_PRICE_FLEX_MONTHLY: price_ui_capture_flex
+      STRIPE_PRICE_RETIKO12_MONTHLY: price_ui_capture_retiko12
+      STRIPE_PRICE_ANNUAL: price_ui_capture_annual
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:setup
+      - name: Start Retiko
+        shell: bash
+        run: |
+          npm run dev > /tmp/retiko-ui-capture.log 2>&1 &
+          echo $! > /tmp/retiko-ui-capture.pid
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/retiko-ui-capture.log
+          exit 1
+      - name: Capture current UI as JPEG
+        run: node scripts/capture-ui-review.mjs
+      - name: Validate JPEG files
+        shell: bash
+        run: |
+          count=$(find docs/ui-review-jpegs -maxdepth 1 -name '*.jpg' | wc -l)
+          test "$count" -ge 25
+          file docs/ui-review-jpegs/*.jpg | grep -v 'JPEG image data' && exit 1 || true
+      - name: Build ZIP
+        shell: bash
+        run: |
+          cd docs/ui-review-jpegs
+          zip -9 retiko-ui-quiet-premium.zip INDEX.md *.jpg
+          unzip -t retiko-ui-quiet-premium.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retiko-ui-quiet-premium
+          path: |
+            docs/ui-review-jpegs/INDEX.md
+            docs/ui-review-jpegs/*.jpg
+            docs/ui-review-jpegs/retiko-ui-quiet-premium.zip
+          if-no-files-found: error
+          retention-days: 7
