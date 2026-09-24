@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { createMerchant, logout, origin, randomizeClientIp, unique } from "./helpers";
 
-test("auth : signup, logout puis login redonnent accès au dashboard", async ({ page }) => {
+test("auth : signup vérifié, logout puis login redonnent accès au dashboard", async ({ page }) => {
   const marker = unique("auth");
   const email = `${marker}@example.com`;
   const password = "Password-test-123!";
@@ -12,15 +12,40 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
   await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login$/);
+
+  const blockedLogin = await page.request.post("/api/auth/login", {
+    headers: { origin },
+    data: { email, password },
+  });
+  expect(blockedLogin.status()).toBe(403);
+  expect((await blockedLogin.json()).error).toBe("EMAIL_NOT_VERIFIED");
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: signup.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await logout(page);
   await expect(page).toHaveURL(/\/login$/);
 
-  // La session est bien révoquée : /dashboard redirige vers /login sans cookie valide.
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
 
@@ -28,6 +53,66 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("auth : une nouvelle inscription reprend proprement une adresse encore non vérifiée", async ({ page }) => {
+  const marker = unique("pre-hijack");
+  const email = `${marker}@example.com`;
+  const oldPassword = "Password-old-123!";
+  const newPassword = "Password-new-123!";
+
+  await randomizeClientIp(page);
+  const first = await page.request.post("/api/auth/signup", {
+    headers: { origin },
+    data: { restaurantName: "Commerce attaquant", email, password: oldPassword },
+  });
+  expect(first.status()).toBe(202);
+  const firstBody = await first.json() as { verificationToken?: string };
+  expect(firstBody.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const second = await page.request.post("/api/auth/signup", {
+    headers: { origin },
+    data: { restaurantName: "Commerce légitime", email, password: newPassword },
+  });
+  expect(second.status()).toBe(202);
+  const secondBody = await second.json() as { verificationToken?: string };
+  expect(secondBody.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const stale = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: firstBody.verificationToken },
+  });
+  expect(stale.status()).toBe(400);
+
+  const oldLoginBeforeVerification = await page.request.post("/api/auth/login", {
+    headers: { origin },
+    data: { email, password: oldPassword },
+  });
+  expect(oldLoginBeforeVerification.status()).toBe(401);
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: secondBody.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  const oldLogin = await page.request.post("/api/auth/login", {
+    headers: { origin },
+    data: { email, password: oldPassword },
+  });
+  expect(oldLogin.status()).toBe(401);
+
+  const goodLogin = await page.request.post("/api/auth/login", {
+    headers: { origin },
+    data: { email, password: newPassword },
+  });
+  expect(goodLogin.ok()).toBeTruthy();
+
+  const duplicateVerified = await page.request.post("/api/auth/signup", {
+    headers: { origin },
+    data: { restaurantName: "Tentative après vérification", email, password: "Another-Password-123!" },
+  });
+  expect(duplicateVerified.status()).toBe(409);
 });
 
 test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER", async ({ page }) => {
