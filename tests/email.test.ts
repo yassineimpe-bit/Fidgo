@@ -3,6 +3,7 @@ import {
   EmailDeliveryError,
   recoveryEmailConfigured,
   sendCardRecoveryEmail,
+  sendEmailVerificationEmail,
   sendPasswordResetEmail,
 } from "@/lib/email";
 
@@ -182,5 +183,58 @@ describe("Resend password reset email", () => {
       fetchImpl: fetchImpl as typeof fetch,
     })).rejects.toMatchObject({ code: "EMAIL_SEND_401" } satisfies Partial<EmailDeliveryError>);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe("Resend merchant email verification", () => {
+  const verificationInput = {
+    to: "Owner@Example.com",
+    commerceName: "Boulangerie <script>alert(1)</script>",
+    verificationUrl: `https://retiko.fr/verify-email?token=${"a".repeat(43)}`,
+    idempotencyKey: `email-verification-${"b".repeat(64)}`,
+  };
+
+  it("names the commerce, escapes it in HTML and warns unsolicited recipients", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ id: "resend-verify-123" }));
+
+    await expect(sendEmailVerificationEmail(
+      verificationInput,
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    )).resolves.toEqual({ messageId: "resend-verify-123" });
+
+    const [url, request] = fetchImpl.mock.calls[0];
+    expect(url).toBe("https://api.resend.com/emails");
+    expect(new Headers(request?.headers).get("idempotency-key")).toBe(verificationInput.idempotencyKey);
+
+    const payload = JSON.parse(String(request?.body));
+    expect(payload.to).toEqual(["owner@example.com"]);
+    expect(payload.subject).toContain("Boulangerie");
+    expect(payload.subject).not.toContain("\r");
+    expect(payload.subject).not.toContain("\n");
+    expect(payload.text).toContain("Une inscription a été lancée");
+    expect(payload.text).toContain("Ignorez ce message");
+    expect(payload.text).toContain(verificationInput.verificationUrl);
+    expect(payload.html).toContain("Boulangerie &lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(payload.html).not.toContain("<script>alert(1)</script>");
+    expect(payload.html).toContain("Vous n’êtes pas à l’origine de cette inscription ?");
+  });
+
+  it("accepts only the canonical Retiko verification URL in production", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    await expect(sendEmailVerificationEmail(
+      { ...verificationInput, verificationUrl: `https://evil.example/verify-email?token=${"a".repeat(43)}` },
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    )).rejects.toMatchObject({ code: "EMAIL_INVALID_VERIFICATION_URL" } satisfies Partial<EmailDeliveryError>);
+
+    await expect(sendEmailVerificationEmail(
+      { ...verificationInput, verificationUrl: `${verificationInput.verificationUrl}&next=https://evil.example` },
+      env,
+      { fetchImpl: fetchImpl as typeof fetch },
+    )).rejects.toMatchObject({ code: "EMAIL_INVALID_VERIFICATION_URL" } satisfies Partial<EmailDeliveryError>);
+
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
