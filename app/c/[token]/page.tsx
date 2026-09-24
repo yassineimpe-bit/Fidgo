@@ -36,14 +36,14 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   const brandColor = normalizeHexColor(card.primary_color, "#111111");
   const brandTextColor = contrastTextColor(brandColor);
 
-  return <main className="auth-wrap"><section style={{width:"min(480px,100%)"}}>
+  return <main className="client-card-page"><section className="client-card-shell">
     <div className="loyalty-card" style={{background:brandColor,color:brandTextColor}}>
       <div><div style={{display:"flex",alignItems:"center",gap:12}}>{card.logo_url&&<Image src={String(card.logo_url)} alt={`Logo ${card.name}`} width={52} height={52} unoptimized style={{objectFit:"contain",borderRadius:12,background:"white"}}/>}<div><strong style={{fontSize:22}}>{card.name}</strong><div style={{opacity:.8}}>{card.program_name}</div></div></div>
       <div style={{marginTop:30}}><CardLiveStatus token={String(card.token)} initialBalance={Number(card.balance)} initialThreshold={Number(card.reward_threshold)} initialUpdatedAt={new Date(card.updated_at).toISOString()} mode={card.mode === "POINTS" ? "POINTS" : "STAMPS"} rewardLabel={String(card.reward_label)}/></div></div>
       <div style={{display:"grid",placeItems:"center",gap:10}}><Image className="qr" src={qr} alt="QR code fidélité" width={220} height={220} unoptimized/><strong style={{letterSpacing:".16em"}}>{card.short_code}</strong></div>
       <div><strong>{card.reward_label}</strong>{card.card_message&&<p style={{margin:"8px 0 0",opacity:.8}}>{card.card_message}</p>}</div>
     </div>
-    <div className="card" style={{marginTop:14}}><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
+    <div className="card wallet-actions-card"><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
       {appleEnabled ? <a className="btn btn-primary" href={`/api/wallet/apple/${card.token}`}>Ajouter à Apple Wallet</a> : <button className="btn" disabled>Apple Wallet</button>}
       {googleEnabled ? <div style={{padding:"8px 0",display:"grid",placeItems:"center"}}><a href={`/api/wallet/google/${card.token}`} aria-label="Ajouter à Google Wallet"><Image src="/add-to-google-wallet-fr.svg" alt="Ajouter à Google Wallet" width={199} height={55} style={{width:199,maxWidth:"100%",height:"auto"}}/></a></div> : <button className="btn" disabled>Google Wallet</button>}
     </div>{(!appleEnabled||!googleEnabled)&&<p className="muted" style={{fontSize:13,marginTop:12}}>Les boutons s’activent uniquement quand HTTPS et les identifiants émetteur correspondants sont réellement prêts.</p>}</div>

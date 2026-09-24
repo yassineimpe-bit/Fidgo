@@ -22,19 +22,11 @@ export function BrandPreview({ name, logoUrl, primaryColor, rewardThreshold, rew
   const textColor = contrastTextColor(brandColor);
 
   return <div
+    className="brand-preview"
     aria-label="Aperçu de la carte fidélité"
     style={{
       background: brandColor,
       color: textColor,
-      borderRadius: 20,
-      padding: "20px 18px",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      gap: 12,
-      textAlign: "center",
-      maxWidth: 320,
-      margin: "0 auto",
     }}
   >
     {logoUrl
