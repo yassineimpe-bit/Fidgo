@@ -11,7 +11,21 @@ test("sécurité compte : changement de mot de passe révoque la session et remp
   await page.getByLabel("Nom du commerce").fill("Commerce changement mot de passe");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(oldPassword);
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect((await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: signup.verificationToken, password: oldPassword },
+  })).ok()).toBeTruthy();
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(oldPassword);
+  await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
