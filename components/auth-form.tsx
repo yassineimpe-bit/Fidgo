@@ -69,7 +69,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         return;
       }
 
-      router.replace("/dashboard");
+      const destination = mode === "login"
+        ? data.role === "EMPLOYEE"
+          ? "/s"
+          : data.onboardingPending
+            ? "/onboarding"
+            : "/dashboard"
+        : "/dashboard";
+      router.replace(destination);
       router.refresh();
     } catch {
       setError("Connexion impossible. Vérifie le réseau puis réessaie.");
