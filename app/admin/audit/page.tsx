@@ -31,9 +31,10 @@ export default async function AdminAuditPage({
   const currentPage = Math.min(page, totalPages);
   const rows = await sql`
     select a.id, a.admin_email, a.action, a.target_type, a.target_id, a.reason, a.metadata, a.created_at,
-      e.name as establishment
+      e.name as establishment, s.email as target_staff_email
     from platform_admin_audit a
     left join establishments e on a.target_type='establishment' and e.id::text=a.target_id
+    left join staff_users s on a.target_type='staff_user' and s.id::text=a.target_id
     where ${includeViews} or a.action <> 'ADMIN_VIEW'
     order by a.created_at desc, a.id
     limit ${ADMIN_PAGE_SIZE} offset ${(currentPage - 1) * ADMIN_PAGE_SIZE}
@@ -70,6 +71,7 @@ export default async function AdminAuditPage({
                 <td>{ACTION_LABEL[String(row.action)] || String(row.action)}</td>
                 <td>{row.target_type === "establishment" && row.target_id
                   ? <Link href={`/admin/establishments/${row.target_id}`}>{String(row.establishment || row.target_id)}</Link>
+                  : row.target_staff_email ? String(row.target_staff_email)
                   : row.target_type ? `${String(row.target_type)} ${String(row.target_id || "").slice(0, 8)}` : "—"}</td>
                 <td>{row.reason ? String(row.reason) : typeof metadata.view === "string" ? `page ${metadata.view}` : "—"}</td>
               </tr>;
