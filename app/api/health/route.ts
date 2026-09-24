@@ -1,8 +1,9 @@
 import { getBillingRuntimeStatus } from "@/lib/billing";
-import { databaseConfigured, sql } from "@/lib/db";
+import { databaseConfigured } from "@/lib/db";
 import { recoveryEmailConfigured } from "@/lib/email";
 import { healthSchemaIsReady } from "@/lib/health-schema";
 import { logHealthSnapshot } from "@/lib/observability";
+import { readHealthSchemaFlags } from "@/lib/service-status";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
 export const dynamic = "force-dynamic";
@@ -69,53 +70,7 @@ export async function GET() {
   }
 
   try {
-    const [schema] = await sql`
-      select
-        to_regclass('public.card_recovery_tokens') is not null as recovery_table,
-        to_regclass('public.password_reset_tokens') is not null as password_reset_table,
-        exists (select 1 from information_schema.columns where table_schema='public' and table_name='establishments' and column_name='onboarding_step') as onboarding_step,
-        to_regclass('public.product_events') is not null as product_events_table,
-        to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
-        exists(
-          select 1 from information_schema.columns
-          where table_schema='public' and table_name='staff_users' and column_name='token_version'
-        ) as token_version,
-        exists(
-          select 1 from information_schema.columns
-          where table_schema='public' and table_name='cards' and column_name='last_earn_at'
-        ) as last_earn_at,
-        exists(
-          select 1 from information_schema.columns
-          where table_schema='public' and table_name='loyalty_programs' and column_name='cooldown_seconds'
-        ) as cooldown_seconds,
-        exists(
-          select 1 from information_schema.columns
-          where table_schema='public' and table_name='subscriptions' and column_name='trial_ends_at'
-        ) as billing_trial_end,
-        (
-          select count(*)::int = 5 from pg_constraint
-          where connamespace='public'::regnamespace and conname = any(array[
-            'product_events_card_same_tenant_fk',
-            'product_events_staff_same_tenant_fk',
-            'audit_logs_staff_same_tenant_fk',
-            'audit_logs_staff_requires_tenant_check',
-            'transactions_reversal_same_tenant_fk'
-          ])
-        ) as tenant_integrity,
-        to_regclass('public.transactions_reversed_once_key') is not null as reversal_once,
-        (
-          select count(*)::int = 3 from pg_trigger
-          where not tgisinternal and tgname = any(array[
-            'establishments_no_hard_delete',
-            'customers_no_hard_delete',
-            'cards_no_hard_delete'
-          ])
-        ) as lifecycle_guards,
-        exists(
-          select 1 from pg_constraint
-          where connamespace='public'::regnamespace and conname='customers_erased_pii_check'
-        ) as erased_pii_check
-    `;
+    const schema = await readHealthSchemaFlags();
 
     const schemaReady = healthSchemaIsReady(schema, process.env.STRIPE_ENABLED === "true");
 

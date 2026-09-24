@@ -18,7 +18,7 @@ const coreSchema = {
 };
 
 describe("health schema", () => {
-  it("échoue fermé si la migration onboarding 019 manque", () => {
+  it("échoue fermé si la migration onboarding 020 manque", () => {
     expect(healthSchemaIsReady({ ...coreSchema, onboarding_step: false }, false)).toBe(false);
   });
   it("échoue fermé si la migration password reset 015 manque", () => {

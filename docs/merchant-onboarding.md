@@ -21,7 +21,7 @@ Les commerces existants gardent `NULL` et ne sont pas forcés à refaire leur co
 
 ## Migration et livraison
 
-Appliquer `db/migrations/019_merchant_onboarding.sql` **avant** de servir le nouveau code. La migration est additive et rejouable ; `/api/health` signale un schéma incomplet si la colonne manque. `npm run db:setup` applique également cette migration sur un environnement de test.
+Appliquer `db/migrations/020_merchant_onboarding.sql` **avant** de servir le nouveau code. La migration est additive et rejouable ; `/api/health` signale un schéma incomplet si la colonne manque. `npm run db:setup` applique également cette migration sur un environnement de test.
 
 Cette livraison ne déploie pas la migration en production et ne prétend pas valider l’installation PWA ou le scan sur appareil physique. Le logo reste une URL HTTPS, sans upload de fichier. La sélection automatique d’un modèle selon le métier relève du chantier distinct SPEC-V0 §14.
 
