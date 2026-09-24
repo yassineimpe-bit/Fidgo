@@ -23,8 +23,8 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
     ? restaurant.logo_url
     : null;
 
-  return <main className="auth-wrap" style={{background:`linear-gradient(160deg, ${brandColor}18, #f5f6f8 55%)`}}>
-    <section className="card auth-card">
+  return <main className="auth-wrap join-page" style={{backgroundColor:`${brandColor}12`}}>
+    <section className="card auth-card join-card">
       {logoUrl&&<img src={logoUrl} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
       <span className="eyebrow" style={{marginTop:12}}>{restaurant.mode==="STAMPS"?"Carte à tampons":"Carte à points"}</span>
       <h2 style={{margin:"14px 0 6px"}}>{restaurant.name}</h2>
