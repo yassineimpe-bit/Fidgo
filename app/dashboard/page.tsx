@@ -73,10 +73,10 @@ export default async function DashboardPage() {
       : { text: "Ton programme est prêt. Retiko peut accueillir de vrais clients.", href: "/s", cta: "Ouvrir le scanner" };
 
   return <><AppNav restaurantName={restaurant.name}/><main className="shell page">
-    <div className="section-head"><div><span className="eyebrow">{program.mode === "STAMPS" ? "Tampons" : "Points"}</span><h2 style={{margin:"12px 0 4px"}}>{program.program_name}</h2><p className="muted">{program.reward_threshold} unités = {program.reward_label}</p></div><Link className="btn btn-primary" href="/s">Ouvrir le scanner</Link></div>
+    <div className="section-head"><div><span className="eyebrow">{program.mode === "STAMPS" ? "Tampons" : "Points"}</span><h2 style={{margin:"12px 0 4px"}}>{program.program_name}</h2><p className="muted">{program.reward_threshold} unités = {program.reward_label}</p></div><Link className="btn btn-accent" href="/s">Ouvrir le scanner</Link></div>
     {onboardingPending && <section className="notice" style={{marginBottom:18}}><p>La configuration de ton commerce est en cours. Reprends là où tu t’es arrêté.</p><Link className="btn btn-primary" href="/onboarding">Reprendre la configuration</Link></section>}
     <PwaInstallHint/>
-    <section className="card" style={{marginTop:18, borderColor:"var(--accent)"}}>
+    <section className="card dashboard-next-step" style={{marginTop:18}}>
       <div className="section-head"><div><span className="eyebrow">Étape suivante</span><p style={{margin:"10px 0 0", fontSize:17, fontWeight:700}}>{nextStep.text}</p></div><Link className="btn btn-primary" href={nextStep.href}>{nextStep.cta}</Link></div>
       <div className="grid grid-3" style={{marginTop:6}}>
         {checklist.map((item) => <Link key={item.label} href={item.href} style={{color: item.done ? "var(--success)" : "var(--text)"}}>{item.done ? "✓" : "○"} {item.label}</Link>)}
@@ -92,23 +92,23 @@ export default async function DashboardPage() {
         <p className="muted" style={{marginTop:8, marginBottom:0}}>Aucune donnée n’est créée automatiquement : le test utilise le vrai parcours client.</p>
       </div>}
     </section>
-    <section className="grid grid-4" style={{marginTop:18}}>
+    <section className="grid grid-4 dashboard-kpis" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.customers}</strong><span>clients inscrits</span></div>
       <div className="card metric"><strong>{stats.active_cards}</strong><span>cartes actives</span></div>
       <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
       <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
     </section>
-    <section className="grid grid-2" style={{marginTop:18}}>
+    <section className="grid grid-2 dashboard-secondary-kpis" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.scan_today}</strong><span>scans du jour</span></div>
       <div className="card metric"><strong>{stats.rewards_available}</strong><span>récompenses disponibles</span></div>
     </section>
-    <section className="grid grid-4" style={{marginTop:18}}>
+    <section className="grid grid-4 dashboard-secondary-kpis" style={{marginTop:18}}>
       <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
       <div className="card metric"><strong>{stats.scan_success}</strong><span>scans réussis</span></div>
       <div className="card metric"><strong>{scanErrorRate} %</strong><span>taux d’erreur scanner</span></div>
       <div className="card metric"><strong>{stats.scan_failed}</strong><span>scans échoués</span></div>
     </section>
-    <section className="grid grid-3" style={{marginTop:18}}>
+    <section className="grid grid-3 dashboard-secondary-kpis" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.scan_p50} ms</strong><span>p50 QR → fiche client</span></div>
       <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
       <div className="card metric"><strong>{recurringRate} %</strong><span>clients revenus sur ≥2 jours</span></div>
