@@ -4,12 +4,33 @@ import { origin, randomizeClientIp, testClientIp, unique } from "./helpers";
 
 async function signup(page: Page) {
   const marker = unique("guided");
+  const email = `${marker}@example.com`;
+  const password = "Password-test-123!";
   await randomizeClientIp(page);
   await page.goto("/signup");
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
-  await page.getByLabel("Email", { exact: true }).fill(`${marker}@example.com`);
-  await page.getByLabel("Mot de passe", { exact: true }).fill("Password-test-123!");
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Mot de passe", { exact: true }).fill(password);
+
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: signup.verificationToken, password },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page).toHaveURL(/\/onboarding$/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
   return marker;
