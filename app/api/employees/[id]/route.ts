@@ -74,6 +74,11 @@ async function handlePatch(req: Request, { params }: { params: Promise<{ id: str
           set used_at=now()
           where staff_user_id=${id} and used_at is null
         `;
+        await tx`
+          update email_verification_tokens
+          set used_at=now()
+          where staff_user_id=${id} and used_at is null
+        `;
       }
 
       await tx`
