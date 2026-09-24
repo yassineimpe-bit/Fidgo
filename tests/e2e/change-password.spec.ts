@@ -12,6 +12,8 @@ test("sécurité compte : changement de mot de passe révoque la session et remp
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(oldPassword);
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 
   await page.goto("/dashboard/security");
