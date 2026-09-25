@@ -7,6 +7,7 @@ import { parseCardToken } from "@/lib/loyalty";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 import { CardLiveStatus } from "@/components/card-live-status";
 import { programUnits } from "@/lib/program-units";
+import { CardMarketingPreference } from "@/components/card-marketing-preference";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   if (!token) notFound();
   const [card] = await sql`
     select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,
-      p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name,
+      p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name,u.marketing_consent,(u.email is not null) as has_email,
       to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from cards c
     join establishments e on e.id=c.establishment_id
@@ -45,6 +46,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
       <div style={{display:"grid",placeItems:"center",gap:10}}><Image className="qr" src={qr} alt="QR code fidélité" width={220} height={220} unoptimized/><strong style={{letterSpacing:".16em"}}>{card.short_code}</strong></div>
       <div><strong>{card.reward_label}</strong>{card.card_message&&<p style={{margin:"8px 0 0",opacity:.8}}>{card.card_message}</p>}</div>
     </div>
+    <CardMarketingPreference token={String(card.token)} restaurantName={String(card.name)} initialConsent={card.marketing_consent === true} hasEmail={card.has_email === true}/>
     <div className="card wallet-actions-card"><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
       {appleEnabled ? <a className="btn btn-primary" href={`/api/wallet/apple/${card.token}`}>Ajouter à Apple Wallet</a> : <button className="btn" disabled>Apple Wallet</button>}
       {googleEnabled ? <div style={{padding:"8px 0",display:"grid",placeItems:"center"}}><a href={`/api/wallet/google/${card.token}`} aria-label="Ajouter à Google Wallet"><Image src="/add-to-google-wallet-fr.svg" alt="Ajouter à Google Wallet" width={199} height={55} style={{width:199,maxWidth:"100%",height:"auto"}}/></a></div> : <button className="btn" disabled>Google Wallet</button>}
