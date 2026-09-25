@@ -9,6 +9,7 @@ import {
 } from "@/lib/email-verification";
 
 const migration = readFileSync("db/migrations/021_email_verification.sql", "utf8");
+const integrityMigration = readFileSync("db/migrations/023_email_verification_integrity.sql", "utf8");
 
 describe("email verification migration", () => {
   it("backfills legacy accounts only when the column is created for the first time", () => {
@@ -17,6 +18,12 @@ describe("email verification migration", () => {
     expect(migration).toMatch(
       /if not exists \([\s\S]*add column email_verified_at[\s\S]*set email_verified_at = created_at[\s\S]*alter table staff_users/,
     );
+  });
+
+  it("enforces one active token and revokes links when account state changes", () => {
+    expect(integrityMigration).toContain("email_verification_tokens_one_active_per_staff");
+    expect(integrityMigration).toContain("staff_email_verification_revoke_on_state_change");
+    expect(integrityMigration).toContain("establishment_email_verification_revoke_on_suspend");
   });
 });
 

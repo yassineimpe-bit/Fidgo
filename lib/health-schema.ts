@@ -8,6 +8,7 @@ export function healthSchemaIsReady(schema: HealthSchemaFlags, billingRequired: 
     && schema?.password_reset_table
     && schema?.email_verification_table
     && schema?.email_verified_at
+    && schema?.email_verification_integrity
     && schema?.legal_acceptances_table
     && schema?.staff_marketing_consent
     && schema?.product_events_table

@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import { emailDeliveryConfigured, sendEmailVerificationEmail } from "@/lib/email";
-import { createEmailVerificationToken } from "@/lib/email-verification";
+import { createEmailVerificationToken, emailVerificationTestMode } from "@/lib/email-verification";
 import { isEmail } from "@/lib/input";
 import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
@@ -56,15 +56,18 @@ async function processResend(email: string) {
     const tokenId = String(created.id);
     const verifyUrl = `${base}/verify-email?token=${verification.token}`;
 
-    let messageId: string;
+    const testMode = emailVerificationTestMode();
+    let messageId = "test-delivery";
     try {
-      const delivered = await sendEmailVerificationEmail({
-        to: email,
-        restaurantName,
-        verificationUrl: verifyUrl,
-        idempotencyKey: `email-verification-${verification.tokenHash}`,
-      });
-      messageId = delivered.messageId;
+      if (!testMode) {
+        const delivered = await sendEmailVerificationEmail({
+          to: email,
+          restaurantName,
+          verificationUrl: verifyUrl,
+          idempotencyKey: `email-verification-${verification.tokenHash}`,
+        });
+        messageId = delivered.messageId;
+      }
     } catch (error) {
       const code = safeErrorCode(error, "EMAIL_SEND_FAILED");
       console.error("Verification email resend failed", { code });
@@ -73,6 +76,20 @@ async function processResend(email: string) {
     }
 
     await sql.begin(async (tx) => {
+      // Sérialise l'activation des liens concurrents et revérifie l'état après
+      // l'appel au fournisseur. Un compte vérifié ou révoqué entre-temps ne
+      // récupère jamais un nouveau lien actif.
+      const [eligible] = await tx`
+        select s.id
+        from staff_users s
+        join establishments e on e.id=s.establishment_id
+        where s.id=${staffId}
+          and s.email_verified_at is null
+          and s.active=true
+          and e.status='active'
+        for update of s, e
+      `;
+      if (!eligible) return;
       await tx`
         update email_verification_tokens
         set used_at = now()
@@ -91,7 +108,7 @@ async function processResend(email: string) {
           'EMAIL_VERIFICATION_EMAIL_SENT',
           'staff_user',
           ${staffId},
-          ${tx.json({ provider: "resend", messageId, resend: true })}
+          ${tx.json({ provider: testMode ? "test" : "resend", messageId, resend: true })}
         )
       `;
     });
