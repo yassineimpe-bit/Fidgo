@@ -152,6 +152,19 @@ try {
       (select count(*)::int from establishment_logos l join establishments e on e.id=l.establishment_id
         where e.logo_url is distinct from '/api/logos/' || l.id::text) as orphan_logos
   ` : [{ broken_logo_refs: 0, orphan_logos: 0 }];
+  const [campaignSchema] = await sql`
+    select exists (select 1 from information_schema.columns where table_schema='public' and table_name='campaigns' and column_name='recipient_count') as present
+  `;
+  const [campaignData] = campaignSchema.present ? await sql`
+    select
+      (select count(*)::int from campaign_recipients r join campaigns ca on ca.id=r.campaign_id join customers cu on cu.id=r.customer_id
+        where cu.establishment_id<>ca.establishment_id) as cross_tenant_recipients,
+      -- L'effacement d'un client retire sa ligne destinataire : le décompte ne peut que baisser.
+      (select count(*)::int from campaigns ca where ca.channel='email' and ca.recipient_count <
+        (select count(*) from campaign_recipients r where r.campaign_id=ca.id)) as recipient_count_mismatches,
+      (select count(*)::int from campaign_recipients r join customers cu on cu.id=r.customer_id where cu.deleted_at is not null) as erased_customer_recipients,
+      (select count(*)::int from pg_trigger where tgname='campaign_recipients_same_tenant' and not tgisinternal) as tenant_trigger
+  ` : [{ cross_tenant_recipients: 0, recipient_count_mismatches: 0, erased_customer_recipients: 0, tenant_trigger: 1 }];
   const [billingData] = await sql`
     select
       (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
@@ -211,6 +224,10 @@ try {
   if (Number(legalData.cross_tenant_acceptances) > 0) failures.push(`${legalData.cross_tenant_acceptances} acceptation(s) CGU/CGV cross-tenant`);
   if (Number(logoData.broken_logo_refs) > 0) failures.push(`${logoData.broken_logo_refs} commerce(s) référençant un logo importé absent ou d'un autre tenant`);
   if (Number(logoData.orphan_logos) > 0) failures.push(`${logoData.orphan_logos} logo(s) importé(s) non référencé(s)`);
+  if (Number(campaignData.cross_tenant_recipients) > 0) failures.push(`${campaignData.cross_tenant_recipients} destinataire(s) de campagne d'un autre tenant`);
+  if (Number(campaignData.recipient_count_mismatches) > 0) failures.push(`${campaignData.recipient_count_mismatches} campagne(s) au nombre de destinataires incohérent`);
+  if (Number(campaignData.erased_customer_recipients) > 0) failures.push(`${campaignData.erased_customer_recipients} destinataire(s) de campagne effacé(s) encore liés`);
+  if (Number(campaignData.tenant_trigger) < 1) failures.push("garde tenant des destinataires de campagne manquante");
   if (Number(legalData.incoherent_marketing_consents) > 0) failures.push(`${legalData.incoherent_marketing_consents} consentement(s) marketing commerçant incohérent(s)`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
@@ -237,6 +254,7 @@ try {
   console.log(`Gardes hard-delete : ${expectedLifecycleTriggers.length - missingTriggers.length}/${expectedLifecycleTriggers.length}`);
   console.log(`Acceptations CGU/CGV cross-tenant : ${legalTable.present ? legalData.cross_tenant_acceptances : "table absente (migration 022)"}`);
   console.log(`Consentements marketing commerçant incohérents : ${legalData.incoherent_marketing_consents}`);
+  console.log(`Campagnes e-mail incohérentes : ${campaignSchema.present ? `${campaignData.cross_tenant_recipients} cross-tenant, ${campaignData.recipient_count_mismatches} compteur(s), ${campaignData.erased_customer_recipients} client(s) effacé(s)` : "colonnes absentes (migration 027)"}`);
   console.log(`Logos importés incohérents : ${logoTable.present ? `${logoData.broken_logo_refs} référence(s) cassée(s), ${logoData.orphan_logos} orphelin(s)` : "table absente (migration 024)"}`);
 
   if (failures.length > 0) {

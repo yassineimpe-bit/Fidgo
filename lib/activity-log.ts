@@ -33,6 +33,8 @@ const ACTION_LABELS: Record<string, string> = {
   CUSTOMER_ERASE: "Client effacé",
   CUSTOMER_CONTACT_UPDATED: "Coordonnées client rectifiées",
   CUSTOMER_MARKETING_GRANTED: "Consentement marketing client donné",
+  CAMPAIGN_CREATED: "Campagne e-mail créée",
+  CAMPAIGN_SENT: "Campagne e-mail envoyée",
   CUSTOMER_MARKETING_WITHDRAWN: "Consentement marketing client retiré",
   STAFF_MARKETING_CONSENT_UPDATED: "Choix des nouveautés Retiko modifié",
   ESTABLISHMENT_SUSPEND: "Commerce suspendu",

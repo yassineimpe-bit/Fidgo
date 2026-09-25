@@ -469,3 +469,163 @@ export async function sendEmailVerificationEmail(
 
   throw new EmailDeliveryError("EMAIL_SEND_FAILED");
 }
+
+export type CampaignEmailInput = {
+  to: string;
+  restaurantName: string;
+  restaurantAddress: string | null;
+  subject: string;
+  message: string;
+  /** Page de désabonnement (lien visible dans l'e-mail). */
+  unsubscribeUrl: string;
+  /** Point d'entrée POST « un clic » (RFC 8058) pour l'en-tête List-Unsubscribe. */
+  oneClickUnsubscribeUrl: string;
+  idempotencyKey: string;
+};
+
+/** Envois de campagne simulés (aucun appel au prestataire) : jamais en production. */
+export function campaignEmailTestMode(env: EmailEnv = process.env) {
+  return env.NODE_ENV !== "production" && env.CAMPAIGN_EMAIL_TEST_MODE === "true";
+}
+
+function validUnsubscribeUrl(value: string, prefix: "/unsubscribe/" | "/api/unsubscribe/", env: EmailEnv) {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.search || url.hash) return false;
+    if (!url.pathname.startsWith(prefix) || !/^[A-Za-z0-9_.-]+$/.test(url.pathname.slice(prefix.length))) return false;
+    if (url.protocol === "https:") return true;
+    return env.NODE_ENV !== "production"
+      && url.protocol === "http:"
+      && ["127.0.0.1", "localhost"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** « Nom du commerce via Retiko » <adresse d'envoi configurée>. */
+function campaignFrom(from: string, restaurantName: string) {
+  const address = from.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? from;
+  const name = restaurantName.replace(/["\\<>]/g, "").slice(0, 60).trim();
+  return name ? `"${name} via Retiko" <${address}>` : from;
+}
+
+function campaignDocument(input: { restaurantName: string; restaurantAddress: string | null; subject: string; message: string; unsubscribeUrl: string }) {
+  const paragraphs = input.message.split(/\n{2,}/)
+    .map((paragraph) => `<p style="margin:0 0 16px;line-height:1.6;">${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`)
+    .join("\n        ");
+  const restaurant = escapeHtml(input.restaurantName);
+  const address = input.restaurantAddress ? `<br>${escapeHtml(input.restaurantAddress)}` : "";
+  return `<!doctype html>
+<html lang="fr" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(input.subject)}</title>
+  </head>
+  <body lang="fr" dir="ltr" style="margin:0;background:#f6f7f9;color:#172033;font-family:Arial,sans-serif;">
+    <main style="max-width:600px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border-radius:16px;padding:32px 24px;">
+        <p style="margin:0 0 20px;color:#5b6475;font-weight:700;">${restaurant}</p>
+        ${paragraphs}
+      </div>
+      <p style="margin:20px 8px 0;font-size:13px;line-height:1.6;color:#5b6475;">${restaurant}${address}<br>
+        Vous recevez cet e-mail car vous avez accepté les offres de ce commerce avec votre carte de fidélité.<br>
+        <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#5b6475;">Se désabonner</a></p>
+    </main>
+  </body>
+</html>`;
+}
+
+export async function sendCampaignEmail(
+  input: CampaignEmailInput,
+  env: EmailEnv = process.env,
+  options: SendEmailOptions = {},
+): Promise<EmailDeliveryResult> {
+  const apiKey = env.RESEND_API_KEY?.trim();
+  const from = env.EMAIL_FROM?.trim();
+  const replyTo = env.EMAIL_REPLY_TO?.trim();
+  if (!apiKey || !from || !replyTo) throw new EmailDeliveryError("EMAIL_NOT_CONFIGURED");
+
+  const to = input.to.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new EmailDeliveryError("EMAIL_INVALID_RECIPIENT");
+  if (!validUnsubscribeUrl(input.unsubscribeUrl, "/unsubscribe/", env)
+    || !validUnsubscribeUrl(input.oneClickUnsubscribeUrl, "/api/unsubscribe/", env)) {
+    throw new EmailDeliveryError("EMAIL_INVALID_UNSUBSCRIBE_URL");
+  }
+  if (!/^[A-Za-z0-9_-]{1,256}$/.test(input.idempotencyKey)) {
+    throw new EmailDeliveryError("EMAIL_INVALID_IDEMPOTENCY_KEY");
+  }
+  const subject = cleanSubjectPart(input.subject);
+  const message = input.message.trim();
+  if (!subject || !message) throw new EmailDeliveryError("EMAIL_INVALID_CONTENT");
+
+  const restaurantName = cleanSubjectPart(input.restaurantName) || "votre commerce";
+  const restaurantAddress = input.restaurantAddress ? cleanSubjectPart(input.restaurantAddress) || null : null;
+  if (campaignEmailTestMode(env)) return { messageId: `test-${input.idempotencyKey}`.slice(0, 200) };
+
+  const payload = {
+    from: campaignFrom(from, restaurantName),
+    to: [to],
+    reply_to: replyTo,
+    subject,
+    headers: {
+      "List-Unsubscribe": `<${input.oneClickUnsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    text: [
+      message,
+      "",
+      "—",
+      restaurantAddress ? `${restaurantName}, ${restaurantAddress}` : restaurantName,
+      "Vous recevez cet e-mail car vous avez accepté les offres de ce commerce avec votre carte de fidélité.",
+      `Se désabonner : ${input.unsubscribeUrl}`,
+    ].join("\n"),
+    html: campaignDocument({ restaurantName, restaurantAddress, subject, message, unsubscribeUrl: input.unsubscribeUrl }),
+  };
+
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const sleep = options.sleep ?? wait;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response | undefined;
+    try {
+      response = await fetchImpl(RESEND_API, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          "content-type": "application/json",
+          "idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (response.ok) {
+        const result = await response.json().catch(() => null) as { id?: unknown } | null;
+        const messageId = typeof result?.id === "string" ? result.id.trim().slice(0, 200) : "";
+        if (!messageId) throw new EmailDeliveryError("EMAIL_INVALID_RESPONSE");
+        return { messageId };
+      }
+
+      if (!shouldRetry(response.status) || attempt === maxAttempts) {
+        throw new EmailDeliveryError(`EMAIL_SEND_${response.status}`);
+      }
+    } catch (error) {
+      if (error instanceof EmailDeliveryError) throw error;
+      if (attempt === maxAttempts) {
+        const code = controller.signal.aborted ? "EMAIL_SEND_TIMEOUT" : "EMAIL_SEND_NETWORK";
+        throw new EmailDeliveryError(code);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await sleep(retryDelay(response, attempt));
+  }
+
+  throw new EmailDeliveryError("EMAIL_SEND_FAILED");
+}

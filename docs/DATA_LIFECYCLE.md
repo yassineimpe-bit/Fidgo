@@ -60,9 +60,9 @@ pas être présentées comme appliquées.
 | `platform_admins` / `platform_admin_audit` | super-admins et journal de leurs actions | accès opérateur, preuve | journal append-only, aucune purge |
 | `product_events` | type, durée, IDs carte/staff, métadonnées bornées | télémétrie pseudonymisée | lien carte retiré à l'effacement ; proposition de purge à 180 jours |
 | `audit_logs` | acteur, action, entité, métadonnées | preuve technique et sécurité | pseudonymisé ; proposition de purge à 730 jours, sans toucher au ledger |
-| `campaign_recipients` | lien campagne/client, état de livraison | historique marketing | supprimé avec l'effacement client |
+| `campaign_recipients` | lien campagne/client, état de livraison (envoyé / échec / ignoré), code d'erreur technique, date d'envoi — jamais l'adresse e-mail | historique marketing, anti-spam 7 jours | supprimé avec l'effacement client |
 | `push_subscriptions` | endpoint, clés `p256dh`/`auth` | credentials push | supprimé avec l'effacement client ou la fermeture du commerce |
-| `campaigns` | contenu, canal, planification, créateur | données du commerce | conservé ; aucune purge pilote automatique |
+| `campaigns` | objet, message, type, ciblage, compteurs, créateur | données du commerce | conservé ; aucune purge pilote automatique — **durée à décider** |
 | `loyalty_programs` | règles, libellés, valeur de récompense | configuration commerce | conservé avec le commerce |
 | `subscriptions` | IDs fournisseur et état d'abonnement | données de facturation | hors périmètre de cette purge ; ne pas supprimer automatiquement |
 | `rate_limits` | hash irréversible de clé/IP/email, compteur, fenêtre | donnée technique anti-abus | purge après 2 jours |
