@@ -18,6 +18,7 @@
     "db:verify": "node scripts/verify-db-integrity.mjs",
     "data:purge": "node scripts/purge-data-lifecycle.mjs",
     "pilot:check": "node scripts/pilot-check.mjs",
+    "pilot:field-report": "node scripts/pilot-field-report.mjs",
     "admin:platform": "node scripts/platform-admin.mjs",
     "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify"
   },
