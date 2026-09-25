@@ -5,6 +5,7 @@ import { canManageProgram, canScan, parseCardToken } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
+import { programUnits } from "@/lib/program-units";
 
 async function handlePost(req: Request) {
   const started = Date.now();
@@ -25,7 +26,8 @@ async function handlePost(req: Request) {
       c.id, c.token, c.short_code, c.balance, c.active, c.expires_at, c.last_earn_at,
       u.first_name,
       p.mode, p.points_rule, p.reward_threshold, p.reward_label, p.stamps_per_visit,
-      p.points_per_purchase, p.points_per_euro, p.cooldown_seconds
+      p.points_per_purchase, p.points_per_euro, p.cooldown_seconds,
+      to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from cards c
     join customers u on u.id = c.customer_id
     join loyalty_programs p on p.establishment_id = c.establishment_id
@@ -48,6 +50,7 @@ async function handlePost(req: Request) {
     lastEarnAt: card.last_earn_at ? new Date(card.last_earn_at).toISOString() : null,
     firstName: card.first_name,
     mode: card.mode,
+    units: programUnits(card.mode, card.unit_label, card.unit_label_plural),
     pointsRule: card.points_rule,
     threshold: Number(card.reward_threshold),
     rewardLabel: card.reward_label,

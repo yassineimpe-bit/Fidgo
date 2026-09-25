@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { formatUnits, type ProgramUnits } from "@/lib/program-units";
 
 type CardLiveStatusProps = {
   token: string;
   initialBalance: number;
   initialThreshold: number;
   initialUpdatedAt: string;
-  mode: "STAMPS" | "POINTS";
+  units: ProgramUnits;
   rewardLabel: string;
 };
 
@@ -21,7 +22,7 @@ type CardStatus = {
 const POLL_MS = 3_000;
 const ACTIVE_MS = 5 * 60_000;
 
-export function CardLiveStatus({ token, initialBalance, initialThreshold, initialUpdatedAt, mode, rewardLabel }: CardLiveStatusProps) {
+export function CardLiveStatus({ token, initialBalance, initialThreshold, initialUpdatedAt, units, rewardLabel }: CardLiveStatusProps) {
   const [status, setStatus] = useState<CardStatus>({
     balance: initialBalance,
     threshold: initialThreshold,
@@ -106,14 +107,13 @@ export function CardLiveStatus({ token, initialBalance, initialThreshold, initia
 
   const percent = Math.min(100, Math.round((status.balance / status.threshold) * 100));
   const remaining = Math.max(0, status.threshold - status.balance);
-  const unit = mode === "STAMPS" ? "tampon" : "point";
 
   return <div aria-live="polite">
     <div style={{fontSize:44,fontWeight:950,letterSpacing:"-.05em",transition:"opacity .2s",opacity: justUpdated ? .55 : 1}}>{status.balance} / {status.threshold}</div>
-    <div style={{opacity:.85}}>{unit}{status.balance > 1 ? "s" : ""}</div>
+    <div style={{opacity:.85}}>{status.balance > 1 ? units.plural : units.singular}</div>
     <div className="progress" style={{marginTop:12}}><span style={{width:`${percent}%`}}/></div>
     <p style={{margin:"12px 0 0",opacity:.9}}>
-      {status.rewardAvailable ? `Récompense disponible : ${rewardLabel}` : `Encore ${remaining} ${unit}${remaining > 1 ? "s" : ""} avant votre récompense`}
+      {status.rewardAvailable ? `Récompense disponible : ${rewardLabel}` : `Encore ${formatUnits(remaining, units)} avant votre récompense`}
     </p>
     {justUpdated ? <p style={{margin:"8px 0 0",opacity:.9,fontWeight:800}}>✓ Solde mis à jour</p> : null}
     {idle ? <button className="btn" style={{marginTop:12}} onClick={() => { resume(); void refresh(); }}>Actualiser mon solde</button> : null}

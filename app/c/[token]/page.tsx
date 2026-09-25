@@ -6,6 +6,7 @@ import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 import { CardLiveStatus } from "@/components/card-live-status";
+import { programUnits } from "@/lib/program-units";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,8 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   if (!token) notFound();
   const [card] = await sql`
     select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,
-      p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name
+      p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name,
+      to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from cards c
     join establishments e on e.id=c.establishment_id
     join loyalty_programs p on p.establishment_id=e.id
@@ -39,7 +41,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   return <main className="client-card-page"><section className="client-card-shell">
     <div className="loyalty-card" style={{background:brandColor,color:brandTextColor}}>
       <div><div style={{display:"flex",alignItems:"center",gap:12}}>{card.logo_url&&<Image src={String(card.logo_url)} alt={`Logo ${card.name}`} width={52} height={52} unoptimized style={{objectFit:"contain",borderRadius:12,background:"white"}}/>}<div><strong style={{fontSize:22}}>{card.name}</strong><div style={{opacity:.8}}>{card.program_name}</div></div></div>
-      <div style={{marginTop:30}}><CardLiveStatus token={String(card.token)} initialBalance={Number(card.balance)} initialThreshold={Number(card.reward_threshold)} initialUpdatedAt={new Date(card.updated_at).toISOString()} mode={card.mode === "POINTS" ? "POINTS" : "STAMPS"} rewardLabel={String(card.reward_label)}/></div></div>
+      <div style={{marginTop:30}}><CardLiveStatus token={String(card.token)} initialBalance={Number(card.balance)} initialThreshold={Number(card.reward_threshold)} initialUpdatedAt={new Date(card.updated_at).toISOString()} units={programUnits(card.mode, card.unit_label, card.unit_label_plural)} rewardLabel={String(card.reward_label)}/></div></div>
       <div style={{display:"grid",placeItems:"center",gap:10}}><Image className="qr" src={qr} alt="QR code fidélité" width={220} height={220} unoptimized/><strong style={{letterSpacing:".16em"}}>{card.short_code}</strong></div>
       <div><strong>{card.reward_label}</strong>{card.card_message&&<p style={{margin:"8px 0 0",opacity:.8}}>{card.card_message}</p>}</div>
     </div>

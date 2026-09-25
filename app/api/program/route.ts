@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { boundedInt, boundedNumber, boundedText } from "@/lib/input";
 import { canManageProgram } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
+import { normalizeUnitLabel } from "@/lib/program-units";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 
@@ -46,6 +47,20 @@ async function handlePatch(req: Request) {
   const rewardLabel = boundedText(b.rewardLabel, 180, "Récompense offerte") || "Récompense offerte";
   const cardMessage = boundedText(b.cardMessage, 240) || null;
 
+  // Libellé d'unité facultatif (migration 026). Absent du corps : inchangé.
+  const unitLabelSent = "unitLabel" in b || "unitLabelPlural" in b;
+  const unitLabel = normalizeUnitLabel(b.unitLabel);
+  const unitLabelPlural = normalizeUnitLabel(b.unitLabelPlural);
+  if (unitLabelSent && (unitLabel === undefined || unitLabelPlural === undefined || (unitLabelPlural && !unitLabel))) {
+    return Response.json({ error: "INVALID_UNIT_LABEL" }, { status: 400 });
+  }
+  const [unitColumn] = unitLabelSent
+    ? await sql`select 1 from information_schema.columns where table_schema='public' and table_name='loyalty_programs' and column_name='unit_label'`
+    : [];
+  if (unitLabelSent && !unitColumn && unitLabel) {
+    return Response.json({ error: "UNIT_LABEL_UNAVAILABLE" }, { status: 503 });
+  }
+
   const program = await sql.begin(async (tx) => {
     const [updated] = await tx`
       update loyalty_programs set
@@ -58,6 +73,13 @@ async function handlePatch(req: Request) {
       returning *
     `;
     if (!updated) throw new Error("PROGRAM_NOT_FOUND");
+    if (unitLabelSent && unitColumn) {
+      const [labelled] = await tx`
+        update loyalty_programs set unit_label=${unitLabel ?? null}, unit_label_plural=${unitLabel ? unitLabelPlural ?? null : null}
+        where id=${updated.id} returning *
+      `;
+      Object.assign(updated, labelled);
+    }
     if (b.onboarding === true && session.role === "OWNER") {
       await tx`update establishments set onboarding_step=3, updated_at=now() where id=${session.establishmentId} and onboarding_step=2`;
     }

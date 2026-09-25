@@ -6,11 +6,13 @@ import { JoinForm } from "@/components/join-form";
 import { LEGAL_LINKS } from "@/lib/legal";
 import { cardRecoveryEnabled } from "@/lib/card-recovery";
 import { uploadedLogoId } from "@/lib/logo";
+import { programUnits } from "@/lib/program-units";
 
 export default async function JoinPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [restaurant] = await sql`
-    select e.name,e.logo_url,e.primary_color,p.program_name,p.mode,p.reward_threshold,p.reward_label
+    select e.name,e.logo_url,e.primary_color,p.program_name,p.mode,p.reward_threshold,p.reward_label,
+      to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from establishments e
     join loyalty_programs p on p.establishment_id=e.id
     where e.slug=${slug} and e.status='active' and p.active=true
@@ -29,7 +31,7 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
   return <main className="auth-wrap join-page" style={{backgroundColor:`${brandColor}12`}}>
     <section className="card auth-card join-card">
       {logoUrl&&<img src={logoUrl} alt="" style={{width:64,height:64,objectFit:"contain",borderRadius:14}}/>}
-      <span className="eyebrow" style={{marginTop:12}}>{restaurant.mode==="STAMPS"?"Carte à tampons":"Carte à points"}</span>
+      <span className="eyebrow" style={{marginTop:12}}>{`Carte à ${programUnits(restaurant.mode, restaurant.unit_label, restaurant.unit_label_plural).plural}`}</span>
       <h2 style={{margin:"14px 0 6px"}}>{restaurant.name}</h2>
       <p className="muted">{restaurant.program_name} · {restaurant.reward_threshold} unités = {restaurant.reward_label}</p>
       <JoinForm slug={slug} recoveryEnabled={cardRecoveryEnabled()}/>

@@ -10,6 +10,7 @@ import { ProgramForm, type Program } from "@/components/program-form";
 import { BrandPreview } from "@/components/brand-preview";
 import { OnboardingActions } from "@/components/onboarding-actions";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
+import { programUnits } from "@/lib/program-units";
 
 export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ step?: string }> }) {
   const session = await getSession();
@@ -24,7 +25,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const joinUrl = `${getAppUrl() || "http://localhost:3000"}/j/${restaurant.slug}`;
   const qr = await QRCode.toDataURL(joinUrl, { width: 320, margin: 1, errorCorrectionLevel: "M" });
   const brand = { name: String(restaurant.name), logoUrl: String(restaurant.logo_url || ""), primaryColor: String(restaurant.primary_color), qr };
-  const reward = { rewardThreshold: Number(row.reward_threshold), rewardLabel: String(row.reward_label), unit: row.mode === "STAMPS" ? "tampons" : "points" };
+  const reward = { rewardThreshold: Number(row.reward_threshold), rewardLabel: String(row.reward_label), unit: programUnits(row.mode, row.unit_label, row.unit_label_plural).plural };
   const employees = step === 3 ? await sql`select email from staff_users where establishment_id=${session.establishmentId} and role='EMPLOYEE' and active=true order by created_at` : [];
 
   return <main className="shell page onboarding-shell">

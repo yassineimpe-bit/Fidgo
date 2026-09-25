@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
 import { parseCardToken, type LoyaltyMode } from "@/lib/loyalty";
+import { programUnits, UNIT_COLUMNS_SQL, type ProgramUnits } from "@/lib/program-units";
 
 export type WalletCard = {
   cardId: string;
@@ -14,6 +15,7 @@ export type WalletCard = {
   primaryColor: string;
   programName: string;
   mode: LoyaltyMode;
+  units: ProgramUnits;
   rewardThreshold: number;
   rewardLabel: string;
   cardMessage: string | null;
@@ -33,6 +35,7 @@ function mapWalletCard(row: Record<string, unknown>): WalletCard {
     primaryColor: String(row.primary_color || "#111827"),
     programName: String(row.program_name),
     mode: String(row.mode) as LoyaltyMode,
+    units: programUnits(String(row.mode), row.unit_label, row.unit_label_plural),
     rewardThreshold: Number(row.reward_threshold),
     rewardLabel: String(row.reward_label),
     cardMessage: row.card_message ? String(row.card_message) : null,
@@ -42,7 +45,8 @@ function mapWalletCard(row: Record<string, unknown>): WalletCard {
 const SELECT_CARD = `
   select c.id as card_id,c.establishment_id,c.token,c.short_code,c.balance,c.expires_at,
     u.first_name,e.name as restaurant_name,e.slug as restaurant_slug,e.primary_color,
-    p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message
+    p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,
+    ${UNIT_COLUMNS_SQL}
   from cards c
   join customers u on u.id=c.customer_id
   join establishments e on e.id=c.establishment_id

@@ -6,6 +6,10 @@ import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
 import { walletCardForRevocationById, type WalletCard } from "@/lib/wallet-data";
 import { safeErrorCode } from "@/lib/observability";
 
+function capitalize(value: string) {
+  return value.charAt(0).toLocaleUpperCase("fr-FR") + value.slice(1);
+}
+
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 const WALLET_API = "https://walletobjects.googleapis.com/walletobjects/v1";
 
@@ -93,8 +97,8 @@ export function objectBody(card: WalletCard, state: "ACTIVE" | "INACTIVE" = "ACT
     accountName: (card.firstName || "Client Retiko").slice(0, 20),
     accountId: card.shortCode,
     loyaltyPoints: card.mode === "STAMPS"
-      ? { label: "Tampons", balance: { string: `${card.balance}/${card.rewardThreshold}` } }
-      : { label: "Points", balance: { string: `${card.balance}` } },
+      ? { label: capitalize(card.units.plural), balance: { string: `${card.balance}/${card.rewardThreshold}` } }
+      : { label: capitalize(card.units.plural), balance: { string: `${card.balance}` } },
     secondaryLoyaltyPoints: {
       label: card.rewardLabel,
       balance: {
