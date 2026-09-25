@@ -298,3 +298,7 @@ tbody tr:hover { background: var(--surface-muted); }
 .legal-page .table-scroll { overflow-x: auto; }
 .legal-status { border-left: 3px solid var(--muted); padding: 10px 14px; background: rgba(0,0,0,.03); border-radius: 6px; font-size: 14px; }
 @media (max-width: 480px) { .legal-page article { padding: 20px 16px; } }
+.ready-path { display: grid; gap: 14px; padding-left: 36px; margin-top: 18px; }
+.ready-path li { display: grid; gap: 6px; line-height: 1.45; }
+.ready-path .btn { justify-self: start; }
+.ready-done { color: var(--success, #1f7a4d); font-weight: 800; margin-left: 6px; }

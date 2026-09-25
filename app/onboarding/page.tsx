@@ -39,6 +39,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       </ol>
     </nav>
     <h2>Étape {step} sur 4 · {ONBOARDING_STEPS[step - 1]}</h2>
+    {step > 1 && <p><Link href={`/onboarding?step=${step - 1}`}>← Étape précédente : {ONBOARDING_STEPS[step - 2]}</Link></p>}
     {step === 1 && <>
       <p className="muted">Personnalise ton nom, ta couleur et tes coordonnées. Le logo et les coordonnées sont facultatifs.</p>
       <RestaurantForm onboarding restaurant={{name:brand.name,logo_url:brand.logoUrl,primary_color:brand.primaryColor,address:restaurant.address,phone:restaurant.phone,instagram:restaurant.instagram,website:restaurant.website}} preview={{...reward,qr}}/>
@@ -55,7 +56,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       <a href={joinUrl} target="_blank" rel="noopener noreferrer" style={{overflowWrap:"anywhere"}}>Ouvrir l’inscription client</a>
       <Link className="btn" href="/dashboard/poster" target="_blank" rel="noopener noreferrer">Ouvrir mon affiche à imprimer</Link>
       <PwaInstallHint/>
-      <p className="muted">Pour ton premier test : inscris-toi comme client avec le QR, puis ouvre le scanner depuis le dashboard pour créditer ta carte.</p>
+      <p className="muted">À l’étape suivante, un parcours guidé te fait créer une carte test et la scanner.</p>
       <OnboardingActions step={4}/>
     </section>}
     <p style={{marginTop:24}}><Link href="/dashboard">Reprendre plus tard</Link></p>

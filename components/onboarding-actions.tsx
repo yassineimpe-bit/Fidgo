@@ -25,7 +25,8 @@ export function OnboardingActions({ step, employeeEmails = [] }: { step: 3 | 4; 
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) { setError(errors[result.error] || "Impossible de continuer. Réessaie."); return; }
-      router.push(action === "finish" ? "/dashboard" : "/onboarding?step=4");
+      // Ne progresse qu'après la réponse du serveur (étape réellement enregistrée).
+      router.push(action === "finish" ? "/onboarding/ready" : "/onboarding?step=4");
       router.refresh();
     } catch {
       setError("Connexion perdue. Ta progression est conservée ; réessaie.");
@@ -67,7 +68,7 @@ export function OnboardingActions({ step, employeeEmails = [] }: { step: 3 | 4; 
         {employees.length ? "Continuer vers mon QR" : "Je travaille seul pour le moment"}
       </button>
     </>}
-    {step === 4 && <button className="btn btn-primary" disabled={busy} onClick={() => advance("finish")}>{busy ? "Enregistrement…" : "Terminer et ouvrir mon dashboard"}</button>}
+    {step === 4 && <button className="btn btn-primary" disabled={busy} onClick={() => advance("finish")}>{busy ? "Enregistrement…" : "Terminer la configuration"}</button>}
     {error && <div className="notice error" role="alert">{error}</div>}
   </div>;
 }
