@@ -111,6 +111,10 @@ test("stats pilote : 30 actions QR calculent p50/p90/p95/max, l'export ne sort q
   const manualExport = validateScanMetricsExport(JSON.parse(await manual.inputValue()), { expectedDevice: "iphone" });
   expect(manualExport.ok).toBe(true);
 
+  // Le testeur exporte depuis son téléphone : rien ne doit déborder, même à 320 px.
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "Effacer les mesures" }).click();
   await expect(metricValue(page, "actions QR validées")).toHaveText("30");

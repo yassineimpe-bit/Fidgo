@@ -62,19 +62,21 @@ Répartition :
 
 Les temps officiels ne se chronomètrent pas à la main : chaque téléphone scanner enregistre localement, pour chaque scan, la durée **QR détecté → action fidélité validée**. Les deux exports sont ensuite combinés sur le Mac.
 
+Toujours ouvrir `/s/stats` depuis le bouton **Stats** du scanner, dans la même application que celle qui scanne : sur iPhone, la PWA installée et Safari ne partagent pas leurs données, et un `/s/stats` ouvert dans l'autre application afficherait (et exporterait) zéro mesure.
+
 **Avant la série**
 
-1. Sur l'iPhone, ouvrir `https://retiko.fr/s/stats` (compte Employé scanner) et vérifier que « Ce téléphone scanne en tant que » indique **iPhone**.
+1. Sur l'iPhone, ouvrir le scanner `https://retiko.fr/s` (compte Employé scanner), toucher **Stats** et vérifier que « Ce téléphone scanne en tant que » indique **iPhone**.
 2. Toucher **Effacer les mesures** et confirmer.
-3. Sur l'Android, ouvrir `/s/stats` et vérifier **Android**.
+3. Sur l'Android, ouvrir `/s` → **Stats** et vérifier **Android**.
 4. Toucher **Effacer les mesures** et confirmer.
 
 **Pendant la série**
 
 5. Effectuer les 15 scans avec l'iPhone comme scanner (lignes 1 à 15).
-6. Sur l'iPhone, ouvrir `/s/stats` : le compteur doit indiquer **15 / 15** et aucun échec. Toucher **Exporter les mesures** → `iphone.json` (feuille de partage : AirDrop vers le Mac ou « Enregistrer dans Fichiers »).
+6. Sur l'iPhone, toucher **Stats** : le compteur doit indiquer **15 / 15** et aucun échec. Toucher **Exporter les mesures** → `iphone.json` (feuille de partage : AirDrop vers le Mac ou « Enregistrer dans Fichiers »).
 7. Effectuer les 15 scans avec l'Android comme scanner (lignes 16 à 30).
-8. Sur l'Android, `/s/stats` → **Exporter les mesures** → `android.json` (dossier Téléchargements).
+8. Sur l'Android, **Stats** → **Exporter les mesures** → `android.json` (dossier Téléchargements).
 
 **Analyse**
 

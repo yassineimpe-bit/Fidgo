@@ -164,11 +164,12 @@ export function ScanStats() {
       <div className="card">
         <h3>Série terrain sur cet appareil</h3>
         <p className="muted">{seriesCount} / {PILOT_GATE.actionsPerDevice} actions QR réussies attendues sur ce téléphone scanner, puis export pour le rapport combiné iPhone + Android.</p>
+        <p className="muted" style={{ fontSize: 13 }}>Seules les mesures de cette application sont visibles : sur iPhone, la PWA installée et Safari gardent chacune les leurs. Ouvre cette page depuis le bouton Stats du scanner utilisé.</p>
         <fieldset style={{ border: 0, padding: 0, margin: "14px 0 0" }}>
           <legend className="muted" style={{ fontSize: 13, marginBottom: 8 }}>Ce téléphone scanne en tant que</legend>
-          <div style={{ display: "flex", gap: 8 }}>
-            {PILOT_GATE.devices.map((option) => <label key={option} className="btn" style={{ flex: 1, cursor: "pointer", borderColor: device === option ? "var(--retiko-coral)" : undefined }}>
-              <input type="radio" name="scanner-device" value={option} checked={device === option} onChange={() => setDevice(option)} />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {PILOT_GATE.devices.map((option) => <label key={option} className="btn" style={{ flex: "1 1 0", padding: "0 12px", gap: 6, whiteSpace: "nowrap", cursor: "pointer", borderColor: device === option ? "var(--retiko-coral)" : undefined }}>
+              <input type="radio" name="scanner-device" value={option} checked={device === option} onChange={() => setDevice(option)} style={{ margin: 0 }} />
               {PILOT_GATE.deviceLabels[option]}
             </label>)}
           </div>
@@ -195,11 +196,11 @@ export function ScanStats() {
       <div className="grid grid-4">
         <div className="card metric"><strong>{seriesCount}</strong><span>actions QR validées</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.actions.p50)}</strong><span>p50 détection → validation</span></div>
+        <div className="card metric"><strong>{formatDurationMs(view.actions.p90)}</strong><span>p90 détection → validation</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.actions.p95)}</strong><span>p95 détection → validation</span></div>
-        <div className="card metric"><strong>{formatDurationMs(view.actions.max)}</strong><span>max détection → validation</span></div>
       </div>
       <div className="grid grid-4">
-        <div className="card metric"><strong>{formatDurationMs(view.actions.p90)}</strong><span>p90 détection → validation</span></div>
+        <div className="card metric"><strong>{formatDurationMs(view.actions.max)}</strong><span>max détection → validation</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.lookupP95)}</strong><span>p95 QR → fiche client</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.networkP95)}</strong><span>p95 réseau action</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.serverP95)}</strong><span>p95 serveur action</span></div>
