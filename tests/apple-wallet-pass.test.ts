@@ -52,6 +52,7 @@ const fixtureCard: WalletCard = {
   primaryColor: "#1a2b3c",
   programName: "Fidélité Test",
   mode: "STAMPS",
+  units: { singular: "tampon", plural: "tampons" },
   rewardThreshold: 8,
   rewardLabel: "Un café offert",
   cardMessage: "Merci de votre fidélité",

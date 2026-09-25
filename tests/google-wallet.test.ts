@@ -34,6 +34,7 @@ const fixtureCard: WalletCard = {
   primaryColor: "#1a2b3c",
   programName: "Fidélité Test",
   mode: "STAMPS",
+  units: { singular: "tampon", plural: "tampons" },
   rewardThreshold: 10,
   rewardLabel: "Café offert",
   cardMessage: "Merci de votre fidélité",
@@ -81,9 +82,15 @@ describe("Google Wallet loyalty object", () => {
     });
   });
 
+  it("uses the merchant's custom unit label", async () => {
+    const { objectBody } = await import("../lib/google-wallet");
+    const body = objectBody({ ...fixtureCard, units: { singular: "café", plural: "cafés" } });
+    expect(body.loyaltyPoints).toEqual({ label: "Cafés", balance: { string: "7/10" } });
+  });
+
   it("renders a numeric points balance", async () => {
     const { objectBody } = await import("../lib/google-wallet");
-    const body = objectBody({ ...fixtureCard, mode: "POINTS", balance: 450, rewardThreshold: 500 });
+    const body = objectBody({ ...fixtureCard, mode: "POINTS", units: { singular: "point", plural: "points" }, balance: 450, rewardThreshold: 500 });
     expect(body.loyaltyPoints).toEqual({ label: "Points", balance: { string: "450" } });
   });
 

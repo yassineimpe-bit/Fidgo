@@ -91,7 +91,7 @@ async function renderApplePass(card: WalletCard, authToken: string, revoked: boo
   } else {
     pass.primaryFields.push({
       key: "balance",
-      label: card.mode === "STAMPS" ? "TAMPONS" : "POINTS",
+      label: card.units.plural.toLocaleUpperCase("fr-FR"),
       value: card.balance,
     });
     pass.secondaryFields.push({

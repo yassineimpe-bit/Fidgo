@@ -16,6 +16,7 @@ import { normalizeScanErrorCode } from "@/lib/pilot-field-report.mjs";
 import { appendScanMetric, type RecordedScanMetric } from "@/lib/scan-metrics";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
 import { NEW_PURCHASE_REASON, formatRemaining } from "@/lib/cooldown";
+import { defaultUnits, formatUnits, type ProgramUnits } from "@/lib/program-units";
 
 type CardView = {
   token: string;
@@ -24,6 +25,8 @@ type CardView = {
   lastEarnAt?: string | null;
   firstName?: string;
   mode: "STAMPS" | "POINTS";
+  /** Libellés d'unité du programme (absents d'une réponse d'ancienne version). */
+  units?: ProgramUnits;
   pointsRule: "PER_PURCHASE" | "PER_EURO";
   threshold: number;
   rewardLabel: string;
@@ -543,11 +546,12 @@ export function ScannerClient() {
   const cooldownLeft = cooldownEndsAt ? Math.max(0, Math.ceil((cooldownEndsAt - clock) / 1000)) : 0;
   const retryingCredit = Boolean(error?.retryable && error.code !== "COOLDOWN" && actionKeyRef.current?.kind === "credit");
   const retryingRedeem = Boolean(error?.retryable && actionKeyRef.current?.kind === "redeem");
+  const units = card ? card.units || defaultUnits(card.mode) : defaultUnits("STAMPS");
   const normalCreditLabel = card?.mode === "STAMPS"
-    ? `+${card.defaultEarn} tampon${card.defaultEarn > 1 ? "s" : ""}`
+    ? `+${formatUnits(card.defaultEarn, units)}`
     : card?.pointsRule === "PER_EURO"
       ? "Ajouter les points"
-      : `+${card?.defaultEarn || 0} points`;
+      : `+${formatUnits(card?.defaultEarn || 0, units)}`;
 
   return <main className="scanner-page">
     <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
@@ -558,9 +562,9 @@ export function ScannerClient() {
     </div>
     <section className="scan-sheet">
       {card ? <div className="scan-result" aria-live="polite">
-        <div style={{color:"#aaa"}}>{card.mode === "STAMPS" ? "Tampons" : "Points"} · {card.shortCode}</div>
+        <div style={{color:"#aaa"}}>{units.plural.charAt(0).toLocaleUpperCase("fr-FR") + units.plural.slice(1)} · {card.shortCode}</div>
         <strong>{card.firstName || "Client"}</strong>
-        <div style={{fontSize:20}}>{card.balance} / {card.threshold} {card.mode === "STAMPS" ? "tampons" : "points"}</div>
+        <div style={{fontSize:20}}>{card.balance} / {card.threshold} {units.plural}</div>
         {card.lastEarnAt && <div style={{color:"#aaa",fontSize:13}}>Dernier passage : {formatLastPassage(card.lastEarnAt)}</div>}
         {rewardJustReached
           ? <div className="scan-success" style={{fontSize:18,fontWeight:900}}>🎁 Récompense débloquée : {card.rewardLabel}</div>
