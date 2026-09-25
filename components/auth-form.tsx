@@ -2,11 +2,13 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LEGAL_LINKS, LEGAL_VERSION } from "@/lib/legal";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_EXISTS: "Un compte existe déjà avec cet email.",
   INVALID_INPUT: "Merci de vérifier les champs du formulaire.",
   INVALID_CREDENTIALS: "Email ou mot de passe incorrect.",
+  LEGAL_ACCEPTANCE_REQUIRED: "Tu dois accepter les CGU et les CGV en vigueur pour créer le compte.",
   EMAIL_NOT_VERIFIED: "Cette adresse e-mail doit être vérifiée avant la connexion.",
   EMAIL_VERIFICATION_UNAVAILABLE: "La vérification d’e-mail est momentanément indisponible.",
   TOO_MANY_ATTEMPTS: "Trop de tentatives. Réessaie dans quelques minutes.",
@@ -38,7 +40,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     const form = new FormData(e.currentTarget);
     const email = String(form.get("email") || "").trim().toLowerCase();
     const payload = mode === "signup"
-      ? { restaurantName: form.get("restaurantName"), email, password: form.get("password") }
+      ? {
+          restaurantName: form.get("restaurantName"),
+          email,
+          password: form.get("password"),
+          legalAccepted: form.get("legalAccepted") === "on",
+          legalVersion: LEGAL_VERSION,
+          marketingOptIn: form.get("marketingOptIn") === "on",
+        }
       : { email, password: form.get("password") };
 
     try {
@@ -95,6 +104,18 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       {mode === "signup" && <div className="field"><label htmlFor="restaurantName">Nom du commerce</label><input className="input" id="restaurantName" name="restaurantName" required maxLength={120} /></div>}
       <div className="field"><label htmlFor={`${mode}-email`}>Email</label><input className="input" id={`${mode}-email`} name="email" type="email" required autoComplete="email" /></div>
       <div className="field"><label htmlFor={`${mode}-password`}>Mot de passe</label><input className="input" id={`${mode}-password`} name="password" type="password" minLength={8} required autoComplete={mode === "signup" ? "new-password" : "current-password"} /></div>
+      {mode === "signup" && <>
+        {/* Accord contractuel obligatoire, distinct du consentement marketing facultatif. */}
+        <label className="check-row">
+          <input name="legalAccepted" type="checkbox" required />
+          <span>J’accepte les <Link href={LEGAL_LINKS.cgu} target="_blank">CGU</Link> et les <Link href={LEGAL_LINKS.cgv} target="_blank">CGV</Link> de Retiko.</span>
+        </label>
+        <label className="check-row">
+          <input name="marketingOptIn" type="checkbox" />
+          <span>Je souhaite recevoir par e-mail les nouveautés et offres de Retiko. <span className="muted">(facultatif, révocable à tout moment)</span></span>
+        </label>
+        <p className="muted legal-hint">Tes données sont traitées selon la <Link href={LEGAL_LINKS.privacy} target="_blank">politique de confidentialité</Link>.</p>
+      </>}
       {error && <div className="notice error" role="alert">{error}</div>}
       {loginNeedsVerification && <p className="muted"><Link href="/verify-email/resend"><strong>Renvoyer le lien de vérification</strong></Link></p>}
       <button className="btn btn-primary" disabled={loading}>{loading ? "Chargement…" : mode === "signup" ? "Créer mon espace" : "Se connecter"}</button>

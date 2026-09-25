@@ -12,6 +12,8 @@ export async function readHealthSchemaFlags(): Promise<HealthSchemaFlags> {
       to_regclass('public.password_reset_tokens') is not null as password_reset_table,
       to_regclass('public.email_verification_tokens') is not null as email_verification_table,
       exists (select 1 from information_schema.columns where table_schema='public' and table_name='staff_users' and column_name='email_verified_at') as email_verified_at,
+      to_regclass('public.legal_acceptances') is not null as legal_acceptances_table,
+      exists (select 1 from information_schema.columns where table_schema='public' and table_name='staff_users' and column_name='marketing_consent') as staff_marketing_consent,
       to_regclass('public.product_events') is not null as product_events_table,
       to_regclass('public.stripe_webhook_events') is not null as stripe_webhook_events_table,
       exists(

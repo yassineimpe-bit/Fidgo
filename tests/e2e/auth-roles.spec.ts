@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, logout, origin, randomizeClientIp, testClientIp, unique } from "./helpers";
+import { createMerchant, legalAcceptance, logout, origin, randomizeClientIp, testClientIp, unique } from "./helpers";
 
 test("auth : signup vérifié, logout puis login redonnent accès au dashboard", async ({ page }) => {
   const marker = unique("auth");
@@ -15,6 +15,7 @@ test("auth : signup vérifié, logout puis login redonnent accès au dashboard",
   const signupResponsePromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
   );
+  await page.getByRole("checkbox", { name: /J’accepte les CGU/ }).check();
   await page.getByRole("button", { name: "Créer mon espace" }).click();
   const signupResponse = await signupResponsePromise;
   expect(signupResponse.status()).toBe(202);
@@ -71,7 +72,7 @@ test("auth : une nouvelle inscription reprend proprement une adresse encore non 
   const headers = { origin, "x-real-ip": testClientIp() };
   const first = await page.request.post("/api/auth/signup", {
     headers,
-    data: { restaurantName: "Commerce attaquant", email, password: oldPassword },
+    data: { ...legalAcceptance, restaurantName: "Commerce attaquant", email, password: oldPassword },
   });
   expect(first.status()).toBe(202);
   const firstBody = await first.json() as { verificationToken?: string };
@@ -79,7 +80,7 @@ test("auth : une nouvelle inscription reprend proprement une adresse encore non 
 
   const second = await page.request.post("/api/auth/signup", {
     headers,
-    data: { restaurantName: "Commerce légitime", email, password: newPassword },
+    data: { ...legalAcceptance, restaurantName: "Commerce légitime", email, password: newPassword },
   });
   expect(second.status()).toBe(202);
   const secondBody = await second.json() as { verificationToken?: string };
@@ -125,7 +126,7 @@ test("auth : une nouvelle inscription reprend proprement une adresse encore non 
 
   const duplicateVerified = await page.request.post("/api/auth/signup", {
     headers,
-    data: { restaurantName: "Tentative après vérification", email, password: "Another-Password-123!" },
+    data: { ...legalAcceptance, restaurantName: "Tentative après vérification", email, password: "Another-Password-123!" },
   });
   expect(duplicateVerified.status()).toBe(409);
 });
@@ -144,13 +145,13 @@ test("vérification e-mail : lien hors cache et hors referrer, renvoi sans énum
   const pending = `${unique("resend-pending")}@example.com`;
   const signup = await page.request.post("/api/auth/signup", {
     headers,
-    data: { restaurantName: "Commerce en attente", email: pending, password: "Password-test-123!" },
+    data: { ...legalAcceptance, restaurantName: "Commerce en attente", email: pending, password: "Password-test-123!" },
   });
   expect(signup.status()).toBe(202);
   const verifiedEmail = `${unique("resend-verified")}@example.com`;
   const verifiedSignup = await page.request.post("/api/auth/signup", {
     headers,
-    data: { restaurantName: "Commerce vérifié", email: verifiedEmail, password: "Password-test-123!" },
+    data: { ...legalAcceptance, restaurantName: "Commerce vérifié", email: verifiedEmail, password: "Password-test-123!" },
   });
   const { verificationToken } = await verifiedSignup.json() as { verificationToken: string };
   expect((await page.request.post("/api/auth/verify-email", { headers, data: { token: verificationToken } })).ok()).toBeTruthy();

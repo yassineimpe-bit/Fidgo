@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { origin, randomizeClientIp, unique } from "./helpers";
+import { legalAcceptance, origin, randomizeClientIp, unique } from "./helpers";
 
 // bcrypt tronque silencieusement tout au-delà de 72 octets : sans ce garde-fou,
 // deux mots de passe partageant les 72 mêmes premiers octets produiraient le
@@ -12,6 +12,7 @@ test("signup refuse un mot de passe dépassant la limite bcrypt de 72 octets", a
   const tooLong = await page.request.post("/api/auth/signup", {
     headers: { origin },
     data: {
+      ...legalAcceptance,
       restaurantName: `Commerce ${marker}`,
       email: `${marker}@example.com`,
       password: "a".repeat(73),
@@ -23,6 +24,7 @@ test("signup refuse un mot de passe dépassant la limite bcrypt de 72 octets", a
   const exactly72 = await page.request.post("/api/auth/signup", {
     headers: { origin },
     data: {
+      ...legalAcceptance,
       restaurantName: `Commerce ${marker}`,
       email: `${marker}@example.com`,
       password: "a".repeat(72),

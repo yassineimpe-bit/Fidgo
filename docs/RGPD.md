@@ -14,9 +14,10 @@
 - effacement des données personnelles avec désactivation de carte ;
 - conservation du ledger pseudonymisé pour intégrité et antifraude.
 
-La cartographie technique détaillée, les effets exacts de l'effacement et la
-politique de purge proposée figurent dans `DATA_LIFECYCLE.md`. Les durées qui y
-sont indiquées restent à valider avant toute planification automatique.
+La cartographie technique détaillée, les effets exacts de l'effacement et
+l'état réel de chaque durée (appliquée / prévue non active / à décider)
+figurent dans `DATA_LIFECYCLE.md`. Au 25/09/2026, aucune purge automatique
+n'est exécutée en production.
 
 ## Répartition des rôles pour le programme fidélité
 
@@ -29,22 +30,20 @@ Retiko reste responsable de ses propres traitements nécessaires à la relation 
 
 Cette répartition doit être reflétée dans l'accord pilote et son annexe de sous-traitance.
 
-Modèles de travail présents dans le dépôt :
+Documents de référence (point d'entrée : `LEGAL_STATUS.md`) :
 
-- `PILOT_AGREEMENT_TEMPLATE.md` pour l'accord pilote ;
-- `DPA_TEMPLATE.md` pour l'annexe de sous-traitance ;
+- pages publiques `/legal/*` (CGU, CGV, mentions légales, confidentialité, cookies), seule version de ces textes ;
+- `REGISTRE_TRAITEMENTS.md` pour le registre des activités de traitement (art. 30), la liste des sous-traitants et les écarts ouverts ;
+- `DATA_LIFECYCLE.md` pour le cycle de vie technique et l'état réel des durées de conservation ;
 - `RGPD_PROCEDURES.md` pour l'exercice des droits, les violations de données et la fin de relation ;
-- `PRIVACY_POLICY_TEMPLATE.md` pour la politique de confidentialité publique ;
-- `MENTIONS_LEGALES_TEMPLATE.md` pour les mentions légales.
+- `PILOT_AGREEMENT_TEMPLATE.md` et `DPA_TEMPLATE.md` pour l'accord pilote et l'annexe de sous-traitance.
 
 ## Sous-traitants techniques
 
-Documenter uniquement les fournisseurs réellement activés. Pour le pilote, la liste attendue comprend au minimum :
+Documenter uniquement les fournisseurs réellement activés. La liste de référence, avec les données transmises à chacun, est tenue dans `REGISTRE_TRAITEMENTS.md` :
 
-- Vercel pour l'hébergement applicatif ;
-- Neon pour PostgreSQL ;
-- Resend pour les emails transactionnels de récupération, une fois activé ;
-- l'outil d'observabilité retenu, s'il traite des données pour Retiko.
+- **actifs** : Vercel (hébergement), Neon (PostgreSQL), GitHub Actions (sauvegardes quotidiennes : dump en clair sur le runner le temps du job, artefacts chiffrés 14 jours), Resend (e-mails transactionnels, requis par la vérification e-mail) ;
+- **si activés** : Stripe (facturation), Google Wallet, Apple APNs (mises à jour des passes).
 
 Éviter toute donnée personnelle inutile dans les logs et outils de monitoring. Les secrets, JWT, tokens de carte et liens magiques ne doivent pas être journalisés.
 
@@ -64,16 +63,6 @@ La procédure détaillée figure dans `RGPD_PROCEDURES.md`.
 
 ## Avant le premier pilote réel
 
-Finaliser :
-
-- politique de confidentialité ;
-- mentions légales ;
-- identité juridique Retiko et contacts à insérer dans les modèles ;
-- accord pilote ;
-- annexe de sous-traitance ;
-- durées de conservation ;
-- procédure de violation de données ;
-- procédure d'exercice des droits ;
-- liste des sous-traitants effectivement activés et leurs localisations/transferts.
+La liste à jour des informations à fournir et des décisions ouvertes est tenue dans `LEGAL_STATUS.md`.
 
 Les campagnes marketing restent désactivées tant que consentement, désinscription et plafonds anti-spam ne sont pas implémentés de bout en bout.

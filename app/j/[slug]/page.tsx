@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { normalizeHexColor } from "@/lib/brand-color";
 import { sql } from "@/lib/db";
+import Link from "next/link";
 import { JoinForm } from "@/components/join-form";
+import { LEGAL_LINKS } from "@/lib/legal";
 import { cardRecoveryEnabled } from "@/lib/card-recovery";
 
 export default async function JoinPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -30,6 +32,7 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
       <h2 style={{margin:"14px 0 6px"}}>{restaurant.name}</h2>
       <p className="muted">{restaurant.program_name} · {restaurant.reward_threshold} unités = {restaurant.reward_label}</p>
       <JoinForm slug={slug} recoveryEnabled={cardRecoveryEnabled()}/>
+      <p className="muted legal-hint" style={{marginTop:14}}>Tes données sont utilisées par {restaurant.name} pour son programme de fidélité, avec Retiko comme prestataire technique. <Link href={LEGAL_LINKS.privacy}>Données personnelles</Link></p>
     </section>
   </main>;
 }

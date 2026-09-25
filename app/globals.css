@@ -281,3 +281,20 @@ tbody tr:hover { background: var(--surface-muted); }
   .poster--chevalet { width:105mm; min-height:148mm; }
   .poster--contrasted { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
 }
+
+/* Mentions et consentements légaux : discrets, alignés sur la grille des formulaires. */
+.check-row { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; }
+.check-row input { margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; }
+.legal-hint { margin: 0; font-size: 13px; line-height: 1.45; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; font-size: 13px; color: var(--muted); }
+.legal-links a { color: inherit; }
+.site-footer { padding: 28px 16px 36px; }
+.legal-page { max-width: 820px; margin: 0 auto; padding: 40px 16px 72px; }
+.legal-page article { margin-top: 18px; padding: 28px; line-height: 1.65; }
+.legal-page h1 { margin-top: 0; font-size: clamp(26px, 5vw, 34px); }
+.legal-page h2 { margin-top: 28px; font-size: 19px; }
+.legal-page table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.legal-page th, .legal-page td { text-align: left; vertical-align: top; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line, rgba(0,0,0,.08)); }
+.legal-page .table-scroll { overflow-x: auto; }
+.legal-status { border-left: 3px solid var(--muted); padding: 10px 14px; background: rgba(0,0,0,.03); border-radius: 6px; font-size: 14px; }
+@media (max-width: 480px) { .legal-page article { padding: 20px 16px; } }

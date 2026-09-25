@@ -119,6 +119,15 @@ try {
           and (s.email_verified_at is not null or not s.active or e.status <> 'active')
       ) as active_orphan_email_verification_tokens
   `;
+  // Migration 022 : contrôle actif dès que la table existe. Elle n'est pas
+  // exigée ici, car la sauvegarde quotidienne vérifie la copie de production
+  // avant de la chiffrer (le health check, lui, échoue fermé sans elle).
+  const [legalTable] = await sql`select to_regclass('public.legal_acceptances') is not null as present`;
+  const [legalData] = legalTable.present ? await sql`
+    select
+      (select count(*)::int from legal_acceptances a join staff_users s on s.id=a.staff_user_id where s.establishment_id<>a.establishment_id) as cross_tenant_acceptances,
+      (select count(*)::int from staff_users where marketing_consent <> (marketing_consent_at is not null)) as incoherent_marketing_consents
+  ` : [{ cross_tenant_acceptances: 0, incoherent_marketing_consents: 0 }];
   const [billingData] = await sql`
     select
       (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
@@ -161,6 +170,8 @@ try {
   if (Number(billingData.duplicate_stripe_customers) > 0) failures.push(`${billingData.duplicate_stripe_customers} client(s) Stripe dupliqué(s)`);
   if (Number(billingData.duplicate_stripe_subscriptions) > 0) failures.push(`${billingData.duplicate_stripe_subscriptions} abonnement(s) Stripe dupliqué(s)`);
   if (missingTriggers.length > 0) failures.push(`gardes hard-delete manquantes: ${missingTriggers.join(", ")}`);
+  if (Number(legalData.cross_tenant_acceptances) > 0) failures.push(`${legalData.cross_tenant_acceptances} acceptation(s) CGU/CGV cross-tenant`);
+  if (Number(legalData.incoherent_marketing_consents) > 0) failures.push(`${legalData.incoherent_marketing_consents} consentement(s) marketing commerçant incohérent(s)`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
   console.log(`Soldes négatifs : ${summary.negative_balances}`);
@@ -182,6 +193,8 @@ try {
   console.log(`Clients Stripe dupliqués : ${billingData.duplicate_stripe_customers}`);
   console.log(`Abonnements Stripe dupliqués : ${billingData.duplicate_stripe_subscriptions}`);
   console.log(`Gardes hard-delete : ${expectedLifecycleTriggers.length - missingTriggers.length}/${expectedLifecycleTriggers.length}`);
+  console.log(`Acceptations CGU/CGV cross-tenant : ${legalTable.present ? legalData.cross_tenant_acceptances : "table absente (migration 022)"}`);
+  console.log(`Consentements marketing commerçant incohérents : ${legalData.incoherent_marketing_consents}`);
 
   if (failures.length > 0) {
     console.error(`Intégrité DB invalide : ${failures.join(" ; ")}`);

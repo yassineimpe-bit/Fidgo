@@ -99,10 +99,14 @@ Liste initiale à compléter avant signature :
 
 | Prestataire | Service | Localisation / transfert | Statut pilote |
 | --- | --- | --- | --- |
-| Vercel | Hébergement applicatif | [à documenter] | Actif |
-| Neon | Base PostgreSQL | Région UE configurée | Actif |
-| Resend | Email transactionnel | [à documenter] | À activer |
-| [Observabilité] | Erreurs / performance | [à documenter] | [statut] |
+| Vercel | Hébergement applicatif | Calcul en région `fra1` ; société américaine, [garanties à documenter] | Actif |
+| Neon | Base PostgreSQL | [Région à confirmer dans la console] | Actif |
+| GitHub (Actions) | Sauvegardes quotidiennes chiffrées, restauration de contrôle | Société américaine, [garanties à documenter] ; dump en clair sur le runner le temps du job, artefacts chiffrés 14 jours | Actif |
+| Resend | E-mails transactionnels (vérification, réinitialisation, récupération de carte si activée) | [garanties à documenter] | Actif |
+| Google | Google Wallet (prénom, nom du commerce, solde, QR) | Société américaine, [garanties à documenter] | Si activé |
+| Apple | Notifications APNs des passes Apple Wallet (push token) | Société américaine, [garanties à documenter] | Si activé |
+
+Le détail des données transmises à chaque prestataire figure dans `REGISTRE_TRAITEMENTS.md`.
 
 Un prestataire non activé ne doit pas être présenté comme sous-traitant effectif.
 

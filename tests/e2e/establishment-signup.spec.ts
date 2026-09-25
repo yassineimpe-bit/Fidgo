@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, origin, unique } from "./helpers";
+import { createMerchant, legalAcceptance, origin, unique } from "./helpers";
 
 test("création établissement : compte, OWNER, programme et essai sont atomiques", async ({ page }) => {
   const marker = unique("establishment-signup");
@@ -36,6 +36,7 @@ test("création établissement : compte, OWNER, programme et essai sont atomique
     const duplicate = await page.request.post("/api/auth/signup", {
       headers: { origin },
       data: {
+        ...legalAcceptance,
         restaurantName: duplicateName,
         email: String(rows[0].owner_email),
         password: "Password-test-123!",

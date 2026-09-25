@@ -45,6 +45,8 @@ create table if not exists staff_users (
   role text not null default 'EMPLOYEE' check (role in ('OWNER','MANAGER','EMPLOYEE','VIEWER')),
   active boolean not null default true,
   email_verified_at timestamptz default now(),
+  marketing_consent boolean not null default false,
+  marketing_consent_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -61,6 +63,19 @@ create table if not exists email_verification_tokens (
 );
 create index if not exists email_verification_tokens_staff_idx on email_verification_tokens (staff_user_id, created_at desc);
 create index if not exists email_verification_tokens_expiry_idx on email_verification_tokens (expires_at) where used_at is null;
+
+-- Preuve d'acceptation des CGU/CGV (migration 022, qui ajoute aussi la clé
+-- étrangère composite tenant une fois staff_users_id_establishment_key créée).
+create table if not exists legal_acceptances (
+  id uuid primary key default gen_random_uuid(),
+  establishment_id uuid not null,
+  staff_user_id uuid not null,
+  document_type text not null check (document_type in ('CGU', 'CGV')),
+  document_version text not null check (document_version ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  source text not null check (source in ('signup')),
+  accepted_at timestamptz not null default now()
+);
+create index if not exists legal_acceptances_staff_idx on legal_acceptances (staff_user_id, accepted_at desc);
 
 create table if not exists customers (
   id uuid primary key default gen_random_uuid(),

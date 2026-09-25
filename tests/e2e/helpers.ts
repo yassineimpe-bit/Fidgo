@@ -1,10 +1,14 @@
 import { expect, type Page } from "@playwright/test";
+import { LEGAL_VERSION } from "../../lib/legal";
 
 export const origin = "http://127.0.0.1:3000";
 
 export function unique(label: string) {
   return `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Acceptation CGU/CGV attendue par /api/auth/signup (migration 022). */
+export const legalAcceptance = { legalAccepted: true, legalVersion: LEGAL_VERSION } as const;
 
 export function testClientIp() {
   // Les E2E tournent tous derrière 127.0.0.1. Sans IP logique distincte,
@@ -27,6 +31,7 @@ export async function submitSignupAndVerify(page: Page, email: string, password:
   const signupResponsePromise = page.waitForResponse(
     (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
   );
+  await page.getByRole("checkbox", { name: /J’accepte les CGU/ }).check();
   await page.getByRole("button", { name: "Créer mon espace" }).click();
   const signupResponse = await signupResponsePromise;
   expect(signupResponse.status()).toBe(202);
