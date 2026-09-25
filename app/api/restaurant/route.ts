@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { canManageEstablishment } from "@/lib/loyalty";
+import { uploadedLogoId } from "@/lib/logo";
 import { withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
@@ -61,9 +62,18 @@ async function handlePatch(req: Request) {
   if (values.primaryColor !== undefined && (!color || !/^#[0-9a-fA-F]{6}$/.test(color))) {
     return Response.json({ error: "INVALID_FIELD", field: "primaryColor" }, { status: 400 });
   }
-  const logoUrl = safeHttpsUrl(values.logoUrl);
+  // Un logo importé est référencé par son chemin relatif /api/logos/<id> :
+  // accepté seulement s'il appartient bien à ce commerce.
+  const uploadedId = uploadedLogoId(typeof values.logoUrl === "string" ? values.logoUrl.trim() : null);
+  const logoUrl = uploadedId ? `/api/logos/${uploadedId}` : safeHttpsUrl(values.logoUrl);
   const website = safeHttpsUrl(values.website);
   if (values.logoUrl && !logoUrl) return Response.json({ error: "INVALID_FIELD", field: "logoUrl" }, { status: 400 });
+  if (uploadedId) {
+    const [owned] = await sql`
+      select 1 from establishment_logos where id=${uploadedId} and establishment_id=${session.establishmentId}
+    `.catch(() => []);
+    if (!owned) return Response.json({ error: "INVALID_FIELD", field: "logoUrl" }, { status: 400 });
+  }
   if (values.website && !website) return Response.json({ error: "INVALID_FIELD", field: "website" }, { status: 400 });
   const address = typeof values.address === "string" ? values.address.trim() || null : null;
   const phone = typeof values.phone === "string" ? values.phone.trim() || null : null;
@@ -87,6 +97,15 @@ async function handlePatch(req: Request) {
       insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id)
       values (${session.establishmentId}, ${session.staffId}, 'RESTAURANT_UPDATE', 'establishment', ${session.establishmentId})
     `;
+    // Logo importé remplacé par une URL externe ou retiré : le fichier stocké
+    // n'est plus référencé et disparaît avec la mise à jour.
+    const [logoTable] = await tx`select to_regclass('public.establishment_logos') is not null as present`;
+    if (values.logoUrl !== undefined && logoTable.present) {
+      await tx`
+        delete from establishment_logos
+        where establishment_id=${session.establishmentId} and id::text is distinct from ${uploadedId}
+      `;
+    }
     return updated;
   });
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });

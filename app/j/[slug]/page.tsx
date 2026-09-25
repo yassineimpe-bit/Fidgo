@@ -5,6 +5,7 @@ import Link from "next/link";
 import { JoinForm } from "@/components/join-form";
 import { LEGAL_LINKS } from "@/lib/legal";
 import { cardRecoveryEnabled } from "@/lib/card-recovery";
+import { uploadedLogoId } from "@/lib/logo";
 
 export default async function JoinPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -21,7 +22,7 @@ export default async function JoinPage({ params }: { params: Promise<{ slug: str
   // sans verification de schema. La validation cote ecriture ne couvre pas les
   // lignes creees avant son ajout (cf. migration 014).
   const brandColor = normalizeHexColor(restaurant.primary_color, "#111111");
-  const logoUrl = typeof restaurant.logo_url === "string" && /^https:\/\//i.test(restaurant.logo_url)
+  const logoUrl = typeof restaurant.logo_url === "string" && (/^https:\/\//i.test(restaurant.logo_url) || uploadedLogoId(restaurant.logo_url))
     ? restaurant.logo_url
     : null;
 
