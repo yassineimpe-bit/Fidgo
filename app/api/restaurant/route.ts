@@ -1,4 +1,6 @@
 import { getSession } from "@/lib/auth";
+import { isValidHexColor } from "@/lib/brand-color";
+import { isCardBackground } from "@/lib/card-design";
 import { sql } from "@/lib/db";
 import { canManageEstablishment } from "@/lib/loyalty";
 import { uploadedLogoId } from "@/lib/logo";
@@ -30,8 +32,9 @@ async function handleGet() {
   const session = await getSession();
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const [restaurant] = await sql`
-    select id, slug, name, logo_url, primary_color, address, phone, instagram, website, status, created_at, updated_at
-    from establishments where id = ${session.establishmentId}
+    select id, slug, name, logo_url, primary_color, address, phone, instagram, website, status, created_at, updated_at,
+      to_jsonb(e)->>'secondary_color' as secondary_color, coalesce(to_jsonb(e)->>'card_background', 'solid') as card_background
+    from establishments e where id = ${session.establishmentId}
   `;
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });
 }
@@ -75,6 +78,22 @@ async function handlePatch(req: Request) {
     if (!owned) return Response.json({ error: "INVALID_FIELD", field: "logoUrl" }, { status: 400 });
   }
   if (values.website && !website) return Response.json({ error: "INVALID_FIELD", field: "website" }, { status: 400 });
+  // Apparence de la carte (migration 030). Champs absents du corps : inchangés.
+  const designSent = values.secondaryColor !== undefined || values.cardBackground !== undefined;
+  const secondaryColor = typeof values.secondaryColor === "string" && values.secondaryColor.trim() ? values.secondaryColor.trim().toLowerCase() : null;
+  if (values.secondaryColor !== undefined && values.secondaryColor !== null && values.secondaryColor !== ""
+    && !(typeof values.secondaryColor === "string" && isValidHexColor(values.secondaryColor.trim()))) {
+    return Response.json({ error: "INVALID_FIELD", field: "secondaryColor" }, { status: 400 });
+  }
+  if (values.cardBackground !== undefined && !isCardBackground(values.cardBackground)) {
+    return Response.json({ error: "INVALID_FIELD", field: "cardBackground" }, { status: 400 });
+  }
+  const [designColumns] = designSent
+    ? await sql`select 1 from information_schema.columns where table_schema='public' and table_name='establishments' and column_name='card_background'`
+    : [];
+  if (designSent && !designColumns && (secondaryColor || values.cardBackground === "gradient")) {
+    return Response.json({ error: "CARD_DESIGN_UNAVAILABLE" }, { status: 503 });
+  }
   const address = typeof values.address === "string" ? values.address.trim() || null : null;
   const phone = typeof values.phone === "string" ? values.phone.trim() || null : null;
   const instagram = typeof values.instagram === "string" ? values.instagram.trim() || null : null;
@@ -93,6 +112,19 @@ async function handlePatch(req: Request) {
       where id = ${session.establishmentId}
       returning *
     `;
+    if (designSent && designColumns) {
+      const [current] = await tx`select secondary_color, card_background from establishments where id=${session.establishmentId}`;
+      const nextSecondary = values.secondaryColor !== undefined ? secondaryColor : current.secondary_color;
+      const nextBackground = values.cardBackground !== undefined ? String(values.cardBackground) : String(current.card_background);
+      // Pas de dégradé sans couleur secondaire : retour à la couleur unie.
+      const background = nextBackground === "gradient" && !nextSecondary ? "solid" : nextBackground;
+      const [designed] = await tx`
+        update establishments set secondary_color=${nextSecondary}, card_background=${background}
+        where id=${session.establishmentId}
+        returning secondary_color, card_background
+      `;
+      Object.assign(updated, designed);
+    }
     await tx`
       insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id)
       values (${session.establishmentId}, ${session.staffId}, 'RESTAURANT_UPDATE', 'establishment', ${session.establishmentId})

@@ -1,11 +1,13 @@
 "use client";
 
-import { contrastTextColor, normalizeHexColor } from "@/lib/brand-color";
+import { cardDesign } from "@/lib/card-design";
 
 export type BrandPreviewProps = {
   name: string;
   logoUrl: string;
   primaryColor: string;
+  secondaryColor?: string | null;
+  cardBackground?: string | null;
   rewardThreshold: number;
   rewardLabel: string;
   unit: string;
@@ -17,16 +19,15 @@ export type BrandPreviewProps = {
  * l'affiche imprimable : mêmes règles de couleur/contraste, pour que ce que
  * le commerçant voit dans ses réglages ressemble à ce qu'il imprimera.
  */
-export function BrandPreview({ name, logoUrl, primaryColor, rewardThreshold, rewardLabel, unit, qr }: BrandPreviewProps) {
-  const brandColor = normalizeHexColor(primaryColor, "#111111");
-  const textColor = contrastTextColor(brandColor);
+export function BrandPreview({ name, logoUrl, primaryColor, secondaryColor, cardBackground, rewardThreshold, rewardLabel, unit, qr }: BrandPreviewProps) {
+  const design = cardDesign({ primaryColor, secondaryColor, cardBackground });
 
   return <div
     className="brand-preview"
     aria-label="Aperçu de la carte fidélité"
     style={{
-      background: brandColor,
-      color: textColor,
+      background: design.background,
+      color: design.textColor,
     }}
   >
     {logoUrl
