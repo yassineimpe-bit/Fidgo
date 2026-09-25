@@ -17,7 +17,8 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
 
   await openCardInScanner(page, shortCode);
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText("+1 validé")).toBeVisible();
+  // Premier crédit : /api/credit peut être compilé à la demande en CI.
+  await expect(page.getByText("+1 validé")).toBeVisible({ timeout: 15_000 });
   await expect(cardPage.getByText("1 / 10")).toBeVisible({ timeout: 8_000 });
 
   await page.waitForTimeout(1_400);

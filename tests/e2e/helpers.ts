@@ -96,7 +96,9 @@ export async function openCardInScanner(page: Page, shortCode: string) {
   await page.goto("/s");
   await page.getByPlaceholder("Code court ou email").fill(shortCode);
   await page.getByRole("button", { name: "Chercher" }).click();
-  await expect(page.getByText(/\d+ \/ 10 tampons/)).toBeVisible();
+  // Première recherche d'une série : /api/lookup et /api/scan peuvent être
+  // compilés à la demande par le serveur de dev de la CI, au-delà de 5 s.
+  await expect(page.getByText(/\d+ \/ 10 tampons/)).toBeVisible({ timeout: 15_000 });
 }
 
 /** Récupère l'id du client courant depuis le lien "Exporter" de /dashboard/clients. */
