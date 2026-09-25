@@ -62,8 +62,20 @@ La migration `027_email_campaigns.sql` complète les tables `campaigns` / `campa
 
 `CAMPAIGN_EMAIL_TEST_MODE=true` simule les envois (aucun appel à Resend) pour les tests E2E ; ce mode est ignoré lorsque `NODE_ENV=production`.
 
+## Notification « récompense disponible »
+
+Option du programme (**Programme → Prévenir le client par e-mail…**), désactivée par défaut.
+
+- Déclenchée uniquement par un crédit (`/api/credit`) qui fait franchir le seuil : solde inférieur au seuil avant, au moins égal après. Un ajustement manuel ne déclenche rien.
+- Envoyée **après** la réponse au scanner (`after`) : jamais sur le chemin critique, aucune erreur ne remonte au staff.
+- Mêmes conditions que les campagnes : le client a accepté les offres, a une adresse e-mail et une carte active ; le commerce est actif. Même pied de page et même désabonnement en un clic.
+- Une ligne `reward_notifications` par transaction (clé unique) et au plus une notification par carte sur 24 h ; clé d'idempotence Resend `reward-<transaction>`.
+- L'e-mail ne contient **pas** le lien de la carte : c'est un accès au porteur, qui n'a pas sa place dans une boîte mail.
+- Migration `028_reward_notifications.sql` ; sans elle, aucun envoi et l'option répond `503 REWARD_EMAIL_UNAVAILABLE`.
+
 ## Limites connues
 
+- Une notification restée `pending` (processus interrompu entre l'enregistrement et l'envoi) n'est pas renvoyée.
 - Pas d'envoi programmé ; l'envoi se fait tant que la page reste ouverte, avec reprise manuelle.
 - Pas de statistiques d'ouverture ni de clic : aucun pixel de suivi n'est ajouté.
 - Les rebonds et plaintes remontés par Resend ne sont pas encore exploités (pas de webhook).

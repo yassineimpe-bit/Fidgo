@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { crossedRewardThreshold, notifyRewardAvailable } from "@/lib/reward-notification";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { boundedText } from "@/lib/input";
@@ -81,17 +82,18 @@ async function handlePost(req: Request) {
 
       const balance = Number(card.balance) + delta;
       const unit = card.mode === "STAMPS" ? "STAMP" : "POINT";
-      await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key,metadata) values(${session.establishmentId},${card.id},${session.staffId},'earn',${delta},${balance},${unit},${idempotencyKey},${tx.json({purchaseAmountCents:body.purchaseAmountCents??null,pointsRule:card.points_rule,overrideReason:overrodeCooldown?overrideReason:null})})`;
+      const [earned] = await tx`insert into transactions(establishment_id,card_id,staff_user_id,type,delta,balance_after,unit,idempotency_key,metadata) values(${session.establishmentId},${card.id},${session.staffId},'earn',${delta},${balance},${unit},${idempotencyKey},${tx.json({purchaseAmountCents:body.purchaseAmountCents??null,pointsRule:card.points_rule,overrideReason:overrodeCooldown?overrideReason:null})}) returning id`;
       const [updatedCard] = await tx`update cards set balance=${balance},last_earn_at=now(),updated_at=now() where id=${card.id} returning last_earn_at`;
       await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'LOYALTY_EARN','card',${String(card.id)},${tx.json({delta,balance})})`;
       await tx`insert into product_events(establishment_id,card_id,staff_user_id,event_type,metadata) values(${session.establishmentId},${card.id},${session.staffId},'CREDIT_SUCCESS',${tx.json({delta,override:overrodeCooldown})})`;
       if (overrodeCooldown) {
         await tx`insert into audit_logs(establishment_id,staff_user_id,action,entity_type,entity_id,metadata) values(${session.establishmentId},${session.staffId},'CARD_ADJUSTED','card',${String(card.id)},${tx.json({oldBalance:Number(card.balance),newBalance:balance,delta,reason:overrideReason,source:'cooldown_override'})})`;
       }
-      return { cardId: String(card.id), balance, delta, duplicate:false, rewardAvailable: balance >= Number(card.reward_threshold), threshold:Number(card.reward_threshold), rewardLabel:card.reward_label, firstName:card.first_name, mode:card.mode, lastEarnAt: new Date(updatedCard.last_earn_at).toISOString() };
+      return { cardId: String(card.id), rewardCrossedBy: crossedRewardThreshold(Number(card.balance), balance, Number(card.reward_threshold)) ? String(earned.id) : null, balance, delta, duplicate:false, rewardAvailable: balance >= Number(card.reward_threshold), threshold:Number(card.reward_threshold), rewardLabel:card.reward_label, firstName:card.first_name, mode:card.mode, lastEarnAt: new Date(updatedCard.last_earn_at).toISOString() };
     });
-    const { cardId, ...payload } = result;
+    const { cardId, rewardCrossedBy, ...payload } = result as typeof result & { rewardCrossedBy?: string | null };
     after(() => syncWalletsForCard(cardId));
+    if (rewardCrossedBy) after(() => notifyRewardAvailable(session.establishmentId, rewardCrossedBy));
     return Response.json({ ...payload, serverMs: Date.now() - started }, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "ERROR";

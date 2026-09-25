@@ -46,6 +46,7 @@ export type Program = {
   card_message?: string | null;
   unit_label?: string | null;
   unit_label_plural?: string | null;
+  reward_email_enabled?: boolean | null;
 };
 
 export function ProgramForm({ program, preview, onboarding = false }: { program: Program; preview?: Omit<BrandPreviewProps, "rewardThreshold" | "rewardLabel" | "unit">; onboarding?: boolean }) {
@@ -57,13 +58,14 @@ export function ProgramForm({ program, preview, onboarding = false }: { program:
   const [unitLabel, setUnitLabel] = useState(program.unit_label || "");
   const [unitLabelPlural, setUnitLabelPlural] = useState(program.unit_label_plural || "");
   const units = programUnits(mode, unitLabel, unitLabelPlural);
+  const [rewardEmail, setRewardEmail] = useState(program.reward_email_enabled === true);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setLoading(true); setMsg("");
     const f = new FormData(e.currentTarget);
-    const payload = { onboarding, programName:f.get("programName"), mode, pointsRule, rewardThreshold:Number(f.get("rewardThreshold")), rewardLabel:f.get("rewardLabel"), stampsPerVisit:Number(f.get("stampsPerVisit")), pointsPerPurchase:Number(f.get("pointsPerPurchase")), pointsPerEuro:Number(f.get("pointsPerEuro")), dailyEarnLimit:Number(f.get("dailyEarnLimit")), cooldownSeconds:Number(f.get("cooldownSeconds")), expiresAfterDays:f.get("expiresAfterDays")?Number(f.get("expiresAfterDays")):null, cardMessage:f.get("cardMessage"), unitLabel, unitLabelPlural };
+    const payload = { onboarding, programName:f.get("programName"), mode, pointsRule, rewardThreshold:Number(f.get("rewardThreshold")), rewardLabel:f.get("rewardLabel"), stampsPerVisit:Number(f.get("stampsPerVisit")), pointsPerPurchase:Number(f.get("pointsPerPurchase")), pointsPerEuro:Number(f.get("pointsPerEuro")), dailyEarnLimit:Number(f.get("dailyEarnLimit")), cooldownSeconds:Number(f.get("cooldownSeconds")), expiresAfterDays:f.get("expiresAfterDays")?Number(f.get("expiresAfterDays")):null, cardMessage:f.get("cardMessage"), unitLabel, unitLabelPlural, ...(onboarding ? {} : { rewardEmailEnabled: rewardEmail }) };
     try {
       const r = await fetch("/api/program", { method:"PATCH", headers:{"content-type":"application/json"}, body:JSON.stringify(payload) });
       const error = r.ok ? "" : String((await r.json().catch(() => ({}))).error || "");
@@ -71,7 +73,9 @@ export function ProgramForm({ program, preview, onboarding = false }: { program:
         ? "Libellé d’unité invalide : lettres, espaces, apostrophes et tirets, 24 caractères au plus."
         : error === "UNIT_LABEL_UNAVAILABLE"
           ? "Le libellé personnalisé n’est pas encore disponible sur ce serveur."
-          : "Impossible d’enregistrer. Vérifie les valeurs du programme.");
+          : error === "REWARD_EMAIL_UNAVAILABLE"
+            ? "La notification par e-mail n’est pas encore disponible sur ce serveur."
+            : "Impossible d’enregistrer. Vérifie les valeurs du programme.");
       if (r.ok && onboarding) { router.push("/onboarding?step=3"); router.refresh(); }
     } catch {
       // Sans ce filet, une coupure réseau pendant l'envoi laissait le bouton
@@ -91,6 +95,7 @@ export function ProgramForm({ program, preview, onboarding = false }: { program:
       <div className="field"><label htmlFor="program-unit-label">Nom de l’unité</label><input className="input" id="program-unit-label" maxLength={24} value={unitLabel} onChange={e=>setUnitLabel(e.target.value)} placeholder={defaultUnits(mode).singular}/><small className="muted">Facultatif, ex. « café ». Vide = {defaultUnits(mode).singular}.</small></div>
       <div className="field"><label htmlFor="program-unit-label-plural">Au pluriel</label><input className="input" id="program-unit-label-plural" maxLength={24} value={unitLabelPlural} onChange={e=>setUnitLabelPlural(e.target.value)} placeholder={units.plural} disabled={!unitLabel.trim()}/><small className="muted">Si différent de « {units.singular}s ».</small></div>
     </div>
+    {!onboarding && <label className="check-row"><input type="checkbox" checked={rewardEmail} onChange={e=>setRewardEmail(e.target.checked)}/><span>Prévenir le client par e-mail quand sa récompense est disponible (uniquement les clients qui ont accepté vos offres).</span></label>}
     <div className="field"><label htmlFor="program-card-message">Message carte</label><textarea className="textarea" id="program-card-message" name="cardMessage" maxLength={240} defaultValue={program.card_message || ""}/></div>
     {msg && <div className={`notice ${msg.includes("enregistré")?"success":"error"}`} role={msg.includes("enregistré")?undefined:"alert"}>{msg}</div>}<button className="btn btn-primary" disabled={loading}>{loading?"Enregistrement…":onboarding?"Enregistrer et continuer":"Enregistrer"}</button>
   </form>{preview && <aside className="card"><h3>Aperçu de ta carte</h3><BrandPreview {...preview} rewardThreshold={Number(threshold) || 0} rewardLabel={reward} unit={units.plural}/></aside>}</div>;

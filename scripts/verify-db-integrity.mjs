@@ -165,6 +165,14 @@ try {
       (select count(*)::int from campaign_recipients r join customers cu on cu.id=r.customer_id where cu.deleted_at is not null) as erased_customer_recipients,
       (select count(*)::int from pg_trigger where tgname='campaign_recipients_same_tenant' and not tgisinternal) as tenant_trigger
   ` : [{ cross_tenant_recipients: 0, recipient_count_mismatches: 0, erased_customer_recipients: 0, tenant_trigger: 1 }];
+  const [rewardTable] = await sql`select to_regclass('public.reward_notifications') is not null as present`;
+  const [rewardData] = rewardTable.present ? await sql`
+    select count(*)::int as cross_tenant_reward_notifications
+    from reward_notifications n
+    join cards c on c.id=n.card_id
+    join transactions t on t.id=n.transaction_id
+    where c.establishment_id<>n.establishment_id or t.establishment_id<>n.establishment_id or t.card_id<>n.card_id
+  ` : [{ cross_tenant_reward_notifications: 0 }];
   const [billingData] = await sql`
     select
       (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
@@ -228,6 +236,7 @@ try {
   if (Number(campaignData.recipient_count_mismatches) > 0) failures.push(`${campaignData.recipient_count_mismatches} campagne(s) au nombre de destinataires incohérent`);
   if (Number(campaignData.erased_customer_recipients) > 0) failures.push(`${campaignData.erased_customer_recipients} destinataire(s) de campagne effacé(s) encore liés`);
   if (Number(campaignData.tenant_trigger) < 1) failures.push("garde tenant des destinataires de campagne manquante");
+  if (Number(rewardData.cross_tenant_reward_notifications) > 0) failures.push(`${rewardData.cross_tenant_reward_notifications} notification(s) de récompense incohérente(s) (tenant, carte ou transaction)`);
   if (Number(legalData.incoherent_marketing_consents) > 0) failures.push(`${legalData.incoherent_marketing_consents} consentement(s) marketing commerçant incohérent(s)`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
@@ -255,6 +264,7 @@ try {
   console.log(`Acceptations CGU/CGV cross-tenant : ${legalTable.present ? legalData.cross_tenant_acceptances : "table absente (migration 022)"}`);
   console.log(`Consentements marketing commerçant incohérents : ${legalData.incoherent_marketing_consents}`);
   console.log(`Campagnes e-mail incohérentes : ${campaignSchema.present ? `${campaignData.cross_tenant_recipients} cross-tenant, ${campaignData.recipient_count_mismatches} compteur(s), ${campaignData.erased_customer_recipients} client(s) effacé(s)` : "colonnes absentes (migration 027)"}`);
+  console.log(`Notifications de récompense incohérentes : ${rewardTable.present ? rewardData.cross_tenant_reward_notifications : "table absente (migration 028)"}`);
   console.log(`Logos importés incohérents : ${logoTable.present ? `${logoData.broken_logo_refs} référence(s) cassée(s), ${logoData.orphan_logos} orphelin(s)` : "table absente (migration 024)"}`);
 
   if (failures.length > 0) {

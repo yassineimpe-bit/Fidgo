@@ -62,6 +62,7 @@ pas être présentées comme appliquées.
 | `audit_logs` | acteur, action, entité, métadonnées | preuve technique et sécurité | pseudonymisé ; proposition de purge à 730 jours, sans toucher au ledger |
 | `campaign_recipients` | lien campagne/client, état de livraison (envoyé / échec / ignoré), code d'erreur technique, date d'envoi — jamais l'adresse e-mail | historique marketing, anti-spam 7 jours | supprimé avec l'effacement client |
 | `push_subscriptions` | endpoint, clés `p256dh`/`auth` | credentials push | supprimé avec l'effacement client ou la fermeture du commerce |
+| `reward_notifications` | carte, transaction, état d'envoi, code d'erreur technique — jamais l'adresse e-mail | idempotence de la notification « récompense disponible » | supprimé avec la carte ; aucune purge pilote automatique — **durée à décider** |
 | `campaigns` | objet, message, type, ciblage, compteurs, créateur | données du commerce | conservé ; aucune purge pilote automatique — **durée à décider** |
 | `loyalty_programs` | règles, libellés, valeur de récompense | configuration commerce | conservé avec le commerce |
 | `subscriptions` | IDs fournisseur et état d'abonnement | données de facturation | hors périmètre de cette purge ; ne pas supprimer automatiquement |
