@@ -62,8 +62,11 @@ describe("secret chiffré", () => {
     expect(first).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
     expect(decryptTotpSecret(first)).toBe(secret);
     const [version, iv, data, tag] = first.split(".");
-    const flipped = data.slice(0, -1) + (data.endsWith("A") ? "B" : "A");
-    expect(decryptTotpSecret([version, iv, flipped, tag].join("."))).toBeNull();
+    // Altérer un octet décodé : changer le dernier caractère base64url peut ne
+    // toucher que des bits de bourrage et laisser les octets identiques.
+    const bytes = Buffer.from(data, "base64url");
+    bytes[0] ^= 0x01;
+    expect(decryptTotpSecret([version, iv, bytes.toString("base64url"), tag].join("."))).toBeNull();
     expect(decryptTotpSecret("v2.x.y.z")).toBeNull();
   });
 
