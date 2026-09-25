@@ -87,6 +87,36 @@ test.describe("mot de passe oublié", () => {
     }
   });
 
+  test("une demande publique de reset ne verrouille jamais le compte ni ses sessions", async ({ page, playwright }) => {
+    await createMerchant(page, "reset-no-lockout");
+    const restaurant = await page.request.get("/api/restaurant").then((r) => r.json());
+    const sql = postgres(process.env.DATABASE_URL!, { max: 2, prepare: false });
+    // Un tiers, sans session, qui connaît seulement l'e-mail du titulaire.
+    const stranger = await playwright.request.newContext({ baseURL: origin });
+    try {
+      const [before] = await sql`select id, email, password_hash, token_version from staff_users where establishment_id=${restaurant.id} and role='OWNER' limit 1`;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const response = await stranger.post("/api/auth/forgot-password", { headers: ipHeaders(), data: { email: before.email } });
+        expect(response.status()).toBe(202);
+      }
+
+      const [after] = await sql`select password_hash, token_version from staff_users where id=${before.id}`;
+      expect(after.password_hash).toBe(before.password_hash);
+      expect(Number(after.token_version)).toBe(Number(before.token_version));
+
+      // La session ouverte reste valide et le mot de passe actuel fonctionne toujours.
+      expect((await page.request.get("/api/restaurant")).status()).toBe(200);
+      const login = await stranger.post("/api/auth/login", {
+        headers: ipHeaders(),
+        data: { email: before.email, password: "Password-test-123!" },
+      });
+      expect(login.status()).toBe(200);
+    } finally {
+      await stranger.dispose();
+      await sql.end({ timeout: 5 });
+    }
+  });
+
   test("utilisateur désactivé : aucun token créé", async ({ page }) => {
     await createMerchant(page, "reset-disabled");
     const restaurant = await page.request.get("/api/restaurant").then((r) => r.json());
