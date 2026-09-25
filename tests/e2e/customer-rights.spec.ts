@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, origin, unique } from "./helpers";
+import { createMerchant, origin, testClientIp, unique } from "./helpers";
 
 async function enrollWithMarketing(page: Page, firstName: string, email: string) {
   const joinPath = await page.locator("code").filter({ hasText: "/j/" }).textContent();
@@ -10,6 +10,21 @@ async function enrollWithMarketing(page: Page, firstName: string, email: string)
   await page.getByRole("checkbox", { name: /offres et actualités de ce commerce/ }).check();
   await page.getByRole("button", { name: "Créer ma carte" }).click();
   await expect(page).toHaveURL(/\/c\//);
+}
+
+/**
+ * Un navigateur qui a déjà une carte chez ce commerce est renvoyé vers elle
+ * par /j/ (clé `loyalty:<slug>`) : le second client passe donc par l'API,
+ * avec sa propre IP logique pour ne pas entamer le quota d'inscription partagé.
+ */
+async function enrollWithMarketingViaApi(page: Page, firstName: string, email: string) {
+  const joinPath = await page.locator("code").filter({ hasText: "/j/" }).textContent();
+  const slug = joinPath!.replace(/^\/j\//, "");
+  const response = await page.request.post("/api/enroll", {
+    headers: { origin, "x-real-ip": testClientIp() },
+    data: { slug, firstName, email, marketingConsent: true },
+  });
+  expect(response.status()).toBe(201);
 }
 
 async function openCustomer(page: Page, firstName: string) {
@@ -82,7 +97,7 @@ test("droits client : unicité par commerce, rôles et isolation tenant", async 
   await page.goto("/dashboard");
   await enrollWithMarketing(page, "Alma", first);
   await page.goto("/dashboard");
-  await enrollWithMarketing(page, "Basile", second);
+  await enrollWithMarketingViaApi(page, "Basile", second);
   await page.goto("/dashboard");
   const customerId = await openCustomer(page, "Basile");
   const url = `/api/customers/${customerId}`;
