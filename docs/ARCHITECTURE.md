@@ -11,7 +11,7 @@ Un seul déploiement Next.js App Router contient les pages publiques, le dashboa
 - `/j/[slug]` : inscription client.
 - `/c/[token]` : carte fidélité web mobile, avec polling visible toutes les trois secondes puis arrêt après cinq minutes d'inactivité.
 - `/s` : scanner caisse, optimisé rush.
-- `/s/stats` : p50/p95 local de la latence.
+- `/s/stats` : p50/p90/p95 local de la latence et export JSON des mesures pour `npm run pilot:field-report`.
 - `/dashboard` : KPI simples.
 - `/dashboard/program` : configuration points/tampons.
 - `/dashboard/transactions` : ledger + annulation par écriture inverse.

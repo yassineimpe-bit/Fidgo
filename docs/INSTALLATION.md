@@ -74,4 +74,4 @@ Le service worker ne met en cache que le shell public (`/`, `/login`, `/signup`,
 
 ## Gate pilote
 
-30 actions réelles, p95 détection QR → validation < 2,5 s, aucun double crédit, retry réseau idempotent, test cross-tenant, employé désactivé et export/effacement RGPD.
+30 actions réelles (15 iPhone + 15 Android), p95 détection QR → validation conforme au seuil officiel (2 000 ou 2 500 ms : décision produit requise, voir `docs/protocole-validation-physique-retiko.md`), aucun double crédit, retry réseau idempotent, test cross-tenant, employé désactivé et export/effacement RGPD.

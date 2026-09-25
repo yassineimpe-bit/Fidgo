@@ -10,7 +10,7 @@ const TRACKERS: [string, string, string, string][] = [
   ["Cookie « loyalty_staff »", "Session de l’espace commerçant (authentification)", "12 heures, supprimé à la déconnexion", "Strictement nécessaire"],
   ["Stockage local « loyalty:<commerce> »", "Retrouver sa carte de fidélité sur son propre téléphone", "Jusqu’à suppression par l’utilisateur ou le navigateur", "Strictement nécessaire à la carte demandée"],
   ["Stockage local « retiko:pwa-install-dismissed »", "Ne plus afficher la suggestion d’installer l’application", "Jusqu’à suppression par l’utilisateur", "Préférence demandée par l’utilisateur"],
-  ["Stockage local « loyalty_scan_metrics »", "Mesures de rapidité du scanner, sur l’appareil du commerce uniquement (50 dernières)", "Jusqu’à effacement depuis l’écran de statistiques", "Fonctionnement du scanner, jamais transmis"],
+  ["Stockage local « loyalty_scan_metrics »", "Mesures de rapidité du scanner, sur l’appareil du commerce uniquement (200 dernières) ; export manuel possible par le commerçant, sans donnée client", "Jusqu’à effacement depuis l’écran de statistiques", "Fonctionnement du scanner, jamais transmis automatiquement"],
   ["Cache du service worker « retiko-shell-* »", "Afficher l’application hors connexion", "Remplacé à chaque nouvelle version", "Strictement nécessaire à l’application installée"],
 ];
 

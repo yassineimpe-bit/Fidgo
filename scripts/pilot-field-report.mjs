@@ -2,16 +2,16 @@
 // Android). Lecture seule : ne lit que les deux exports /s/stats, n'accède à
 // aucune base et ne complète aucune mesure. Le calcul vit dans
 // lib/pilot-field-report.mjs, partagé avec /s/stats.
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import {
   buildPilotFieldReport,
-  parseScanMetricsExport,
   renderPilotFieldReportMarkdown,
   renderPilotFieldReportText,
 } from "../lib/pilot-field-report.mjs";
 import { PILOT_GATE } from "../lib/pilot-gate.mjs";
+import { readScanMetricsExportFile } from "./pilot-export-file.mjs";
 
 const USAGE = `Usage :
   npm run pilot:field-report -- --iphone <iphone.json> --android <android.json> \\
@@ -24,21 +24,6 @@ Codes de sortie :
   0  GO performance (échantillon complet 15/15, p95 conforme aux seuils candidats)
   1  pas de GO : incomplet, non conforme, NO-GO ou décision produit requise
   2  arguments, fichiers ou exports invalides`;
-
-const MAX_INPUT_BYTES = 5 * 1024 * 1024;
-
-function readExport(device, file) {
-  let stats;
-  try {
-    stats = statSync(file);
-  } catch {
-    return { errors: [`fichier introuvable : ${file}`] };
-  }
-  if (!stats.isFile()) return { errors: [`${file} n'est pas un fichier`] };
-  if (stats.size > MAX_INPUT_BYTES) return { errors: [`${file} dépasse ${MAX_INPUT_BYTES} octets : ce n'est pas un export /s/stats`] };
-  const result = parseScanMetricsExport(readFileSync(file, "utf8"), { expectedDevice: device });
-  return result.ok ? { value: result.value } : { errors: result.errors };
-}
 
 function main(argv) {
   let options;
@@ -88,7 +73,7 @@ function main(argv) {
   const files = {};
   let rejected = false;
   for (const device of inputs) {
-    const result = readExport(device, options[device]);
+    const result = readScanMetricsExportFile(device, options[device]);
     if (result.errors) {
       rejected = true;
       console.error(`pilot:field-report : export --${device} rejeté (${options[device]}) :`);

@@ -180,7 +180,7 @@ Ne pas considérer Retiko `PILOT READY` avant :
 - redemption impossible sans session staff ;
 - PWA iOS et Android testées sur appareils physiques ;
 - 30 scans terrain ;
-- p95 QR détecté → action validée < 2,5 s ;
+- p95 QR détecté → action validée conforme au seuil officiel (2 000 ou 2 500 ms : décision produit requise, voir `docs/protocole-validation-physique-retiko.md`) ;
 - aucun double crédit ;
 - test de coupure réseau / retry.
 

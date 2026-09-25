@@ -40,7 +40,7 @@ SaaS de fidélité digitale pour snacks, restaurants, coffee shops, fast-foods, 
 
 > Détecter la carte et effectuer l'action fidélité en moins de 3 secondes pendant un rush.
 
-Gate terrain : **30 scans, p95 < 2,5 s, zéro double crédit**.
+Gate terrain : **30 scans physiques (15 iPhone + 15 Android), p95 QR détecté → action validée sous le seuil officiel, zéro double crédit**. Seuil officiel encore à décider : p95 < 2,5 s (historique) ou p95 ≤ 2 s (protocole physique) — voir `docs/protocole-validation-physique-retiko.md`, dont la collecte s'analyse avec `npm run pilot:field-report` et `npm run pilot:ledger-audit`.
 
 ## Domaine pilote
 

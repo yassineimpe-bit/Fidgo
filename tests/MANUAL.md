@@ -14,7 +14,7 @@
 10. Deux inscriptions avec le même email dans le même établissement renvoient `CARD_ALREADY_EXISTS` sans exposer le token ; la récupération passe par le lien email à usage unique.
 11. Le même email peut exister dans deux établissements différents.
 12. Consentement marketing non coché : `marketing_consent=false` et `marketing_consent_at=null`.
-13. 30 scans réels iPhone + Android : p95 affiché dans `/s/stats` < 2 500 ms.
+13. 30 scans réels (15 iPhone + 15 Android) : exports `/s/stats` puis `npm run pilot:field-report` ; p95 conforme au seuil officiel (2 000 ou 2 500 ms : décision produit requise, voir `docs/protocole-validation-physique-retiko.md`).
 14. Couper le réseau après clic crédit puis réessayer : la même idempotency key doit être réutilisée par l'UI.
 15. Après un crédit, une carte visible affiche le nouveau solde sous 8 secondes sans rechargement manuel.
 16. Après 5 minutes sans interaction, le polling cesse et le bouton `Actualiser mon solde` apparaît.

@@ -22,11 +22,13 @@
 
 ## Test technique
 
-Sur l'appareil caisse, ouvrir `/s/stats`, effacer les anciennes mesures, puis effectuer 30 passages en conditions réelles et relever `/s/stats`. Le compteur « actions validées » doit afficher au moins 30 : le p95 pilote porte sur **détection QR → validation du crédit/redeem**, pas seulement sur l'ouverture de la fiche client.
+Le gate terrain suit `docs/protocole-validation-physique-retiko.md` : 15 scans avec l'iPhone comme scanner, 15 avec l'Android, chaque téléphone exporte ses mesures depuis `/s/stats` (« Exporter les mesures »), puis `npm run pilot:field-report -- --iphone iphone.json --android android.json --markdown-output pilot-result.md` calcule sur le Mac le p95 de **détection QR → validation du crédit/redeem** (nearest-rank, N = 30), pas seulement l'ouverture de la fiche client. L'absence de double crédit se prouve à part, en lecture seule, avec `npm run pilot:ledger-audit` et `npm run db:verify`.
 
 Le scénario E2E `pilot-rush.spec.ts` vérifie séparément 30 scans/crédits et le ledger sur base locale de test. Il ne mesure ni caméra ni réseau mobile et ne doit jamais être lancé contre les données d'un commerçant.
 
-- p95 < 2,5 s : GO ;
+Grille de décision historique (issue #2) ; les seuils appliqués par `/s/stats` et le rapport vivent dans `lib/pilot-gate.mjs` :
+
+- p95 < 2,5 s : GO selon la grille historique ; le protocole physique (PR #121) exige p95 ≤ 2 s — **décision produit encore requise** sur le seuil officiel ;
 - 2,5 à 3,0 s : optimiser ;
 - > 3,0 s : stopper le scope et traiter scan/réseau ;
 - double crédit : blocker absolu.

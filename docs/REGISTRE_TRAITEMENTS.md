@@ -71,7 +71,7 @@ Retiko tient deux registres :
 | Rubrique | Contenu |
 |---|---|
 | Finalités | Performance du scanner, fiabilité caméra, adoption du parcours |
-| Données | `product_events` (type, durée, identifiants pseudonymes carte/staff) ; mesures de scan stockées uniquement sur l'appareil du commerce (50 dernières) |
+| Données | `product_events` (type, durée, identifiants pseudonymes carte/staff) ; mesures de scan stockées uniquement sur l'appareil du commerce (200 dernières : durées, résultat, origine QR/saisie, horodatage), exportables manuellement depuis `/s/stats` pour le gate terrain, sans token ni donnée client |
 | Base légale | Intérêt légitime — *à valider* (qualification responsable / sous-traitant à confirmer pour les événements liés aux cartes) |
 | Durée | 180 j **prévus, non actifs** ; lien carte retiré à l'effacement d'un client |
 
