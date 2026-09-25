@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { ClientObservability } from "@/components/client-observability";
+import { getAppUrl } from "@/lib/app-url";
 
 // Les nonces CSP sont générés à chaque requête. Le rendu dynamique garantit
 // que chaque balise script reçoit le nonce correspondant à son en-tête HTTP.
@@ -18,6 +19,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  // URL absolues des balises canonical / Open Graph.
+  metadataBase: new URL(getAppUrl() || "https://retiko.fr"),
   title: { default: "Retiko", template: "%s · Retiko" },
   description: "Fidélité digitale pour restaurants et commerces alimentaires",
   manifest: "/manifest.webmanifest",

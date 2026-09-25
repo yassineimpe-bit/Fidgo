@@ -1,34 +1,12 @@
 import Stripe from "stripe";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
+import { BILLING_PLANS, BILLING_TRIAL_DAYS } from "@/lib/billing-plans";
 
-export const BILLING_TRIAL_DAYS = 30;
+export { BILLING_PLANS, BILLING_TRIAL_DAYS };
+
 const STRIPE_MIN_TRIAL_AHEAD_SECONDS = 48 * 60 * 60;
 const STRIPE_CHECKOUT_LIFETIME_SECONDS = 31 * 60;
-
-export const BILLING_PLANS = {
-  FLEX: {
-    label: "Retiko Flex",
-    priceLabel: "24,99 € HT/mois",
-    billingInterval: "monthly",
-    priceEnv: "STRIPE_PRICE_FLEX_MONTHLY",
-    commitment: "Sans engagement",
-  },
-  RETIKO_12: {
-    label: "Retiko 12",
-    priceLabel: "19,99 € HT/mois",
-    billingInterval: "monthly",
-    priceEnv: "STRIPE_PRICE_RETIKO12_MONTHLY",
-    commitment: "Engagement commercial de 12 mois",
-  },
-  ANNUAL: {
-    label: "Retiko annuel",
-    priceLabel: "210 € HT/an",
-    billingInterval: "annual",
-    priceEnv: "STRIPE_PRICE_ANNUAL",
-    commitment: "Facturation annuelle",
-  },
-} as const;
 
 export type BillingPlan = keyof typeof BILLING_PLANS;
 export type BillingInterval = "monthly" | "annual";
