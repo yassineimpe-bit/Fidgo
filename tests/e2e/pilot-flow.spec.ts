@@ -22,10 +22,11 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
 
   await page.waitForTimeout(1_400);
   await openCardInScanner(page, shortCode);
+  await expect(page.getByText("Crédit récent détecté")).toBeVisible();
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText(/Passage déjà enregistré/)).toBeVisible();
-  await page.getByLabel("Motif obligatoire pour créditer quand même").fill("Second achat distinct");
-  await page.getByRole("button", { name: "Créditer quand même" }).click();
+  await expect(page.getByText("Crédit récent détecté")).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Nouvel achat : autoriser un nouveau crédit" }).click();
   await expect(page.getByText("+1 validé")).toBeVisible();
   await expect(cardPage.getByText("2 / 10")).toBeVisible({ timeout: 8_000 });
 

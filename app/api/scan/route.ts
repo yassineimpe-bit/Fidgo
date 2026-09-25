@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth";
+import { cooldownRemainingSeconds } from "@/lib/cooldown";
 import { sql } from "@/lib/db";
 import { canManageProgram, canScan, parseCardToken } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
@@ -24,7 +25,7 @@ async function handlePost(req: Request) {
       c.id, c.token, c.short_code, c.balance, c.active, c.expires_at, c.last_earn_at,
       u.first_name,
       p.mode, p.points_rule, p.reward_threshold, p.reward_label, p.stamps_per_visit,
-      p.points_per_purchase, p.points_per_euro
+      p.points_per_purchase, p.points_per_euro, p.cooldown_seconds
     from cards c
     join customers u on u.id = c.customer_id
     join loyalty_programs p on p.establishment_id = c.establishment_id
@@ -54,6 +55,10 @@ async function handlePost(req: Request) {
     pointsPerEuro: Number(card.points_per_euro),
     rewardAvailable: Number(card.balance) >= Number(card.reward_threshold),
     canOverrideCooldown: canManageProgram(session.role),
+    // Délai calculé côté serveur : le scanner affiche « Crédit récent détecté »
+    // dès l'ouverture de la carte, sans dépendre de l'horloge du téléphone.
+    cooldownSeconds: Number(card.cooldown_seconds),
+    cooldownRemainingSeconds: cooldownRemainingSeconds(card.last_earn_at, Number(card.cooldown_seconds)),
     serverMs: Date.now() - started,
   }, { headers: { "cache-control": "no-store" } });
 }
