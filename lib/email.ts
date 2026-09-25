@@ -173,7 +173,7 @@ function passwordResetDocument(resetUrl: string) {
           <a href="${safeUrl}" style="display:inline-block;background:#1f5eff;color:#ffffff;text-decoration:none;font-weight:700;border-radius:10px;padding:14px 22px;">Choisir un nouveau mot de passe</a>
         </p>
         <p style="margin:0 0 12px;line-height:1.6;">Ce lien expire dans 30 minutes et ne fonctionne qu’une seule fois.</p>
-        <p style="margin:0;line-height:1.6;color:#5b6475;">Vous n’avez pas demandé cette réinitialisation ? Vous pouvez ignorer cet email en toute sécurité : votre mot de passe actuel reste inchangé.</p>
+        <p style="margin:0;line-height:1.6;color:#5b6475;">Si vous n’êtes pas à l’origine de cette demande, votre mot de passe n’a pas été modifié. Si vous pensez que quelqu’un tente d’accéder à votre compte, modifiez votre mot de passe afin de révoquer les sessions actives.</p>
       </div>
     </main>
   </body>
@@ -333,7 +333,7 @@ export async function sendPasswordResetEmail(
       `Choisir un nouveau mot de passe : ${input.resetUrl}`,
       "",
       "Ce lien expire dans 30 minutes et ne fonctionne qu'une seule fois.",
-      "Vous n'avez pas demandé cette réinitialisation ? Vous pouvez ignorer cet email en toute sécurité : votre mot de passe actuel reste inchangé.",
+      "Si vous n'êtes pas à l'origine de cette demande, votre mot de passe n'a pas été modifié. Si vous pensez que quelqu'un tente d'accéder à votre compte, modifiez votre mot de passe afin de révoquer les sessions actives.",
     ].join("\n"),
     html: passwordResetDocument(input.resetUrl),
   };

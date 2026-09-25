@@ -73,7 +73,7 @@ test("onboarding séquentiel : enchaînement, retour, double clic, deux onglets 
 
   // Étape 4 → écran final.
   await page.getByRole("button", { name: "Terminer la configuration" }).click();
-  await expect(page).toHaveURL(/\/onboarding\/ready$/);
+  await expect(page).toHaveURL(/\/onboarding\/ready$/, { timeout: 15_000 });
   await heading(page, "Tout est prêt");
   expect(await savedStep(slug)).toBe(5);
   const path = page.getByRole("list", { name: "Parcours recommandé" }).getByRole("listitem");

@@ -50,7 +50,8 @@ export async function submitSignupAndVerify(page: Page, email: string, password:
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  // bcrypt (~350 ms) + première compilation de /onboarding en dev.
+  await expect(page).toHaveURL(/\/onboarding$/, { timeout: 15_000 });
 }
 
 export async function createMerchant(page: Page, label: string) {
@@ -74,7 +75,7 @@ export async function enrollCustomer(page: Page, firstName: string, email: strin
   await page.getByLabel(/Prénom/).fill(firstName);
   await page.getByLabel(/Email/).fill(email);
   await page.getByRole("button", { name: "Créer ma carte" }).click();
-  await expect(page).toHaveURL(/\/c\//);
+  await expect(page).toHaveURL(/\/c\//, { timeout: 15_000 });
   const cardUrl = page.url();
   const shortCode = (await page.locator("img[alt='QR code fidélité'] + strong").textContent())?.trim();
   expect(shortCode).toMatch(/^[A-Z0-9]{6}$/);

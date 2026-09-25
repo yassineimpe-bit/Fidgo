@@ -8,6 +8,9 @@ import { createMerchant, currentCustomerId, enrollCustomer, origin, submitSignup
  */
 
 test("login : 20 echecs d'un tiers ne verrouillent pas le titulaire du compte", async ({ page }) => {
+  // 27 connexions séquentielles, chacune bornée par bcrypt (~350 ms, davantage
+  // sur un runner CI chargé) : 30 s ne laissent aucune marge.
+  test.setTimeout(60_000);
   const marker = unique("lockout");
   const email = `${marker}@example.com`;
   const password = "Password-test-123!";
