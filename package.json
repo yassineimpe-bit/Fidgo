@@ -29,7 +29,7 @@
     "jose": "5.9.6",
     "next": "15.5.24",
     "passkit-generator": "3.6.0",
-    "postgres": "3.4.5",
+    "postgres": "3.4.9",
     "qr-scanner": "1.4.2",
     "qrcode": "1.5.4",
     "react": "19.1.1",
