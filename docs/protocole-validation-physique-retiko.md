@@ -94,8 +94,8 @@ npm run pilot:field-report -- \
 
 **Règles qui conditionnent la validité des mesures**
 
-- **Cooldown :** le programme refuse par défaut un second crédit sur la même carte avant **120 s**. Espacer deux scans d'une même carte d'au moins la durée du cooldown configuré, ou faire tourner plusieurs cartes clientes. Un refus `COOLDOWN` pendant la série est compté comme action échouée.
-- **Jamais d'override pendant la série :** « Créditer quand même » correspond aux scénarios A11/A12, pas à un scan nominal.
+- **Cooldown :** un programme créé depuis le 25/09/2026 refuse un second crédit sur la même carte pendant **10 min** (600 s) ; un programme plus ancien garde sa valeur (120 s auparavant). La valeur réelle se lit dans **Programme**. Pendant ce délai, le scanner affiche « Crédit récent détecté » avec un compte à rebours, et un crédit tenté est refusé (`COOLDOWN`) : il compte comme action échouée. Une série scanne en général la même carte cliente 15 fois ; avant de la commencer, choisir et noter en §8 soit une rotation de cartes clientes assez large pour qu'aucune ne revienne avant la fin du délai, soit un délai temporairement réduit sur le commerce de test (préréglage 2 min) en espaçant d'autant les scans d'une même carte, valeur d'origine rétablie avant les scénarios A1–A12.
+- **Jamais de dépassement du délai pendant la série :** « Nouvel achat : autoriser un nouveau crédit » (OWNER/MANAGER, après confirmation) est un override du cooldown, audité `CARD_ADJUSTED` avec le motif `NEW_PURCHASE_CONFIRMED`. Il relève des scénarios A11/A12, pas d'un scan nominal : la série se fait avec le compte Employé, qui n'a pas ce bouton, et `pilot:ledger-audit` signale tout override survenu pendant une série.
 - **QR uniquement :** une carte ouverte par saisie manuelle (code court, e-mail, téléphone) est exclue du calcul et signalée à part.
 - **Échec pendant la série :** le protocole exige 30/30 scans réussis et le rapport refuse de conclure s'il trouve un échec. Documenter l'incident en §8, conserver l'export en l'état (le renommer, ex. `iphone-essai-1.json`), puis effacer les mesures de cet appareil et refaire ses 15 scans.
 - **Scénarios adverses A1–A12 :** uniquement **après** les deux exports, sinon ils polluent les mesures nominales.
@@ -168,8 +168,8 @@ Les erreurs attendues ne sont pas considérées comme des échecs si Retiko réa
 | A8 | Android | iPhone (Apple Wallet) | **Deuxième tentative sur la même récompense** | Refus, aucun double débit, ledger inchangé | | |
 | A9 | iPhone | Android (Google Wallet) | **Première consommation récompense** | Succès, récompense consommée, ledger cohérent | | |
 | A10 | iPhone | Android (Google Wallet) | **Deuxième tentative sur la même récompense** | Refus, aucun double débit, ledger inchangé | | |
-| A11 | iPhone | Android (PWA Chrome) | **Manager : override manuel** | Succès, solde ajusté correctement, historique correct | | |
-| A12 | Android | iPhone (PWA Safari) | **Manager : override manuel** | Succès, solde ajusté correctement, historique correct | | |
+| A11 | iPhone | Android (PWA Chrome) | **Manager : override manuel** (« Nouvel achat : autoriser un nouveau crédit ») | Succès, solde ajusté correctement, historique correct | | |
+| A12 | Android | iPhone (PWA Safari) | **Manager : override manuel** (« Nouvel achat : autoriser un nouveau crédit ») | Succès, solde ajusté correctement, historique correct | | |
 
 ### Validation des scénarios adverses
 
