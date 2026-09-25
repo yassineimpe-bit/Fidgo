@@ -35,6 +35,15 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
         ],
       },
+      // Le lien de désabonnement identifie un client : ni cache, ni referrer, ni index.
+      {
+        source: "/unsubscribe/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+        ],
+      },
       // Le jeton de réinitialisation de mot de passe est également un secret
       // à usage unique porté par l'URL (?token=...).
       {

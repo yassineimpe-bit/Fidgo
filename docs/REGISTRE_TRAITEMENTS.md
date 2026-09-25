@@ -107,7 +107,7 @@ Retiko tient deux registres :
 | Données exclues | Aucune donnée sensible ; aucune donnée de contact dans le QR ; tokens absents des URL de suivi et des journaux |
 | Information des personnes | Mention sur la page d'inscription avec lien vers la politique de confidentialité ; le commerce reste tenu d'informer ses clients |
 | Durée | Jusqu'à l'effacement demandé au commerce ; clients **inactifs : aucune durée — à décider** ; ledger conservé pseudonymisé après effacement — **à décider** |
-| Droits | Export JSON, rectification des coordonnées, retrait du consentement marketing et effacement dans le dashboard (OWNER/MANAGER) ; limitation : traitement manuel (voir `RGPD_PROCEDURES.md`) |
+| Droits | Export JSON, rectification des coordonnées, retrait du consentement marketing et effacement dans le dashboard (OWNER/MANAGER) ; le client active ou retire lui-même son consentement depuis sa carte ou par le lien de désabonnement signé ; limitation : traitement manuel (voir `RGPD_PROCEDURES.md`) |
 
 ---
 
