@@ -246,7 +246,7 @@ Objectifs :
 | détection QR | < 500 ms idéal |
 | QR → fiche client | < 1 s idéal |
 | action → confirmation | < 1 s idéal |
-| p95 parcours | < 2,5 s maximum pilote |
+| p95 parcours | < 2,5 s maximum pilote (seuil historique ; le protocole physique propose ≤ 2 s — décision produit requise) |
 
 ## Fallback manuel
 

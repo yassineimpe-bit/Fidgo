@@ -12,6 +12,8 @@ import {
   type CameraIssue,
 } from "@/lib/scanner-camera";
 import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
+import { normalizeScanErrorCode } from "@/lib/pilot-field-report.mjs";
+import { appendScanMetric, type RecordedScanMetric } from "@/lib/scan-metrics";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
 import { NEW_PURCHASE_REASON, formatRemaining } from "@/lib/cooldown";
 
@@ -33,20 +35,9 @@ type CardView = {
   cooldownRemainingSeconds?: number;
 };
 
-type Metric = {
-  phase: "lookup" | "action";
-  action?: "credit" | "redeem";
-  networkMs: number;
-  serverMs: number;
-  totalMs: number;
-  ok: boolean;
-  at: string;
-};
-
-function saveMetric(metric: Metric) {
+function saveMetric(metric: RecordedScanMetric) {
   try {
-    const previous = JSON.parse(localStorage.getItem("loyalty_scan_metrics") || "[]") as Metric[];
-    localStorage.setItem("loyalty_scan_metrics", JSON.stringify([...previous, metric].slice(-50)));
+    appendScanMetric(window.localStorage, metric);
   } catch {}
 }
 
@@ -105,6 +96,9 @@ export function ScannerClient() {
   const lastTokenRef = useRef<{ value: string; at: number } | null>(null);
   const lastInvalidQrAtRef = useRef(0);
   const detectedAtRef = useRef(performance.now());
+  // Origine de la carte affichée : seules les actions issues d'un QR comptent
+  // pour le gate « QR détecté → action validée ».
+  const detectedSourceRef = useRef<"qr" | "manual">("qr");
   const actionKeyRef = useRef<{ kind: "credit" | "redeem"; key: string } | null>(null);
 
   const [status, setStatus] = useState("Initialisation caméra…");
@@ -163,14 +157,16 @@ export function ScannerClient() {
       setCooldownEndsAt(cooldownSeconds > 0 ? now + cooldownSeconds * 1000 : null);
       setStatus("Carte prête");
       detectedAtRef.current = detectedAt;
+      detectedSourceRef.current = source;
       const totalMs = Math.round(performance.now() - detectedAt);
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs, ok: true, at: new Date().toISOString() });
+      saveMetric({ phase: "lookup", source, networkMs: Math.max(0, networkMs - serverMs), serverMs, totalMs, ok: true, at: new Date().toISOString() });
       recordPilotEvent("SCAN_SUCCESS", totalMs, source);
     } catch (caught) {
       const elapsed = Math.round(performance.now() - networkStarted);
       const totalMs = Math.round(performance.now() - detectedAt);
-      saveMetric({ phase: "lookup", networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs, ok: false, at: new Date().toISOString() });
-      recordPilotEvent("SCAN_FAILED", totalMs, source, scannerErrorInfo(caught).code);
+      const errorCode = scannerErrorInfo(caught).code;
+      saveMetric({ phase: "lookup", source, networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs, ok: false, at: new Date().toISOString(), errorCode: normalizeScanErrorCode(errorCode) });
+      recordPilotEvent("SCAN_FAILED", totalMs, source, errorCode);
       throw caught;
     }
   }
@@ -512,7 +508,7 @@ export function ScannerClient() {
       setCooldownEndsAt(null);
       feedback(kind === "redeem" || rewardReached ? "reward" : "success");
       setStatus(kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`);
-      saveMetric({ phase: "action", action: kind, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
+      saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
       window.setTimeout(reset, 1_250);
     } catch (caught) {
       const info = scannerErrorInfo(caught);
@@ -520,7 +516,7 @@ export function ScannerClient() {
       setError(info);
       feedback("error");
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion perdue — retry sûr" : "Action refusée");
-      saveMetric({ phase: "action", action: kind, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: false, at: new Date().toISOString() });
+      saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: false, at: new Date().toISOString(), errorCode: normalizeScanErrorCode(info.code) });
       if (!info.retryable) actionKeyRef.current = null;
     } finally {
       setAction("");

@@ -22,7 +22,7 @@ Ce document couvre le premier vrai service d'un commerce pilote, minute par minu
 
 Mesurer, sans ralentir la file :
 
-- temps perçu entre le scan et le crédit (`/s/stats` donne p50/p95 réels après coup) ;
+- temps perçu entre le scan et le crédit (`/s/stats` donne p50/p90/p95 réels après coup et permet d'exporter les mesures) ;
 - erreurs rencontrées par le staff (message affiché, action suivante) ;
 - doubles scans (cooldown déclenché, override utilisé et pourquoi) ;
 - abandons client (quelqu'un renonce à créer sa carte ou à la présenter) ;
@@ -45,3 +45,5 @@ Noter, à chaud si possible :
 Ce relevé sert à décider, service après service, si le pilote passe à l'échelle ou doit d'abord être corrigé.
 
 Le test est complet seulement si les trois niveaux sont verts : automatisé, smoke production, puis physique. Les tests Chromium simulent les erreurs caméra et sécurisent le ledger ; ils ne valident pas les permissions Safari/PWA, la mise au point ou la lumière du commerce.
+
+Le gate physique préalable (15 scans iPhone + 15 scans Android, rapport combiné `npm run pilot:field-report`, rapprochement ledger `npm run pilot:ledger-audit`) est décrit dans `docs/protocole-validation-physique-retiko.md`, qui fait foi pour la collecte, le calcul et les seuils.
