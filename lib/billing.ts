@@ -1,24 +1,19 @@
 import Stripe from "stripe";
 import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
-import { BILLING_PLANS, BILLING_TRIAL_DAYS } from "@/lib/billing-plans";
+import { BILLING_PLANS, BILLING_TRIAL_DAYS, offeredPlans, type BillingPlan } from "@/lib/billing-plans";
 
-export { BILLING_PLANS, BILLING_TRIAL_DAYS };
+export { BILLING_PLANS, BILLING_TRIAL_DAYS, activePriceGrid, offeredPlans } from "@/lib/billing-plans";
+export type { BillingPlan, BillingPriceGrid } from "@/lib/billing-plans";
 
 const STRIPE_MIN_TRIAL_AHEAD_SECONDS = 48 * 60 * 60;
 const STRIPE_CHECKOUT_LIFETIME_SECONDS = 31 * 60;
 
-export type BillingPlan = keyof typeof BILLING_PLANS;
 export type BillingInterval = "monthly" | "annual";
 export type SubscriptionStatus = "trial" | "active" | "past_due" | "canceled" | "unpaid";
 
-const REQUIRED_STRIPE_ENV = [
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "STRIPE_PRICE_FLEX_MONTHLY",
-  "STRIPE_PRICE_RETIKO12_MONTHLY",
-  "STRIPE_PRICE_ANNUAL",
-] as const;
+const REQUIRED_STRIPE_SECRETS = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] as const;
+const ALL_PRICE_ENVS = Object.values(BILLING_PLANS).map((plan) => plan.priceEnv);
 
 export type BillingRuntimeStatus = {
   enabled: boolean;
@@ -39,7 +34,10 @@ export function getBillingRuntimeStatus(
   env: Record<string, string | undefined> = process.env,
 ): BillingRuntimeStatus {
   const enabled = billingEnabled(env);
-  const missing = REQUIRED_STRIPE_ENV.filter((key) => !env[key]?.trim());
+  // Seuls les Prices de la grille proposée sont obligatoires ; ceux d'une
+  // ancienne grille restent utiles pour reconnaître les abonnés existants.
+  const required = [...REQUIRED_STRIPE_SECRETS, ...offeredPlans(env).map((plan) => BILLING_PLANS[plan].priceEnv)];
+  const missing = required.filter((key) => !env[key]?.trim());
   const invalid: string[] = [];
   if (enabled && env.STRIPE_SECRET_KEY && !env.STRIPE_SECRET_KEY.startsWith("sk_")) {
     invalid.push("STRIPE_SECRET_KEY");
@@ -47,11 +45,9 @@ export function getBillingRuntimeStatus(
   if (enabled && env.STRIPE_WEBHOOK_SECRET && !env.STRIPE_WEBHOOK_SECRET.startsWith("whsec_")) {
     invalid.push("STRIPE_WEBHOOK_SECRET");
   }
-  const priceIds = [
-    env.STRIPE_PRICE_FLEX_MONTHLY,
-    env.STRIPE_PRICE_RETIKO12_MONTHLY,
-    env.STRIPE_PRICE_ANNUAL,
-  ].filter((value): value is string => Boolean(value?.trim()));
+  const priceIds = ALL_PRICE_ENVS
+    .map((key) => env[key]?.trim())
+    .filter((value): value is string => Boolean(value));
   if (enabled && priceIds.some((value) => !value.startsWith("price_"))) invalid.push("STRIPE_PRICE_IDS");
   if (enabled && new Set(priceIds).size !== priceIds.length) invalid.push("STRIPE_PRICE_IDS_DUPLICATED");
   return { enabled, configured: enabled && missing.length === 0 && invalid.length === 0, missing, invalid };
@@ -68,12 +64,13 @@ export class BillingInputError extends Error {
   }
 }
 
-export function checkoutPlanFromRequest(value: unknown): BillingPlan {
+export function checkoutPlanFromRequest(value: unknown, env: Record<string, string | undefined> = process.env): BillingPlan {
   const body = value && typeof value === "object" ? value as Record<string, unknown> : {};
   if ("price" in body || "priceId" in body || "price_id" in body) {
     throw new BillingInputError("CLIENT_PRICE_NOT_ALLOWED");
   }
-  if (!isBillingPlan(body.plan)) throw new BillingInputError("INVALID_PLAN");
+  // Une offre d'une autre grille n'est plus proposée à la souscription.
+  if (!isBillingPlan(body.plan) || !offeredPlans(env).includes(body.plan)) throw new BillingInputError("INVALID_PLAN");
   return body.plan;
 }
 
@@ -148,6 +145,19 @@ export async function billingSchemaSupportsV2(query: typeof sql = sql) {
     ) as billing_v2
   `;
   return Boolean(schema?.billing_v2);
+}
+
+/** Les offres de la grille standard exigent la migration 029 (contraintes élargies). */
+export async function billingSchemaSupportsPlan(plan: BillingPlan, query: typeof sql = sql) {
+  if (!plan.startsWith("STANDARD_")) return true;
+  const [row] = await query`
+    select exists(
+      select 1 from pg_constraint
+      where conrelid = 'subscriptions'::regclass and conname = 'subscriptions_plan_check'
+        and pg_get_constraintdef(oid) like '%STANDARD_MONTHLY%'
+    ) as supported
+  `;
+  return Boolean(row?.supported);
 }
 
 export async function createPilotSubscription(tx: typeof sql, establishmentId: string) {

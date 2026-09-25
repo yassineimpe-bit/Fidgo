@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { BrandPreview } from "@/components/brand-preview";
 import { LegalLinks } from "@/components/legal-links";
 import { getAppUrl } from "@/lib/app-url";
-import { BILLING_PLANS, BILLING_TRIAL_DAYS } from "@/lib/billing-plans";
+import { BILLING_PLANS, BILLING_TRIAL_DAYS, offeredPlans } from "@/lib/billing-plans";
 
 const TITLE = "Retiko — carte de fidélité QR pour restaurants et commerces";
 const DESCRIPTION = "Carte de fidélité digitale à tampons ou à points : inscription client par QR sans application, scanner commerçant pensé pour le rush, compatible Apple Wallet et Google Wallet. Essai gratuit 30 jours.";
@@ -26,7 +26,6 @@ const STEPS = [
   { title: "La récompense tombe", text: "Au seuil choisi, la récompense s’affiche des deux côtés ; vous la validez, le compteur repart." },
 ];
 
-const PLAN_ORDER = ["FLEX", "RETIKO_12", "ANNUAL"] as const;
 
 export default async function Home() {
   const appUrl = getAppUrl() || "https://retiko.fr";
@@ -40,7 +39,7 @@ export default async function Home() {
     operatingSystem: "Web",
     description: DESCRIPTION,
     url: appUrl,
-    offers: PLAN_ORDER.map((plan) => ({
+    offers: offeredPlans().map((plan) => ({
       "@type": "Offer",
       name: BILLING_PLANS[plan].label,
       description: `${BILLING_PLANS[plan].priceLabel} — ${BILLING_PLANS[plan].commitment}`,
@@ -134,7 +133,7 @@ export default async function Home() {
           <h2 id="prix-title">Un abonnement, tout compris</h2>
           <p className="muted">{BILLING_TRIAL_DAYS} jours d’essai gratuit, sans carte bancaire pour commencer. Clients, scans et cartes illimités.</p>
           <div className="landing-plans">
-            {PLAN_ORDER.map((plan) => {
+            {offeredPlans().map((plan) => {
               const definition = BILLING_PLANS[plan];
               return <article key={plan} className={`card landing-plan${plan === "RETIKO_12" ? " is-featured" : ""}`}>
                 <h3>{definition.label}</h3>

@@ -13,15 +13,17 @@ alter table subscriptions add column if not exists stripe_checkout_plan text;
 alter table subscriptions add column if not exists stripe_checkout_pending_at timestamptz;
 alter table subscriptions add column if not exists stripe_checkout_claim_token text;
 
+-- Rejouée par db:setup : la liste doit connaître toutes les offres (voir 029),
+-- sinon un rejeu ramènerait les abonnés d'une offre récente à PILOT.
 alter table subscriptions drop constraint if exists subscriptions_plan_check;
 update subscriptions
 set legacy_plan = coalesce(legacy_plan, plan), plan = 'PILOT'
-where plan not in ('PILOT', 'FLEX', 'RETIKO_12', 'ANNUAL');
+where plan not in ('PILOT', 'FLEX', 'RETIKO_12', 'ANNUAL', 'STANDARD_MONTHLY', 'STANDARD_ANNUAL');
 alter table subscriptions alter column plan set default 'PILOT';
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'subscriptions_plan_check' and conrelid = 'subscriptions'::regclass) then
     alter table subscriptions add constraint subscriptions_plan_check
-      check (plan in ('PILOT', 'FLEX', 'RETIKO_12', 'ANNUAL'));
+      check (plan in ('PILOT', 'FLEX', 'RETIKO_12', 'ANNUAL', 'STANDARD_MONTHLY', 'STANDARD_ANNUAL'));
   end if;
 end $$;
 
@@ -52,7 +54,7 @@ alter table subscriptions drop constraint if exists subscriptions_stripe_checkou
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'subscriptions_stripe_checkout_plan_check' and conrelid = 'subscriptions'::regclass) then
     alter table subscriptions add constraint subscriptions_stripe_checkout_plan_check
-      check (stripe_checkout_plan is null or stripe_checkout_plan in ('FLEX', 'RETIKO_12', 'ANNUAL'));
+      check (stripe_checkout_plan is null or stripe_checkout_plan in ('FLEX', 'RETIKO_12', 'ANNUAL', 'STANDARD_MONTHLY', 'STANDARD_ANNUAL'));
   end if;
 end $$;
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { BILLING_PLANS, BILLING_TRIAL_DAYS } from "../../lib/billing-plans";
+import { BILLING_PLANS, BILLING_TRIAL_DAYS, offeredPlans } from "../../lib/billing-plans";
 
 test("site commercial : parcours, fidélité, QR, Wallet, prix et appel à l'essai", async ({ page }) => {
   await page.goto("/");
@@ -20,7 +20,8 @@ test("site commercial : parcours, fidélité, QR, Wallet, prix et appel à l'ess
   // Les prix affichés sont ceux facturés (source unique lib/billing-plans).
   const plans = page.locator(".landing-plan");
   await expect(plans).toHaveCount(3);
-  for (const plan of Object.values(BILLING_PLANS)) {
+  // Serveur de test sans BILLING_PRICE_GRID : grille pilote.
+  for (const plan of offeredPlans({}).map((key) => BILLING_PLANS[key])) {
     await expect(plans.filter({ hasText: plan.label })).toContainText(plan.priceLabel);
   }
   await expect(page.getByText(`${BILLING_TRIAL_DAYS} jours d’essai gratuit`)).toBeVisible();

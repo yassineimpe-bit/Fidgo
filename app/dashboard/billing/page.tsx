@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import {
   BILLING_PLANS,
   BILLING_TRIAL_DAYS,
+  offeredPlans,
   type BillingPlan,
   getBillingRuntimeStatus,
   getSubscription,
@@ -56,7 +57,7 @@ export default async function BillingPage() {
     </section>
 
     {runtime.configured && canSubscribe && <section style={{marginTop:18}}><div className="section-head"><div><h3>Choisir une offre</h3><p className="muted">Le prix utilisé par Checkout est déterminé exclusivement par le serveur.</p></div></div><div className="grid grid-3">
-      {(Object.keys(BILLING_PLANS) as BillingPlan[]).map((key) => {
+      {offeredPlans().map((key) => {
         const offer = BILLING_PLANS[key];
         return <article className="card" key={key}><h3>{offer.label}</h3><p style={{fontSize:20,fontWeight:800,margin:"12px 0 6px"}}>{offer.priceLabel}</p><p className="muted" style={{minHeight:44}}>{offer.commitment}</p><StartCheckoutButton plan={key} label={`Choisir ${offer.label}`}/></article>;
       })}
