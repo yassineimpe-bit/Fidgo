@@ -31,8 +31,25 @@ async function newMerchant(browser: Browser, label: string) {
     headers: { origin },
     data: { restaurantName: `Commerce ${unique(label)}`, email, password: PASSWORD },
   });
-  expect(signup.ok(), await signup.text()).toBeTruthy();
-  const restaurant = await (await page.request.get("/api/restaurant")).json();
+  expect(signup.status(), await signup.text()).toBe(202);
+  const signupBody = await signup.json() as { verificationToken?: string };
+  expect(signupBody.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin },
+    data: { token: signupBody.verificationToken },
+  });
+  expect(verified.ok(), await verified.text()).toBeTruthy();
+
+  const login = await page.request.post("/api/auth/login", {
+    headers: { origin, "x-real-ip": testClientIp() },
+    data: { email, password: PASSWORD },
+  });
+  expect(login.ok(), await login.text()).toBeTruthy();
+
+  const restaurantResponse = await page.request.get("/api/restaurant");
+  expect(restaurantResponse.ok(), await restaurantResponse.text()).toBeTruthy();
+  const restaurant = await restaurantResponse.json();
   return { context, page, email, restaurant };
 }
 

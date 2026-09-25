@@ -11,5 +11,6 @@ test("health : la base et le schéma requis sont prêts", async ({ request }) =>
     database: "up",
     schema: "up",
     auth: "up",
+    email: { recovery: true, passwordReset: true, verification: true },
   });
 });

@@ -52,10 +52,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const users = await sql`select id, establishment_id, email, password_hash, role, active, token_version from staff_users where lower(email)=${email} limit 1`;
+    const users = await sql`
+      select id, establishment_id, email, password_hash, role, active, token_version, email_verified_at
+      from staff_users
+      where lower(email)=${email}
+      limit 1
+    `;
     const user = users[0];
     const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hash);
+
     if (!user || !user.active || !passwordOk) {
       // Seul l'echec consomme un jeton.
       const { allowed } = await consumeRateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_WINDOW_SECONDS);
@@ -68,17 +74,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401 });
     }
 
-    // Révélé seulement après preuve du mot de passe : aucun signal
-    // d'énumération. Aucune session n'est émise pour un commerce suspendu.
-    const [establishment] = await sql`select status from establishments where id=${user.establishment_id}`;
+    // On ne révèle les états de compte (suspendu, e-mail non vérifié)
+    // qu'après preuve du mot de passe : aucun signal d'énumération. Aucune
+    // session n'est émise pour un commerce suspendu.
+    const [establishment] = await sql`
+      select status, onboarding_step from establishments where id=${user.establishment_id}
+    `;
     if (establishment?.status !== "active") {
-      return NextResponse.json({ error: "ESTABLISHMENT_SUSPENDED" }, { status: 403, headers: { "cache-control": "no-store" } });
+      return NextResponse.json(
+        { error: "ESTABLISHMENT_SUSPENDED" },
+        { status: 403, headers: { "cache-control": "no-store" } },
+      );
     }
 
     // Le titulaire legitime repart d'un compteur vierge. Combine au fait qu'un
     // mot de passe correct n'est jamais rejete, il ne peut plus etre maintenu
     // dehors par les tentatives d'un tiers.
     await resetRateLimit(accountKey);
+
+    if (!user.email_verified_at) {
+      return NextResponse.json(
+        { error: "EMAIL_NOT_VERIFIED" },
+        { status: 403, headers: { "cache-control": "no-store" } },
+      );
+    }
 
     const token = await signSession({
       staffId: String(user.id),
@@ -87,7 +106,15 @@ export async function POST(request: Request) {
       email: String(user.email),
       tokenVersion: Number(user.token_version),
     });
-    const response = NextResponse.json({ ok: true, role: user.role }, { headers: { "cache-control": "no-store" } });
+    // Même règle que le dashboard : un OWNER dont la configuration guidée est
+    // en cours y retourne directement (NULL = commerce historique, terminé).
+    const onboardingPending = String(user.role) === "OWNER"
+      && establishment.onboarding_step !== null
+      && Number(establishment.onboarding_step) < 5;
+    const response = NextResponse.json(
+      { ok: true, role: user.role, onboardingPending },
+      { headers: { "cache-control": "no-store" } },
+    );
     response.cookies.set(sessionCookie(token));
     return response;
   } catch (error) {

@@ -28,5 +28,5 @@ test("signup refuse un mot de passe dépassant la limite bcrypt de 72 octets", a
       password: "a".repeat(72),
     },
   });
-  expect(exactly72.status()).toBe(200);
+  expect(exactly72.status()).toBe(202);
 });

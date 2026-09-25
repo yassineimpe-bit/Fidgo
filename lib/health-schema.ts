@@ -6,6 +6,8 @@ export function healthSchemaIsReady(schema: HealthSchemaFlags, billingRequired: 
     schema?.recovery_table
     && schema?.onboarding_step
     && schema?.password_reset_table
+    && schema?.email_verification_table
+    && schema?.email_verified_at
     && schema?.product_events_table
     && schema?.token_version
     && schema?.last_earn_at

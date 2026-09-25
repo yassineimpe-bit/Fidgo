@@ -103,23 +103,27 @@ Après le premier déploiement sain :
 5. vérifier le scanner `/s` ;
 6. tester crédit, récompense, rejeu idempotent et annulation.
 
-## 3. Email de récupération / Resend
+## 3. Email transactionnel / Resend
 
-La récupération email est P0 pour le pilote. Elle ne doit être activée qu'après validation du domaine expéditeur.
+L'email transactionnel est **requis en production** : l'inscription publique
+d'un commerçant exige la vérification de son adresse. Sans les trois variables
+ci-dessous, `/api/auth/signup` répond `503 EMAIL_VERIFICATION_UNAVAILABLE` et
+`/api/health` reste en `503`. La récupération de carte client reste, elle,
+activée séparément par `CARD_RECOVERY_ENABLED`.
 
 Configuration cible :
 
-- sous-domaine transactionnel recommandé : `send.retiko.fr` ;
-- adresse expéditrice : `Retiko <cartes@send.retiko.fr>` ;
+- domaine expéditeur vérifié dans Resend : `retiko.fr` (région `eu-west-1`, envoi seul) ;
+- adresse expéditrice : `Retiko <cartes@retiko.fr>` ;
 - adresse de réponse surveillée : `contact@retiko.fr` ;
 - `RESEND_API_KEY` en secret Vercel Production ;
-- `EMAIL_FROM=Retiko <cartes@send.retiko.fr>` ;
+- `EMAIL_FROM=Retiko <cartes@retiko.fr>` ;
 - `EMAIL_REPLY_TO=contact@retiko.fr` ;
 - `CARD_RECOVERY_ENABLED=true` uniquement après vérification DNS et test d'envoi réel.
 
 Procédure :
 
-1. ajouter `send.retiko.fr` dans Resend ;
+1. ajouter `retiko.fr` dans Resend ;
 2. recopier dans OVH les enregistrements SPF et DKIM exactement fournis par Resend, sans remplacer le SPF existant de l'apex `retiko.fr` ;
 3. publier une politique DMARC pour `retiko.fr` (commencer par `p=none` avec rapports, puis durcir après observation) ;
 4. attendre le statut **Verified** dans Resend et vérifier SPF, DKIM et DMARC avec un outil DNS externe ;

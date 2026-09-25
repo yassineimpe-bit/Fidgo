@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { contrastTextColor } from "../../lib/brand-color";
-import { origin, testClientIp, unique } from "./helpers";
+import { origin, submitSignupAndVerify, testClientIp, unique } from "./helpers";
 
 const BRAND_NAME = "Le Café d'Ussel";
 const BRAND_COLOR = "#7A3E2D";
@@ -47,8 +47,7 @@ test.describe("branding commerce : Le Café d'Ussel", () => {
     await merchantPage.getByLabel("Nom du commerce").fill(BRAND_NAME);
     await merchantPage.getByLabel("Email").fill(`${marker}@example.com`);
     await merchantPage.getByLabel("Mot de passe").fill("Password-test-123!");
-    await merchantPage.getByRole("button", { name: "Créer mon espace" }).click();
-    await expect(merchantPage).toHaveURL(/\/onboarding$/);
+    await submitSignupAndVerify(merchantPage, `${marker}@example.com`, "Password-test-123!");
 
     // Programme : 10 cafés = le 11e offert (le seuil par défaut est déjà 10).
     await merchantPage.goto("/dashboard/program");

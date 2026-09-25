@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { origin, randomizeClientIp, testClientIp, unique } from "./helpers";
+import { origin, randomizeClientIp, submitSignupAndVerify, testClientIp, unique } from "./helpers";
 
 async function signup(page: Page) {
   const marker = unique("guided");
@@ -9,8 +9,7 @@ async function signup(page: Page) {
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email", { exact: true }).fill(`${marker}@example.com`);
   await page.getByLabel("Mot de passe", { exact: true }).fill("Password-test-123!");
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await submitSignupAndVerify(page, `${marker}@example.com`, "Password-test-123!");
   expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
   return marker;
 }

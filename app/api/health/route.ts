@@ -17,7 +17,7 @@ function healthResponse(
     auth: "up" | "down";
     wallet: { https: boolean; apple: boolean; google: boolean };
     billing: { enabled: boolean; configured: boolean };
-    email: { recovery: boolean; passwordReset: boolean };
+    email: { recovery: boolean; passwordReset: boolean; verification: boolean };
     serverMs: number;
   },
   status: number,
@@ -48,7 +48,7 @@ export async function GET() {
     google: wallet.google.configured,
   };
   const billingState = { enabled: billing.enabled, configured: billing.configured };
-  const emailState = { recovery: emailConfigured, passwordReset: emailConfigured };
+  const emailState = { recovery: emailConfigured, passwordReset: emailConfigured, verification: emailConfigured };
 
   if (!databaseConfigured || !authConfigured) {
     return healthResponse({
@@ -68,9 +68,12 @@ export async function GET() {
     const schema = await readHealthSchemaFlags();
 
     const schemaReady = healthSchemaIsReady(schema, process.env.STRIPE_ENABLED === "true");
+    // La vérification d'e-mail devient obligatoire au signup : sans transport
+    // transactionnel, le produit n'est pas prêt même si le schéma l'est.
+    const ready = schemaReady && emailConfigured;
 
     return healthResponse({
-      ok: schemaReady,
+      ok: ready,
       service: "retiko",
       database: "up",
       schema: schemaReady ? "up" : "down",
@@ -79,7 +82,7 @@ export async function GET() {
       billing: billingState,
       email: emailState,
       serverMs: Date.now() - started,
-    }, schemaReady ? 200 : 503);
+    }, ready ? 200 : 503);
   } catch {
     return healthResponse({
       ok: false,

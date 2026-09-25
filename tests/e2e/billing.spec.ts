@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { randomizeClientIp, unique } from "./helpers";
+import { randomizeClientIp, submitSignupAndVerify, unique } from "./helpers";
 
 const webhookSecret = "whsec_retiko_e2e";
 
@@ -13,8 +13,7 @@ async function signup(page: Page, label: string) {
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill("Password-test-123!");
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await submitSignupAndVerify(page, email, "Password-test-123!");
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
   return email;

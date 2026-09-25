@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
-import { createMerchant, logout, origin, randomizeClientIp, unique } from "./helpers";
+import { createMerchant, logout, origin, randomizeClientIp, testClientIp, unique } from "./helpers";
 
-test("auth : signup, logout puis login redonnent accès au dashboard", async ({ page }) => {
+test("auth : signup vérifié, logout puis login redonnent accès au dashboard", async ({ page }) => {
   const marker = unique("auth");
   const email = `${marker}@example.com`;
   const password = "Password-test-123!";
@@ -12,7 +12,38 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Créer mon espace" }).click();
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  await page.goto("/dashboard");
+  await expect(page).toHaveURL(/\/login$/);
+
+  // page.request n'hérite pas de l'IP logique de la page.
+  const apiHeaders = { origin, "x-real-ip": testClientIp() };
+  const blockedLogin = await page.request.post("/api/auth/login", {
+    headers: apiHeaders,
+    data: { email, password },
+  });
+  expect(blockedLogin.status()).toBe(403);
+  expect((await blockedLogin.json()).error).toBe("EMAIL_NOT_VERIFIED");
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: apiHeaders,
+    data: { token: signup.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  // Configuration guidée encore en cours : le login y ramène le propriétaire.
   await expect(page).toHaveURL(/\/onboarding$/);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -20,14 +51,118 @@ test("auth : signup, logout puis login redonnent accès au dashboard", async ({ 
   await logout(page);
   await expect(page).toHaveURL(/\/login$/);
 
-  // La session est bien révoquée : /dashboard redirige vers /login sans cookie valide.
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Mot de passe").fill(password);
   await page.getByRole("button", { name: "Se connecter" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/onboarding$/);
+});
+
+test("auth : une nouvelle inscription reprend proprement une adresse encore non vérifiée", async ({ page }) => {
+  const marker = unique("pre-hijack");
+  const email = `${marker}@example.com`;
+  const oldPassword = "Password-old-123!";
+  const newPassword = "Password-new-123!";
+
+  // page.request n'hérite pas de l'IP logique de la page : IP explicite pour
+  // ne pas épuiser les buckets signup/login partagés de 127.0.0.1.
+  const headers = { origin, "x-real-ip": testClientIp() };
+  const first = await page.request.post("/api/auth/signup", {
+    headers,
+    data: { restaurantName: "Commerce attaquant", email, password: oldPassword },
+  });
+  expect(first.status()).toBe(202);
+  const firstBody = await first.json() as { verificationToken?: string };
+  expect(firstBody.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const second = await page.request.post("/api/auth/signup", {
+    headers,
+    data: { restaurantName: "Commerce légitime", email, password: newPassword },
+  });
+  expect(second.status()).toBe(202);
+  const secondBody = await second.json() as { verificationToken?: string };
+  expect(secondBody.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  const stale = await page.request.post("/api/auth/verify-email", {
+    headers,
+    data: { token: firstBody.verificationToken },
+  });
+  expect(stale.status()).toBe(400);
+
+  const oldLoginBeforeVerification = await page.request.post("/api/auth/login", {
+    headers,
+    data: { email, password: oldPassword },
+  });
+  expect(oldLoginBeforeVerification.status()).toBe(401);
+
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers,
+    data: { token: secondBody.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  // Usage unique : le lien qui vient de servir ne vérifie plus rien.
+  const replayed = await page.request.post("/api/auth/verify-email", {
+    headers,
+    data: { token: secondBody.verificationToken },
+  });
+  expect(replayed.status()).toBe(400);
+
+  const oldLogin = await page.request.post("/api/auth/login", {
+    headers,
+    data: { email, password: oldPassword },
+  });
+  expect(oldLogin.status()).toBe(401);
+
+  const goodLogin = await page.request.post("/api/auth/login", {
+    headers,
+    data: { email, password: newPassword },
+  });
+  expect(goodLogin.ok()).toBeTruthy();
+  expect((await goodLogin.json()).onboardingPending).toBe(true);
+
+  const duplicateVerified = await page.request.post("/api/auth/signup", {
+    headers,
+    data: { restaurantName: "Tentative après vérification", email, password: "Another-Password-123!" },
+  });
+  expect(duplicateVerified.status()).toBe(409);
+});
+
+test("vérification e-mail : lien hors cache et hors referrer, renvoi sans énumération", async ({ page }) => {
+  // Le jeton est un secret porté par l'URL : ni cache, ni fuite par Referer, ni indexation.
+  const response = await page.goto(`/verify-email?token=${"A".repeat(43)}`);
+  expect(response?.status()).toBe(200);
+  expect(response?.headers()["cache-control"]).toContain("no-store");
+  expect(response?.headers()["referrer-policy"]).toBe("no-referrer");
+  expect(response?.headers()["x-robots-tag"]).toContain("noindex");
+
+  // Adresse non vérifiée, adresse vérifiée et adresse inconnue : même réponse.
+  // page.request n'hérite pas des en-têtes de page : IP logique explicite.
+  const headers = { origin, "x-real-ip": testClientIp() };
+  const pending = `${unique("resend-pending")}@example.com`;
+  const signup = await page.request.post("/api/auth/signup", {
+    headers,
+    data: { restaurantName: "Commerce en attente", email: pending, password: "Password-test-123!" },
+  });
+  expect(signup.status()).toBe(202);
+  const verifiedEmail = `${unique("resend-verified")}@example.com`;
+  const verifiedSignup = await page.request.post("/api/auth/signup", {
+    headers,
+    data: { restaurantName: "Commerce vérifié", email: verifiedEmail, password: "Password-test-123!" },
+  });
+  const { verificationToken } = await verifiedSignup.json() as { verificationToken: string };
+  expect((await page.request.post("/api/auth/verify-email", { headers, data: { token: verificationToken } })).ok()).toBeTruthy();
+
+  const answers = [];
+  for (const email of [pending, verifiedEmail, `${unique("resend-unknown")}@example.com`]) {
+    const resend = await page.request.post("/api/auth/resend-verification", { headers, data: { email } });
+    answers.push({ status: resend.status(), body: await resend.json() });
+  }
+  expect(answers[1]).toEqual(answers[0]);
+  expect(answers[2]).toEqual(answers[0]);
+  expect(answers[0].status).toBe(202);
 });
 
 test("rôle : un EMPLOYEE ne peut pas faire ce qui est réservé OWNER/MANAGER", async ({ page }) => {

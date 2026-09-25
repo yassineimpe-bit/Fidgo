@@ -18,15 +18,46 @@ export async function randomizeClientIp(page: Page) {
   await page.setExtraHTTPHeaders({ "x-real-ip": testClientIp() });
 }
 
+/**
+ * Soumet le formulaire d'inscription déjà rempli, vérifie l'adresse avec le
+ * jeton renvoyé en mode E2E, puis se connecte via le formulaire. Un OWNER
+ * fraîchement inscrit atterrit sur la configuration guidée.
+ */
+export async function submitSignupAndVerify(page: Page, email: string, password: string) {
+  const signupResponsePromise = page.waitForResponse(
+    (response) => response.url().endsWith("/api/auth/signup") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Créer mon espace" }).click();
+  const signupResponse = await signupResponsePromise;
+  expect(signupResponse.status()).toBe(202);
+  const signup = await signupResponse.json() as { verificationToken?: string };
+  expect(signup.verificationToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+  // page.request n'hérite pas de l'IP logique de la page : sans elle, chaque
+  // vérification consommerait le même bucket 127.0.0.1 (30/h) pour toute la suite.
+  const verified = await page.request.post("/api/auth/verify-email", {
+    headers: { origin, "x-real-ip": testClientIp() },
+    data: { token: signup.verificationToken },
+  });
+  expect(verified.ok()).toBeTruthy();
+
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await page.getByRole("button", { name: "Se connecter" }).click();
+  await expect(page).toHaveURL(/\/onboarding$/);
+}
+
 export async function createMerchant(page: Page, label: string) {
   const marker = unique(label);
+  const email = `${marker}@example.com`;
+  const password = "Password-test-123!";
   await randomizeClientIp(page);
   await page.goto("/signup");
   await page.getByLabel("Nom du commerce").fill(`Commerce ${marker}`);
-  await page.getByLabel("Email").fill(`${marker}@example.com`);
-  await page.getByLabel("Mot de passe").fill("Password-test-123!");
-  await page.getByRole("button", { name: "Créer mon espace" }).click();
-  await expect(page).toHaveURL(/\/onboarding$/);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Mot de passe").fill(password);
+  await submitSignupAndVerify(page, email, password);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
 }
