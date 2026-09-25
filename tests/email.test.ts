@@ -154,6 +154,18 @@ describe("Resend password reset email", () => {
     expect(payload.html).toContain("expire dans 30 minutes");
   });
 
+  it("rassure sans alarmer : aucun blocage annoncé, révocation par changement de mot de passe", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ id: "resend-reset-copy" }));
+    await sendPasswordResetEmail(resetInput, env, { fetchImpl: fetchImpl as typeof fetch });
+    const payload = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+    for (const body of [payload.text, payload.html]) {
+      expect(body).toMatch(/expire dans 30 minutes/);
+      expect(body).toMatch(/votre mot de passe n.a pas été modifié/);
+      expect(body).toMatch(/modifiez votre mot de passe afin de révoquer les sessions actives/);
+      expect(body).not.toMatch(/bloqu|suspendu|désactivé/i);
+    }
+  });
+
   it("rejects insecure production reset URLs before contacting Resend", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     await expect(sendPasswordResetEmail(
