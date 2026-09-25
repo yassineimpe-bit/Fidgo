@@ -42,6 +42,13 @@ ne doit jamais être exécutée par un build Vercel et n'active pas Stripe :
 `STRIPE_ENABLED=false` reste la valeur sûre jusqu'à la validation opérationnelle
 décrite dans `docs/BILLING.md`.
 
+Les migrations `021_email_verification.sql`, `022_legal_acceptance.sql` et
+`023_email_verification_integrity.sql` doivent être appliquées dans cet ordre
+avant de déployer le durcissement de la vérification e-mail. La troisième conserve au plus un lien
+actif par compte et révoque les liens lors d'une vérification, désactivation ou
+suspension. Ces migrations sont rejouables ; les tester d'abord sur une
+branche Neon issue de la production, puis exécuter `npm run db:verify`.
+
 La maintenance de rétention reste manuelle pendant le pilote :
 
 ```bash
