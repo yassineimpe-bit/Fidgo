@@ -31,7 +31,7 @@ Retiko tient deux registres :
 |---|---|
 | Finalités | Création de l'espace commerçant, vérification de l'adresse e-mail, authentification, gestion des rôles (OWNER, MANAGER, EMPLOYEE, VIEWER), onboarding guidé |
 | Personnes | Propriétaires, gérants, employés des commerces |
-| Données | E-mail, empreinte bcrypt du mot de passe, rôle, état actif, `token_version`, date de vérification e-mail ; informations publiques du commerce (nom, adresse, téléphone, Instagram, site, logo, couleur) |
+| Données | E-mail, empreinte bcrypt du mot de passe, rôle, état actif, `token_version`, date de vérification e-mail ; double authentification facultative (secret TOTP chiffré, empreintes des codes de secours, date d'activation) ; informations publiques du commerce (nom, adresse, téléphone, Instagram, site, logo, couleur) |
 | Base légale | Exécution du contrat — *à valider* |
 | Destinataires | Retiko ; sous-traitants : Vercel, Neon, GitHub (sauvegardes), Resend (e-mails de vérification et de réinitialisation) |
 | Durée | Durée du contrat. Clôture : accès coupés, données conservées sans anonymisation — **à décider** |

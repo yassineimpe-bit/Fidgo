@@ -17,6 +17,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   SIGNUP_FAILED: "Impossible de créer le compte pour le moment.",
   LOGIN_FAILED: "Connexion impossible pour le moment.",
   ESTABLISHMENT_SUSPENDED: "Ce commerce est suspendu. Contacte le support Retiko pour le réactiver.",
+  INVALID_2FA_CODE: "Code incorrect ou déjà utilisé.",
+  TWO_FACTOR_EXPIRED: "La vérification a expiré. Saisis à nouveau ton mot de passe.",
 };
 
 function describeError(code: string | undefined) {
@@ -31,6 +33,38 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [verificationPending, setVerificationPending] = useState<"sent" | "failed" | null>(null);
   const [pendingEmail, setPendingEmail] = useState("");
   const [loginNeedsVerification, setLoginNeedsVerification] = useState(false);
+  const [twoFactor, setTwoFactor] = useState(false);
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+
+  function enter(data: { onboardingPending?: boolean }) {
+    router.replace(data.onboardingPending ? "/onboarding" : "/dashboard");
+    router.refresh();
+  }
+
+  async function submitSecondFactor(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const value = String(new FormData(e.currentTarget).get("secondFactor") || "").trim();
+    try {
+      const res = await fetch("/api/auth/login/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(useRecoveryCode ? { recoveryCode: value } : { code: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.error === "TWO_FACTOR_EXPIRED") setTwoFactor(false);
+        setError(describeError(data.error));
+        return;
+      }
+      enter(data);
+    } catch {
+      setError("Connexion impossible. Vérifie le réseau puis réessaie.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -77,8 +111,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         return;
       }
 
-      router.replace(data.onboardingPending ? "/onboarding" : "/dashboard");
-      router.refresh();
+      if (mode === "login" && data.twoFactorRequired) {
+        setTwoFactor(true);
+        setUseRecoveryCode(false);
+        return;
+      }
+
+      enter(data);
     } catch {
       setError("Connexion impossible. Vérifie le réseau puis réessaie.");
     } finally {
@@ -97,6 +136,26 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <Link className="btn btn-primary" href="/verify-email/resend">Renvoyer le lien de vérification</Link>
       <Link className="btn" href="/login">Retour à la connexion</Link>
     </div>;
+  }
+
+  if (mode === "login" && twoFactor) {
+    return <form className="form" onSubmit={submitSecondFactor}>
+      <p className="muted">{useRecoveryCode
+        ? "Saisis un de tes codes de secours. Chaque code ne fonctionne qu’une fois."
+        : "Saisis le code à 6 chiffres affiché par ton application d’authentification."}</p>
+      <div className="field">
+        <label htmlFor="login-second-factor">{useRecoveryCode ? "Code de secours" : "Code de vérification"}</label>
+        <input key={useRecoveryCode ? "recovery" : "totp"} className="input" id="login-second-factor" name="secondFactor" required autoFocus
+          autoComplete={useRecoveryCode ? "off" : "one-time-code"} inputMode={useRecoveryCode ? "text" : "numeric"}
+          pattern={useRecoveryCode ? "[A-Za-z2-7]{5}-?[A-Za-z2-7]{5}" : "[0-9]{6}"} maxLength={useRecoveryCode ? 11 : 6}
+          placeholder={useRecoveryCode ? "XXXXX-XXXXX" : "123456"} />
+      </div>
+      {error && <div className="notice error" role="alert">{error}</div>}
+      <button className="btn btn-primary" disabled={loading}>{loading ? "Vérification…" : "Vérifier"}</button>
+      <button className="btn" type="button" onClick={() => { setUseRecoveryCode(!useRecoveryCode); setError(""); }}>
+        {useRecoveryCode ? "Utiliser le code de l’application" : "Utiliser un code de secours"}
+      </button>
+    </form>;
   }
 
   return (

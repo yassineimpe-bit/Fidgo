@@ -167,6 +167,8 @@ tbody tr:hover { background: var(--surface-muted); }
 .logo-crop-view:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .logo-crop-view img { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; }
 .logo-cropper input[type="range"] { width: 240px; }
+.recovery-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0; margin: 0; list-style: none; font-size: 15px; }
+.recovery-codes code { display: block; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; text-align: center; letter-spacing: .06em; }
 
 
 .dashboard-next-step { border-color: #d8d3ca; background: #fffdf9; }

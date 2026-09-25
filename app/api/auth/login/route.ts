@@ -7,6 +7,7 @@ import { hashRateKey, requireSameOrigin } from "@/lib/security";
 import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
 import { createPhaseTimer } from "@/lib/phase-timer";
+import { enabledTwoFactor, mfaPendingCookie, signMfaPending } from "@/lib/two-factor";
 
 /**
  * Hash factice (mot de passe aleatoire, meme cout que la production) compare
@@ -114,6 +115,16 @@ export async function POST(request: Request) {
         { error: "EMAIL_NOT_VERIFIED" },
         { status: 403, headers: { "cache-control": "no-store" } },
       );
+    }
+
+    // Second facteur actif : aucune session tant que le code n'est pas
+    // vérifié par /api/auth/login/verify. Révélé seulement après le mot de passe.
+    if (await enabledTwoFactor(String(user.id))) {
+      const pending = await signMfaPending(String(user.id), Number(user.token_version));
+      const response = NextResponse.json({ twoFactorRequired: true }, { headers: { "cache-control": "no-store" } });
+      response.cookies.set(mfaPendingCookie(pending));
+      timer.done("two_factor_required");
+      return response;
     }
 
     const token = await signSession({
