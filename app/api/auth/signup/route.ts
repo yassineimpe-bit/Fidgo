@@ -11,6 +11,19 @@ import { isValidNewPassword } from "@/lib/password-reset";
 import { getAppUrl } from "@/lib/app-url";
 import { emailDeliveryConfigured, sendEmailVerificationEmail } from "@/lib/email";
 import { createEmailVerificationToken, emailVerificationTestMode } from "@/lib/email-verification";
+import { ACCEPTED_DOCUMENTS, LEGAL_VERSION, hasAcceptedCurrentTerms, marketingOptIn } from "@/lib/legal";
+
+// Preuve contractuelle : document, version affichée, date et contexte. Une
+// réinscription sur une adresse encore non vérifiée ajoute sa propre preuve
+// (la plus récente fait foi) sans effacer l'historique.
+async function recordLegalAcceptance(tx: typeof sql, establishmentId: unknown, staffId: unknown) {
+  for (const document of ACCEPTED_DOCUMENTS) {
+    await tx`
+      insert into legal_acceptances(establishment_id,staff_user_id,document_type,document_version,source)
+      values(${String(establishmentId)},${String(staffId)},${document},${LEGAL_VERSION},'signup')
+    `;
+  }
+}
 
 function slugify(input: string) {
   return input.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -37,6 +50,11 @@ export async function POST(request: Request) {
   if (restaurantName.length < 2 || !isEmail(email) || !isValidNewPassword(password)) {
     return NextResponse.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
+  // Contrôle serveur : la case du formulaire ne suffit pas.
+  if (!hasAcceptedCurrentTerms(body)) {
+    return NextResponse.json({ error: "LEGAL_ACCEPTANCE_REQUIRED" }, { status: 400 });
+  }
+  const marketing = marketingOptIn(body);
 
   const baseSlug = slugify(restaurantName) || "commerce";
   const slug = `${baseSlug}-${id().slice(-4).toLowerCase()}`;
@@ -97,9 +115,12 @@ export async function POST(request: Request) {
           update staff_users
           set password_hash=${passwordHash},
               token_version=token_version+1,
+              marketing_consent=${marketing},
+              marketing_consent_at=${marketing ? new Date() : null},
               updated_at=now()
           where id=${existing.id}
         `;
+        await recordLegalAcceptance(tx, existing.establishment_id, existing.id);
         await tx`
           update establishments
           set name=${restaurantName},
@@ -135,10 +156,11 @@ export async function POST(request: Request) {
         returning id,slug,name
       `)[0];
       const staff = (await tx`
-        insert into staff_users(id,establishment_id,email,password_hash,role,email_verified_at)
-        values(${id()},${establishment.id},${email},${passwordHash},'OWNER',null)
+        insert into staff_users(id,establishment_id,email,password_hash,role,email_verified_at,marketing_consent,marketing_consent_at)
+        values(${id()},${establishment.id},${email},${passwordHash},'OWNER',null,${marketing},${marketing ? new Date() : null})
         returning id,email,role,token_version
       `)[0];
+      await recordLegalAcceptance(tx, establishment.id, staff.id);
       await tx`
         insert into email_verification_tokens(staff_user_id,token_hash,expires_at)
         values(${staff.id},${verification.tokenHash},${verification.expiresAt})

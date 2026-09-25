@@ -19,14 +19,27 @@ Si une personne contacte directement Retiko :
 
 Le Commerce doit répondre à la personne dans les meilleurs délais et, en principe, au plus tard **dans un délai d’un mois** à compter de la réception. Le délai peut être prolongé de deux mois lorsque la demande est complexe ou nombreuse, à condition d’en informer la personne dans le premier mois.
 
-### Données disponibles dans le MVP
+### Canal et contenu de la demande
 
-- export client via la fonction prévue dans le dashboard ;
-- effacement/anonymisation via la fonction prévue dans le dashboard ;
-- désactivation de la carte liée au client effacé ;
-- conservation limitée du ledger pseudonymisé lorsque nécessaire à l’intégrité et à l’antifraude.
+- **Client d'un programme** : s'adresse au commerce (responsable). S'il écrit à Retiko, appliquer la qualification ci-dessus.
+- **Commerçant ou membre d'équipe** : écrit au contact données personnelles de Retiko — **[À COMPLÉTER]** dans `lib/legal.ts` (à défaut, `contact@retiko.fr`, adresse de réponse des e-mails transactionnels).
+- Informations minimales à demander : commerce concerné, e-mail utilisé pour la carte ou le compte, nature de la demande. Ne jamais demander de mot de passe ni de lien reçu par e-mail.
 
-Toute demande qui dépasse les capacités du dashboard doit être traitée manuellement avec traçabilité.
+### Ce que le produit permet réellement (vérifié dans le code le 25/09/2026)
+
+| Droit | Client fidélité (Retiko sous-traitant) | Commerçant / staff (Retiko responsable) |
+|---|---|---|
+| Accès / portabilité | **Outil** : export JSON complet (`GET /api/customers/:id/export`, OWNER/MANAGER, 20/h, tracé `CUSTOMER_EXPORT`) — profil, carte sans token, opérations, états Wallet, récupérations, événements, audits | Pas d'export dédié : consultation dans le dashboard, export CSV des opérations ; extraction complète **manuelle** sur demande |
+| Rectification | Note interne modifiable ; prénom / e-mail / téléphone **non modifiables dans l'interface** → correction **manuelle** en base, tracée | Informations du commerce modifiables dans les réglages ; changement de mot de passe en libre-service ; e-mail de connexion **non modifiable** → manuel |
+| Effacement | **Outil** : `DELETE /api/customers/:id` — coordonnées supprimées, carte désactivée et identifiants remplacés, liens et Wallet révoqués, ledger conservé sans identité (voir `DATA_LIFECYCLE.md`) | Désactivation d'un membre d'équipe (sessions coupées, données conservées) ; fermeture du commerce (`/api/restaurant/suspend`) ; **pas d'anonymisation définitive** (écart E3) |
+| Opposition / retrait du consentement marketing | Aucune campagne n'est envoyée aujourd'hui. Retrait isolé **non outillé** : manuel (`marketing_consent=false`, `marketing_consent_at=null`) ou effacement complet | Retrait du consentement aux nouveautés Retiko : **manuel** (`staff_users.marketing_consent=false`, date à `null`) |
+| Limitation | Pas d'outil ; à traiter manuellement au cas par cas (désactivation de la carte sans effacement) | Pas d'outil ; manuel |
+
+Toute opération manuelle en base : requête ciblée sur l'identifiant et le commerce, dans une transaction, avec une entrée `audit_logs` décrivant l'action (sans donnée personnelle dans le motif). Ne jamais promettre publiquement une fonction absente de ce tableau.
+
+### Délais
+
+Répondre au plus tard un mois après réception ; prolongation de deux mois possible pour une demande complexe ou nombreuse, en informant la personne dans le premier mois. Conserver la date de réception, la décision et la date de clôture.
 
 ## 2. Violation de données personnelles
 

@@ -36,9 +36,16 @@
 
 ## Juridique / exploitation
 
+Les pages `/legal/*` existent en version de travail (voir `LEGAL_STATUS.md`) ;
+une case ne se coche qu'une fois l'identité renseignée et le texte validé.
+
+- [ ] identité juridique renseignée dans `lib/legal.ts`
 - [ ] politique de confidentialité
 - [ ] mentions légales
 - [ ] CGU
+- [ ] CGV (dont régime des petits professionnels, pénalités, juridiction)
+- [ ] politique cookies
+- [ ] migration `022_legal_acceptance.sql` appliquée en production
 - [ ] accord pilote
 - [ ] annexe sous-traitance RGPD
 - [ ] procédure incident

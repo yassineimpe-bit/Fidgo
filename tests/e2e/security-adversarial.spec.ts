@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { origin, testClientIp, unique } from "./helpers";
+import { legalAcceptance, origin, testClientIp, unique } from "./helpers";
 
 test.setTimeout(180_000);
 
@@ -29,7 +29,7 @@ async function newMerchant(browser: Browser, label: string) {
   const email = `${unique(label)}@example.com`;
   const signup = await page.request.post("/api/auth/signup", {
     headers: { origin },
-    data: { restaurantName: `Commerce ${unique(label)}`, email, password: PASSWORD },
+    data: { ...legalAcceptance, restaurantName: `Commerce ${unique(label)}`, email, password: PASSWORD },
   });
   expect(signup.status(), await signup.text()).toBe(202);
   const signupBody = await signup.json() as { verificationToken?: string };

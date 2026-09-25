@@ -7,6 +7,8 @@ const coreSchema = {
   password_reset_table: true,
   email_verification_table: true,
   email_verified_at: true,
+  legal_acceptances_table: true,
+  staff_marketing_consent: true,
   product_events_table: true,
   token_version: true,
   last_earn_at: true,
@@ -31,6 +33,11 @@ describe("health schema", () => {
   it("échoue fermé si la migration email verification 021 manque", () => {
     expect(healthSchemaIsReady({ ...coreSchema, email_verification_table: false }, false)).toBe(false);
     expect(healthSchemaIsReady({ ...coreSchema, email_verified_at: false }, false)).toBe(false);
+  });
+
+  it("échoue fermé si la migration légale 022 manque", () => {
+    expect(healthSchemaIsReady({ ...coreSchema, legal_acceptances_table: false }, false)).toBe(false);
+    expect(healthSchemaIsReady({ ...coreSchema, staff_marketing_consent: false }, false)).toBe(false);
   });
 
   describe("Stripe optionnel", () => {

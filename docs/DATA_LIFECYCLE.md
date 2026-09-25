@@ -5,12 +5,49 @@ une qualification juridique ni une durée de conservation imposée par la loi.
 Les durées doivent être validées par le responsable de traitement avant
 activation en production.
 
+## État réel des durées (vérifié sur `main` le 25/09/2026)
+
+Trois statuts, à ne jamais confondre dans un document public :
+
+- **appliquée** : garantie par le code et effective en production ;
+- **prévue, non active** : durée écrite dans `scripts/purge-data-lifecycle.mjs`
+  mais aucune suppression n'est exécutée en production ;
+- **à décider** : aucune durée n'est arrêtée.
+
+| Données | Durée | Statut | Mécanisme |
+|---|---|---|---|
+| Session staff (cookie `loyalty_staff`) | 12 h | appliquée | `maxAge` du cookie + `token_version` |
+| Liens vérification e-mail / reset / récupération | 24 h / 30 min / 15 min, usage unique | appliquée | expiration et `used_at` en base |
+| Liens utilisés ou expirés (4 tables de tokens) | suppression à J+30 | prévue, non active | purge data lifecycle |
+| `rate_limits` | 2 jours | prévue (cron Vercel quotidien, exécution non vérifiée) | `/api/cron/purge` si `CRON_SECRET` configuré en production |
+| `product_events` | 180 jours | prévue, non active | purge data lifecycle |
+| `audit_logs` | 730 jours | prévue, non active | purge data lifecycle |
+| Inscriptions Apple de passes révoqués | 30 jours | prévue, non active | purge data lifecycle |
+| Sauvegardes chiffrées | 14 jours | appliquée | `retention-days: 14` de l'artefact GitHub |
+| Clients fidélité actifs | jusqu'à effacement par le commerce | appliquée | `DELETE /api/customers/:id` |
+| Clients fidélité **inactifs** | aucune | à décider | — |
+| Ledger après effacement client | illimitée, pseudonymisé | à décider | conservé volontairement |
+| Commerce clos (`status=suspended`), staff désactivé | illimitée | à décider | aucune anonymisation définitive |
+| `legal_acceptances` (preuve CGU/CGV) | illimitée | à décider (durée du contrat + prescription) | aucune purge |
+| `platform_admin_audit` | illimitée (append-only) | à décider | aucune purge |
+| `subscriptions`, `stripe_webhook_events` | illimitée | à décider (obligations comptables) | aucune purge |
+| Journaux Vercel | selon le plan | à documenter | hors base |
+
+**Constat au 25/09/2026 :** le workflow `data-lifecycle` échoue chaque nuit
+(runs du 24 et du 25/09) avec `DATABASE_URL est requis` : le secret
+`DATABASE_URL` n'est pas configuré dans l'environnement GitHub `production`
+(les sauvegardes, elles, obtiennent l'accès par le broker OIDC réservé au
+workflow `database-backup`). Aucune purge — même en dry-run — n'est donc
+exécutée en production. Tant que ce point n'est pas corrigé et que
+`DATA_LIFECYCLE_EXECUTE` n'est pas activé, les durées « prévues » ne doivent
+pas être présentées comme appliquées.
+
 ## Cartographie
 
 | Table | Données concernées | Sensibilité / rôle | Cycle de vie technique |
 |---|---|---|---|
 | `establishments` | nom, adresse, téléphone, réseaux, site, horaires | coordonnées du commerce | conservé ; fermeture par `status=suspended`, jamais de hard-delete |
-| `staff_users` | email, hash de mot de passe, rôle, activité, version de session | identité et credential dérivé | accès coupé par `active=false` et incrément de `token_version` |
+| `staff_users` | email, hash de mot de passe, rôle, activité, version de session, e-mail vérifié, consentement marketing Retiko | identité et credential dérivé | accès coupé par `active=false` et incrément de `token_version` |
 | `customers` | email, téléphone, prénom, consentement et dates | identité/contact client | anonymisé sur effacement ; UUID et dates conservés comme pivot pseudonyme |
 | `cards` | token/QR, code court, solde, activité, expiration | credential client et cache du ledger | désactivé et identifiants remplacés ; UUID/solde conservés pour le ledger |
 | `transactions` | mouvements, solde après mouvement, staff, métadonnées, idempotence | ledger métier append-only | jamais purgé automatiquement ; motifs libres retirés lors de l'effacement client |
@@ -18,6 +55,9 @@ activation en production.
 | `apple_wallet_registrations` | identifiant appareil et push token | identifiant technique d'appareil | conservé le temps de délivrer le pass Apple `voided`, puis supprimé par Apple ou après 30 jours pour un pass révoqué |
 | `card_recovery_tokens` | hash du lien, expiration, consommation | credential temporaire | invalidé immédiatement ; purge 30 jours après usage/expiration |
 | `password_reset_tokens` | hash du lien de reset staff, expiration, consommation | credential temporaire | usage unique ; purge 30 jours après usage/expiration |
+| `email_verification_tokens` | hash du lien de vérification e-mail, expiration, consommation | credential temporaire | usage unique, 24 h ; invalidé par une réinscription ; purge 30 jours après usage/expiration |
+| `legal_acceptances` | document (CGU/CGV), version, date, source | preuve contractuelle | conservée, sans cascade ; aucune purge |
+| `platform_admins` / `platform_admin_audit` | super-admins et journal de leurs actions | accès opérateur, preuve | journal append-only, aucune purge |
 | `product_events` | type, durée, IDs carte/staff, métadonnées bornées | télémétrie pseudonymisée | lien carte retiré à l'effacement ; proposition de purge à 180 jours |
 | `audit_logs` | acteur, action, entité, métadonnées | preuve technique et sécurité | pseudonymisé ; proposition de purge à 730 jours, sans toucher au ledger |
 | `campaign_recipients` | lien campagne/client, état de livraison | historique marketing | supprimé avec l'effacement client |
@@ -86,6 +126,7 @@ au maximum 5 000 lignes par table et par exécution, avec verrou consultatif :
 - `audit_logs` : 730 jours ;
 - recovery tokens carte utilisés/expirés : 30 jours ;
 - tokens de réinitialisation staff utilisés/expirés : 30 jours ;
+- tokens de vérification e-mail utilisés/expirés : 30 jours ;
 - inscriptions Apple de passes révoqués : 30 jours ;
 - rate limits : 2 jours.
 
@@ -93,7 +134,8 @@ Aucune transaction, carte ledger, client actif, staff, établissement,
 configuration de programme ou donnée de facturation n'est supprimé par ce
 script. Le workflow `.github/workflows/data-lifecycle.yml` exécute chaque jour
 un dry-run sur l'environnement GitHub `production`, à condition que son secret
-`DATABASE_URL` soit configuré. La suppression planifiée ne s'exécute que si la
+`DATABASE_URL` soit configuré — ce qui n'est pas le cas au 25/09/2026 (voir
+« État réel des durées »). La suppression planifiée ne s'exécute que si la
 variable GitHub d'environnement `DATA_LIFECYCLE_EXECUTE=true` est explicitement
 activée ; un déclenchement manuel peut également demander l'exécution. Les
 durées restent à valider juridiquement avant activation automatique et doivent
