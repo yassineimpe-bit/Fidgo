@@ -9,7 +9,7 @@ test("apparence de la carte : couleur secondaire, dégradé, aperçu et carte cl
   const badColor = await page.request.patch("/api/restaurant", { headers: { origin }, data: { secondaryColor: "red" } });
   expect(badColor.status()).toBe(400);
   expect(await badColor.json()).toEqual({ error: "INVALID_FIELD", field: "secondaryColor" });
-  const badBackground = await page.request.patch("/api/restaurant", { headers: { origin }, data: { cardBackground: "image" } });
+  const badBackground = await page.request.patch("/api/restaurant", { headers: { origin }, data: { cardBackground: "video" } });
   expect(await badBackground.json()).toEqual({ error: "INVALID_FIELD", field: "cardBackground" });
   // Pas de dégradé sans couleur secondaire : couleur unie conservée.
   expect((await page.request.patch("/api/restaurant", { headers: { origin }, data: { cardBackground: "gradient" } })).ok()).toBeTruthy();

@@ -173,6 +173,14 @@ try {
     join transactions t on t.id=n.transaction_id
     where c.establishment_id<>n.establishment_id or t.establishment_id<>n.establishment_id or t.card_id<>n.card_id
   ` : [{ cross_tenant_reward_notifications: 0 }];
+  const [cardImageTable] = await sql`select to_regclass('public.establishment_card_images') is not null as present`;
+  const [cardImageData] = cardImageTable.present ? await sql`
+    select
+      (select count(*)::int from establishments e join establishment_card_images i on i.id=e.card_image_id
+        where i.establishment_id<>e.id) as cross_tenant_card_images,
+      (select count(*)::int from establishment_card_images i join establishments e on e.id=i.establishment_id
+        where e.card_image_id is distinct from i.id) as orphan_card_images
+  ` : [{ cross_tenant_card_images: 0, orphan_card_images: 0 }];
   const [billingData] = await sql`
     select
       (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
@@ -237,6 +245,8 @@ try {
   if (Number(campaignData.erased_customer_recipients) > 0) failures.push(`${campaignData.erased_customer_recipients} destinataire(s) de campagne effacé(s) encore liés`);
   if (Number(campaignData.tenant_trigger) < 1) failures.push("garde tenant des destinataires de campagne manquante");
   if (Number(rewardData.cross_tenant_reward_notifications) > 0) failures.push(`${rewardData.cross_tenant_reward_notifications} notification(s) de récompense incohérente(s) (tenant, carte ou transaction)`);
+  if (Number(cardImageData.cross_tenant_card_images) > 0) failures.push(`${cardImageData.cross_tenant_card_images} commerce(s) référençant le visuel d'un autre tenant`);
+  if (Number(cardImageData.orphan_card_images) > 0) failures.push(`${cardImageData.orphan_card_images} visuel(s) de carte non référencé(s)`);
   if (Number(legalData.incoherent_marketing_consents) > 0) failures.push(`${legalData.incoherent_marketing_consents} consentement(s) marketing commerçant incohérent(s)`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
@@ -265,6 +275,7 @@ try {
   console.log(`Consentements marketing commerçant incohérents : ${legalData.incoherent_marketing_consents}`);
   console.log(`Campagnes e-mail incohérentes : ${campaignSchema.present ? `${campaignData.cross_tenant_recipients} cross-tenant, ${campaignData.recipient_count_mismatches} compteur(s), ${campaignData.erased_customer_recipients} client(s) effacé(s)` : "colonnes absentes (migration 027)"}`);
   console.log(`Notifications de récompense incohérentes : ${rewardTable.present ? rewardData.cross_tenant_reward_notifications : "table absente (migration 028)"}`);
+  console.log(`Visuels de carte incohérents : ${cardImageTable.present ? `${cardImageData.cross_tenant_card_images} cross-tenant, ${cardImageData.orphan_card_images} orphelin(s)` : "table absente (migration 031)"}`);
   console.log(`Logos importés incohérents : ${logoTable.present ? `${logoData.broken_logo_refs} référence(s) cassée(s), ${logoData.orphan_logos} orphelin(s)` : "table absente (migration 024)"}`);
 
   if (failures.length > 0) {

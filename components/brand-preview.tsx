@@ -8,6 +8,7 @@ export type BrandPreviewProps = {
   primaryColor: string;
   secondaryColor?: string | null;
   cardBackground?: string | null;
+  cardImageUrl?: string | null;
   rewardThreshold: number;
   rewardLabel: string;
   unit: string;
@@ -19,8 +20,8 @@ export type BrandPreviewProps = {
  * l'affiche imprimable : mêmes règles de couleur/contraste, pour que ce que
  * le commerçant voit dans ses réglages ressemble à ce qu'il imprimera.
  */
-export function BrandPreview({ name, logoUrl, primaryColor, secondaryColor, cardBackground, rewardThreshold, rewardLabel, unit, qr }: BrandPreviewProps) {
-  const design = cardDesign({ primaryColor, secondaryColor, cardBackground });
+export function BrandPreview({ name, logoUrl, primaryColor, secondaryColor, cardBackground, cardImageUrl, rewardThreshold, rewardLabel, unit, qr }: BrandPreviewProps) {
+  const design = cardDesign({ primaryColor, secondaryColor, cardBackground, cardImageUrl });
 
   return <div
     className="brand-preview"

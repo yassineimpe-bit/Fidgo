@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import QRCode from "qrcode";
 import { cardDesign } from "@/lib/card-design";
+import { cardImagePath } from "@/lib/card-image-path";
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
@@ -16,7 +17,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   const token = parseCardToken(input);
   if (!token) notFound();
   const [card] = await sql`
-    select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,to_jsonb(e)->>'secondary_color' as secondary_color,to_jsonb(e)->>'card_background' as card_background,
+    select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,to_jsonb(e)->>'secondary_color' as secondary_color,to_jsonb(e)->>'card_background' as card_background,to_jsonb(e)->>'card_image_id' as card_image_id,
       p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name,u.marketing_consent,(u.email is not null) as has_email,
       to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from cards c
@@ -36,7 +37,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   // Un commerçant peut choisir une couleur claire (blanc, jaune pâle...) :
   // .loyalty-card impose color:white par défaut, ce qui rendrait alors le
   // texte illisible sur son propre fond. On recalcule systématiquement.
-  const design = cardDesign({ primaryColor: card.primary_color, secondaryColor: card.secondary_color, cardBackground: card.card_background });
+  const design = cardDesign({ primaryColor: card.primary_color, secondaryColor: card.secondary_color, cardBackground: card.card_background, cardImageUrl: card.card_image_id ? cardImagePath(String(card.card_image_id)) : null });
 
   return <main className="client-card-page"><section className="client-card-shell">
     <div className="loyalty-card" style={{background:design.background,color:design.textColor,["--card-accent" as string]:design.accentColor}}>

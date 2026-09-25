@@ -33,7 +33,8 @@ async function handleGet() {
   if (!session) return Response.json({ error: "UNAUTHORIZED" }, { status: 401 });
   const [restaurant] = await sql`
     select id, slug, name, logo_url, primary_color, address, phone, instagram, website, status, created_at, updated_at,
-      to_jsonb(e)->>'secondary_color' as secondary_color, coalesce(to_jsonb(e)->>'card_background', 'solid') as card_background
+      to_jsonb(e)->>'secondary_color' as secondary_color, coalesce(to_jsonb(e)->>'card_background', 'solid') as card_background,
+      to_jsonb(e)->>'card_image_id' as card_image_id
     from establishments e where id = ${session.establishmentId}
   `;
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });
@@ -91,7 +92,7 @@ async function handlePatch(req: Request) {
   const [designColumns] = designSent
     ? await sql`select 1 from information_schema.columns where table_schema='public' and table_name='establishments' and column_name='card_background'`
     : [];
-  if (designSent && !designColumns && (secondaryColor || values.cardBackground === "gradient")) {
+  if (designSent && !designColumns && (secondaryColor || values.cardBackground === "gradient" || values.cardBackground === "image")) {
     return Response.json({ error: "CARD_DESIGN_UNAVAILABLE" }, { status: 503 });
   }
   const address = typeof values.address === "string" ? values.address.trim() || null : null;
@@ -113,11 +114,11 @@ async function handlePatch(req: Request) {
       returning *
     `;
     if (designSent && designColumns) {
-      const [current] = await tx`select secondary_color, card_background from establishments where id=${session.establishmentId}`;
+      const [current] = await tx`select secondary_color, card_background, to_jsonb(e)->>'card_image_id' as card_image_id from establishments e where id=${session.establishmentId}`;
       const nextSecondary = values.secondaryColor !== undefined ? secondaryColor : current.secondary_color;
       const nextBackground = values.cardBackground !== undefined ? String(values.cardBackground) : String(current.card_background);
-      // Pas de dégradé sans couleur secondaire : retour à la couleur unie.
-      const background = nextBackground === "gradient" && !nextSecondary ? "solid" : nextBackground;
+      // Pas de dégradé sans couleur secondaire, ni de fond image sans visuel : couleur unie.
+      const background = (nextBackground === "gradient" && !nextSecondary) || (nextBackground === "image" && !current.card_image_id) ? "solid" : nextBackground;
       const [designed] = await tx`
         update establishments set secondary_color=${nextSecondary}, card_background=${background}
         where id=${session.establishmentId}

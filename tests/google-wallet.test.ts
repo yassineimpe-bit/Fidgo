@@ -88,6 +88,14 @@ describe("Google Wallet loyalty object", () => {
     expect(body.loyaltyPoints).toEqual({ label: "Cafés", balance: { string: "7/10" } });
   });
 
+  it("shows the merchant visual as hero image only when one is uploaded", async () => {
+    const { objectBody } = await import("../lib/google-wallet");
+    expect(objectBody(fixtureCard).heroImage).toBeUndefined();
+    const id = "123e4567-e89b-42d3-a456-426614174000";
+    const body = objectBody({ ...fixtureCard, cardImageId: id });
+    expect(body.heroImage?.sourceUri.uri).toMatch(new RegExp(`^https?://[^/]+/api/card-images/${id}$`));
+  });
+
   it("renders a numeric points balance", async () => {
     const { objectBody } = await import("../lib/google-wallet");
     const body = objectBody({ ...fixtureCard, mode: "POINTS", units: { singular: "point", plural: "points" }, balance: 450, rewardThreshold: 500 });
