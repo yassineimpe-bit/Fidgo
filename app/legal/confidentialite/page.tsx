@@ -96,10 +96,12 @@ export default function PrivacyPage() {
       un consentement donné.</p>
     <p><strong>Client d’un programme de fidélité :</strong> adressez votre demande au commerce. Il dispose
       d’un export complet de votre dossier et d’un effacement qui supprime vos coordonnées et désactive votre
-      carte (l’historique des opérations est conservé sans votre identité). La modification de vos
-      coordonnées et le retrait de votre choix marketing se font aujourd’hui sur demande, traitée par Retiko
-      pour le compte du commerce.</p>
-    <p><strong>Commerçant ou membre d’une équipe :</strong> écrivez à {privacyContact}.</p>
+      carte (l’historique des opérations est conservé sans votre identité). Il peut aussi corriger vos
+      coordonnées et retirer votre accord pour recevoir ses offres ; il ne peut pas donner cet accord à votre
+      place.</p>
+    <p><strong>Commerçant ou membre d’une équipe :</strong> vous pouvez modifier à tout moment votre choix de
+      recevoir les nouveautés Retiko depuis la page Sécurité de votre espace ; pour toute autre demande,
+      écrivez à {privacyContact}.</p>
     <p>Une réponse est apportée dans un délai d’un mois, prolongeable dans les cas prévus par la
       réglementation. Vous pouvez aussi introduire une réclamation auprès de la CNIL (cnil.fr).</p>
 

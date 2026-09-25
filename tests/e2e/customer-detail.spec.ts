@@ -15,7 +15,7 @@ test("fiche client : profil, solde et historique sont accessibles depuis la list
   await page.getByRole("link", { name: "Maya" }).click();
   await expect(page).toHaveURL(/\/dashboard\/clients\//);
   await expect(page.getByRole("heading", { name: "Maya" })).toBeVisible();
-  await expect(page.getByText(email)).toBeVisible();
+  await expect(page.getByLabel("E-mail")).toHaveValue(email);
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "Crédit", exact: true })).toBeVisible();
   await expect(page.getByText("+1", { exact: true })).toBeVisible();
