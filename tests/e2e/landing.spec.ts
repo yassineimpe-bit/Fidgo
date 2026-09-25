@@ -43,7 +43,7 @@ test("site commercial : SEO de base et aucune page privée indexable", async ({ 
 
   const robots = await (await request.get("/robots.txt")).text();
   expect(robots).toContain("Allow: /");
-  for (const privatePath of ["/api/", "/c/", "/dashboard", "/admin", "/recover", "/reset-password"]) {
+  for (const privatePath of ["/api/", "/c/", "/dashboard", "/admin", "/recover", "/reset-password", "/unsubscribe"]) {
     expect(robots).toContain(`Disallow: ${privatePath}`);
   }
   expect(robots).toMatch(/Sitemap: .*\/sitemap\.xml/);
