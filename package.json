@@ -24,7 +24,7 @@
     "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify"
   },
   "dependencies": {
-    "bcryptjs": "2.4.3",
+    "bcryptjs": "3.0.3",
     "google-auth-library": "11.0.2",
     "jose": "5.9.6",
     "next": "15.5.24",
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "3.2.0",
     "@playwright/test": "^1.63.0",
-    "@types/bcryptjs": "2.4.6",
+    "@types/bcryptjs": "3.0.0",
     "@types/node": "^22.12.0",
     "@types/qrcode": "1.5.5",
     "@types/react": "19.0.6",
