@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
+import { CustomerContact } from "@/components/customer-contact";
 import { CustomerNote } from "@/components/customer-note";
 import { getSession } from "@/lib/auth";
 import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
-import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
+import { canAccessBackoffice, canManageCustomers, canManageProgram } from "@/lib/loyalty";
 import { transactionTypeLabel } from "@/lib/transaction-history";
 
 export const dynamic = "force-dynamic";
@@ -114,18 +115,16 @@ export default async function CustomerDetailPage({
       <CustomerNote customerId={id} initialNote={String(customer.internal_note || "")} canEdit={canManageProgram(session.role)} />
 
       <section className="grid grid-2" style={{marginTop:18}}>
-        <div className="card">
-          <h3>Profil</h3>
-          <dl>
-            <dt>Email</dt><dd>{customer.email || "Non fourni"}</dd>
-            <dt>Téléphone</dt><dd>{customer.phone || "Non fourni"}</dd>
-            <dt>Consentement marketing</dt><dd>{customer.marketing_consent ? "Actif" : "Non consenti"}</dd>
-            <dt>Inscrit le</dt><dd>{new Date(String(customer.created_at)).toLocaleString("fr-FR")}</dd>
-          </dl>
-        </div>
+        <CustomerContact customerId={id} canEdit={canManageCustomers(session.role)} initial={{
+          firstName: String(customer.first_name || ""),
+          email: String(customer.email || ""),
+          phone: String(customer.phone || ""),
+          marketingConsent: customer.marketing_consent === true,
+        }} />
         <div className="card">
           <h3>Carte</h3>
           <dl>
+            <dt>Client inscrit le</dt><dd>{new Date(String(customer.created_at)).toLocaleString("fr-FR")}</dd>
             <dt>Code court</dt><dd>{customer.short_code || "—"}</dd>
             <dt>État</dt><dd>{customer.active ? "Active" : "Inactive"}</dd>
             <dt>Créée le</dt><dd>{customer.card_created_at ? new Date(String(customer.card_created_at)).toLocaleString("fr-FR") : "—"}</dd>

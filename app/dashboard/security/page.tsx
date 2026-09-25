@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { MarketingPreference } from "@/components/marketing-preference";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
@@ -10,6 +11,10 @@ export default async function SecurityPage() {
 
   const [restaurant] = await sql`
     select name from establishments where id=${session.establishmentId} limit 1
+  `;
+  const [staff] = await sql`
+    select marketing_consent from staff_users
+    where id=${session.staffId} and establishment_id=${session.establishmentId} limit 1
   `;
 
   return <>
@@ -26,6 +31,10 @@ export default async function SecurityPage() {
         <h3>Changer le mot de passe</h3>
         <p className="muted">La modification révoque toutes les sessions existantes de ce compte.</p>
         <ChangePasswordForm/>
+      </section>
+      <section className="card" style={{maxWidth:640,marginTop:18}}>
+        <h3>Communications Retiko</h3>
+        <MarketingPreference initialConsent={staff?.marketing_consent === true}/>
       </section>
     </main>
   </>;

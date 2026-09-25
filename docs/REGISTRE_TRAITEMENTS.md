@@ -45,7 +45,7 @@ Retiko tient deux registres :
 | Données | `legal_acceptances` (document, version, date, source `signup`, commerce, compte) ; `staff_users.marketing_consent` et sa date |
 | Base légale | Preuve : exécution du contrat / intérêt légitime — *à valider*. Prospection : consentement (case non pré-cochée, facultative) |
 | Durée | Preuve : **à décider** (durée du contrat + prescription). Consentement : jusqu'à retrait |
-| Remarque | Aucun envoi marketing n'est implémenté à ce jour ; le retrait du consentement se fait sur simple demande |
+| Remarque | Aucun envoi marketing n'est implémenté à ce jour ; chaque membre d'équipe modifie ou retire son choix dans la page *Sécurité* |
 
 ### A3. Sécurité, traçabilité et prévention des abus
 
@@ -107,7 +107,7 @@ Retiko tient deux registres :
 | Données exclues | Aucune donnée sensible ; aucune donnée de contact dans le QR ; tokens absents des URL de suivi et des journaux |
 | Information des personnes | Mention sur la page d'inscription avec lien vers la politique de confidentialité ; le commerce reste tenu d'informer ses clients |
 | Durée | Jusqu'à l'effacement demandé au commerce ; clients **inactifs : aucune durée — à décider** ; ledger conservé pseudonymisé après effacement — **à décider** |
-| Droits | Export JSON et effacement dans le dashboard (OWNER/MANAGER) ; rectification et retrait du consentement marketing : **pas d'outil**, traitement manuel (voir `RGPD_PROCEDURES.md`) |
+| Droits | Export JSON, rectification des coordonnées, retrait du consentement marketing et effacement dans le dashboard (OWNER/MANAGER) ; limitation : traitement manuel (voir `RGPD_PROCEDURES.md`) |
 
 ---
 
@@ -151,5 +151,5 @@ Ces mesures sont vérifiées dans le code et la CI ; leur effectivité en produc
 | E4 | Transferts hors UE (Vercel, GitHub, Resend, Stripe, Google, Apple) : garanties non documentées | Documentation contractuelle |
 | E5 | Identité juridique, contact données personnelles, DPO | À compléter |
 | E6 | Rétention des journaux Vercel non documentée | À documenter |
-| E7 | Pas d'outil de rectification des coordonnées client ni de retrait isolé du consentement marketing client | Procédure manuelle, puis outil si le volume le justifie |
+| E7 | ~~Pas d'outil de rectification des coordonnées client ni de retrait isolé du consentement marketing client~~ | **Résolu** : outillé sur la fiche client ; reste la limitation (manuelle) et la modification de l'e-mail de connexion commerçant |
 | E8 | Durée de conservation des preuves d'acceptation, de `platform_admin_audit` et des données de facturation | À décider |
