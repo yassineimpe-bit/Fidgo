@@ -340,7 +340,8 @@ test.describe("pages mot de passe oublié / réinitialisation", () => {
     await randomizeClientIp(page);
     await page.goto("/login");
     await page.getByRole("link", { name: "Mot de passe oublié ?" }).click();
-    await expect(page).toHaveURL(/\/forgot-password$/);
+    // Première compilation de la page en dev : la navigation peut dépasser 5 s.
+    await expect(page).toHaveURL(/\/forgot-password$/, { timeout: 15_000 });
 
     await page.getByLabel("Email").fill(`${unique("ui-forgot")}@example.com`);
     await page.getByRole("button", { name: "Envoyer le lien de réinitialisation" }).click();
