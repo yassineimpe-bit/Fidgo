@@ -186,18 +186,20 @@ test("scanner : un QR lu par la caméra compte pour le gate, la saisie manuelle 
     });
   }, qrDataUrl);
 
+  // Le serveur de dev compile /api/credit et /api/lookup à leur premier appel
+  // (plusieurs secondes sur une CI chargée) : ces attentes ont donc plus de marge.
   await page.goto("/s");
   await expect(page.getByText("0 / 10 tampons")).toBeVisible({ timeout: 30_000 });
   await page.evaluate(() => { (window as typeof window & { __showQr?: boolean }).__showQr = false; });
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText("+1 validé")).toBeVisible();
+  await expect(page.getByText("+1 validé")).toBeVisible({ timeout: 15_000 });
 
   await expect(page.getByPlaceholder("Code court ou email")).toBeVisible();
   await page.getByPlaceholder("Code court ou email").fill(customerEmail);
   await page.getByRole("button", { name: "Chercher" }).click();
-  await expect(page.getByText("1 / 10 tampons")).toBeVisible();
+  await expect(page.getByText("1 / 10 tampons")).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText("+1 validé")).toBeVisible();
+  await expect(page.getByText("+1 validé")).toBeVisible({ timeout: 15_000 });
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("loyalty_scan_metrics") || "[]"));
   expect(stored.map((metric: { phase: string; source: string; ok: boolean }) => `${metric.phase}:${metric.source}:${metric.ok}`)).toEqual([
