@@ -72,7 +72,10 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
       expect(program.points_rule).toBe("PER_EURO");
       expect(Number(program.points_per_euro)).toBe(1);
     }
-    await page.getByRole("button", { name: "Terminer et ouvrir mon dashboard" }).click();
+    await page.getByRole("button", { name: "Terminer la configuration" }).click();
+    await expect(page).toHaveURL(/\/onboarding\/ready$/);
+    await expect(page.getByRole("heading", { name: "Tout est prêt" })).toBeVisible();
+    await page.getByRole("link", { name: "Aller au dashboard" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole("link", { name: "Reprendre la configuration" })).toHaveCount(0);
     await page.goto("/onboarding");
