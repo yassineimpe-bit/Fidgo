@@ -17,15 +17,17 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
 
   await openCardInScanner(page, shortCode);
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText("+1 validé")).toBeVisible();
+  // Premier crédit : /api/credit peut être compilé à la demande en CI.
+  await expect(page.getByText("+1 validé")).toBeVisible({ timeout: 15_000 });
   await expect(cardPage.getByText("1 / 10")).toBeVisible({ timeout: 8_000 });
 
   await page.waitForTimeout(1_400);
   await openCardInScanner(page, shortCode);
+  await expect(page.getByText("Crédit récent détecté")).toBeVisible();
   await page.getByRole("button", { name: "+1 tampon" }).click();
-  await expect(page.getByText(/Passage déjà enregistré/)).toBeVisible();
-  await page.getByLabel("Motif obligatoire pour créditer quand même").fill("Second achat distinct");
-  await page.getByRole("button", { name: "Créditer quand même" }).click();
+  await expect(page.getByText("Crédit récent détecté")).toBeVisible();
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Nouvel achat : autoriser un nouveau crédit" }).click();
   await expect(page.getByText("+1 validé")).toBeVisible();
   await expect(cardPage.getByText("2 / 10")).toBeVisible({ timeout: 8_000 });
 

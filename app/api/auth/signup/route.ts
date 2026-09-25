@@ -12,6 +12,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { emailDeliveryConfigured, sendEmailVerificationEmail } from "@/lib/email";
 import { createEmailVerificationToken, emailVerificationTestMode } from "@/lib/email-verification";
 import { ACCEPTED_DOCUMENTS, LEGAL_VERSION, hasAcceptedCurrentTerms, marketingOptIn } from "@/lib/legal";
+import { DEFAULT_COOLDOWN_SECONDS } from "@/lib/cooldown";
 
 // Preuve contractuelle : document, version affichée, date et contexte. Une
 // réinscription sur une adresse encore non vérifiée ajoute sa propre preuve
@@ -166,8 +167,8 @@ export async function POST(request: Request) {
         values(${staff.id},${verification.tokenHash},${verification.expiresAt})
       `;
       await tx`
-        insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label)
-        values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte')
+        insert into loyalty_programs(id,establishment_id,program_name,mode,stamps_per_visit,reward_threshold,reward_label,cooldown_seconds)
+        values(${id()},${establishment.id},'Programme fidélité','STAMPS',1,10,'1 récompense offerte',${DEFAULT_COOLDOWN_SECONDS})
       `;
       await createPilotSubscription(tx, String(establishment.id));
       return { establishment, staff };

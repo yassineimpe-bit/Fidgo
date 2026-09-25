@@ -13,6 +13,7 @@ import {
 } from "@/lib/scanner-camera";
 import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
+import { NEW_PURCHASE_REASON, formatRemaining } from "@/lib/cooldown";
 
 type CardView = {
   token: string;
@@ -28,6 +29,8 @@ type CardView = {
   pointsPerEuro: number;
   rewardAvailable: boolean;
   canOverrideCooldown: boolean;
+  cooldownSeconds?: number;
+  cooldownRemainingSeconds?: number;
 };
 
 type Metric = {
@@ -112,11 +115,26 @@ export function ScannerClient() {
   const [cameraIssue, setCameraIssue] = useState<CameraIssue | null>(null);
   const [manualQuery, setManualQuery] = useState("");
   const [online, setOnline] = useState(true);
-  const [cooldownRemaining, setCooldownRemaining] = useState<number | null>(null);
-  const [overrideReason, setOverrideReason] = useState("");
+  // Fin du délai anti double-crédit, calculée depuis la durée renvoyée par le
+  // serveur (jamais depuis l'horloge du téléphone comparée à last_earn_at).
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
   const [restartTick, setRestartTick] = useState(0);
   const [rewardJustReached, setRewardJustReached] = useState(false);
   const permissionError = cameraIssue !== null;
+
+  useEffect(() => {
+    if (!cooldownEndsAt) return;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setClock(now);
+      if (now >= cooldownEndsAt) {
+        setCooldownEndsAt(null);
+        setError((current) => current?.code === "COOLDOWN" ? null : current);
+      }
+    }, 1_000);
+    return () => window.clearInterval(timer);
+  }, [cooldownEndsAt]);
 
   async function loadCardFromToken(value: string, detectedAt = performance.now(), source: "qr" | "manual" = "qr") {
     if (!navigator.onLine) throw new Error("OFFLINE");
@@ -138,8 +156,11 @@ export function ScannerClient() {
       serverMs = Number(data.serverMs || 0);
       if (!response.ok) throw new Error(data.error || "SCAN_ERROR");
       setCard(data);
-      setCooldownRemaining(null);
-      setOverrideReason("");
+      // Setters seuls (stables) : cette fonction est appelée depuis l'effet caméra.
+      const cooldownSeconds = Number(data.cooldownRemainingSeconds) || 0;
+      const now = Date.now();
+      setClock(now);
+      setCooldownEndsAt(cooldownSeconds > 0 ? now + cooldownSeconds * 1000 : null);
       setStatus("Carte prête");
       detectedAtRef.current = detectedAt;
       const totalMs = Math.round(performance.now() - detectedAt);
@@ -272,8 +293,7 @@ export function ScannerClient() {
             setCard(null);
             setPurchase("");
             setManualQuery("");
-            setCooldownRemaining(null);
-            setOverrideReason("");
+            setCooldownEndsAt(null);
             actionKeyRef.current = null;
             busyRef.current = false;
             setError(null);
@@ -425,6 +445,19 @@ export function ScannerClient() {
     }
   }
 
+  function startCooldown(seconds: number) {
+    const now = Date.now();
+    setClock(now);
+    setCooldownEndsAt(seconds > 0 ? now + seconds * 1000 : null);
+  }
+
+  function confirmNewPurchase() {
+    // Confirmation explicite : le dépassement du délai reste une décision
+    // humaine, auditée avec un motif système sans donnée personnelle.
+    if (!window.confirm("Confirmer qu’il s’agit d’un nouvel achat effectué par le client ?")) return;
+    void perform("credit", NEW_PURCHASE_REASON);
+  }
+
   async function perform(kind: "credit" | "redeem", reason?: string) {
     if (!card) return;
     if (!navigator.onLine) {
@@ -467,7 +500,7 @@ export function ScannerClient() {
       const actionMs = Math.round(performance.now() - started);
       serverMs = Number(data.serverMs || 0);
       if (!response.ok) {
-        if (data.error === "COOLDOWN") setCooldownRemaining(Number(data.remainingSeconds) || null);
+        if (data.error === "COOLDOWN") startCooldown(Number(data.remainingSeconds) || 0);
         throw new Error(data.error || "ACTION_ERROR");
       }
 
@@ -476,8 +509,7 @@ export function ScannerClient() {
       const rewardReached = kind === "credit" && !card.rewardAvailable && newBalance >= card.threshold;
       setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold, lastEarnAt: kind === "credit" ? (data.lastEarnAt ?? new Date().toISOString()) : card.lastEarnAt });
       setRewardJustReached(rewardReached);
-      setCooldownRemaining(null);
-      setOverrideReason("");
+      setCooldownEndsAt(null);
       feedback(kind === "redeem" || rewardReached ? "reward" : "success");
       setStatus(kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`);
       saveMetric({ phase: "action", action: kind, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
@@ -499,8 +531,7 @@ export function ScannerClient() {
     setCard(null);
     setPurchase("");
     setManualQuery("");
-    setCooldownRemaining(null);
-    setOverrideReason("");
+    setCooldownEndsAt(null);
     setRewardJustReached(false);
     actionKeyRef.current = null;
     busyRef.current = false;
@@ -513,7 +544,8 @@ export function ScannerClient() {
     }
   }
 
-  const retryingCredit = Boolean(error?.retryable && actionKeyRef.current?.kind === "credit");
+  const cooldownLeft = cooldownEndsAt ? Math.max(0, Math.ceil((cooldownEndsAt - clock) / 1000)) : 0;
+  const retryingCredit = Boolean(error?.retryable && error.code !== "COOLDOWN" && actionKeyRef.current?.kind === "credit");
   const retryingRedeem = Boolean(error?.retryable && actionKeyRef.current?.kind === "redeem");
   const normalCreditLabel = card?.mode === "STAMPS"
     ? `+${card.defaultEarn} tampon${card.defaultEarn > 1 ? "s" : ""}`
@@ -541,16 +573,15 @@ export function ScannerClient() {
           <label>Montant achat (€)</label>
           <input className="input" inputMode="decimal" value={purchase} onChange={(event) => setPurchase(event.target.value)} placeholder="12,50" />
         </div>}
-        {error && <div className="scan-error" role="alert">
-          {error.code === "COOLDOWN" && cooldownRemaining
-            ? `Passage déjà enregistré il y a moins de deux minutes. Réessaie dans ${cooldownRemaining} s.`
-            : error.message}
+        {cooldownLeft > 0 ? <div className="scan-error" role="alert">
+          <strong>Crédit récent détecté</strong>
+          <div>Temps restant : {formatRemaining(cooldownLeft)}</div>
+          {card.canOverrideCooldown
+            ? <button className="btn btn-danger" style={{marginTop:8,width:"100%"}} disabled={!online || Boolean(action)} onClick={confirmNewPurchase}>Nouvel achat : autoriser un nouveau crédit</button>
+            : <div style={{marginTop:6,fontSize:13}}>Pour un nouvel achat pendant ce délai, appelle un responsable.</div>}
+        </div> : error && error.code !== "COOLDOWN" && <div className="scan-error" role="alert">
+          {error.message}
           {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
-        </div>}
-        {error?.code === "COOLDOWN" && card.canOverrideCooldown && <div className="field">
-          <label htmlFor="cooldown-override-reason">Motif obligatoire pour créditer quand même</label>
-          <input className="input" id="cooldown-override-reason" value={overrideReason} maxLength={240} onChange={(event) => setOverrideReason(event.target.value)} placeholder="Ex. second achat distinct" />
-          <button className="btn btn-danger" disabled={!overrideReason.trim() || Boolean(action)} onClick={() => perform("credit", overrideReason.trim())}>Créditer quand même</button>
         </div>}
         <div className="scan-actions">
           <button className="scan-main" disabled={!online || Boolean(action)} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>

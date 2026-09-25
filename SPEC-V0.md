@@ -309,26 +309,34 @@ interface
 audit
 ```
 
-Cooldown V0 par défaut :
+Cooldown par défaut des **nouveaux** programmes :
 
 ```text
-2 minutes
+10 minutes
 ```
 
-Si un second crédit est demandé :
+(2 minutes jusqu'au retour terrain du 25/09/2026 ; les programmes existants
+gardent leur valeur, aucune migration ne la réécrit). Le commerçant choisit
+librement : 2, 5, 10, 15 minutes ou une valeur personnalisée en secondes.
+
+Si la carte est encore dans le délai, le scanner l'affiche dès l'ouverture :
 
 ```text
-Passage déjà enregistré
-il y a 42 secondes.
+Crédit récent détecté
+Temps restant : 7 min 42 s
 ```
 
 Un `OWNER` ou `MANAGER` peut utiliser :
 
 ```text
-Créditer quand même
+Nouvel achat : autoriser un nouveau crédit
 ```
 
-avec motif obligatoire et audit.
+après la confirmation « Confirmer qu’il s’agit d’un nouvel achat effectué par
+le client ? ». Le crédit passe par le dépassement de cooldown existant
+(`expectedLastEarnAt`, refus d'un état périmé) et est audité (`CARD_ADJUSTED`)
+avec le motif système `NEW_PURCHASE_CONFIRMED`, sans donnée personnelle.
+Un `EMPLOYEE` voit le délai mais ne peut pas le dépasser.
 
 ---
 
