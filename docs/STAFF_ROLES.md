@@ -16,6 +16,7 @@ Retiko applique les permissions côté interface **et** côté serveur. Le menu 
 | Modifier le commerce | Oui | Oui | Non | Non |
 | Suspendre le commerce | Oui | Non | Non | Non |
 | Billing | Oui | Non | Non | Non |
+| Envoyer une campagne e-mail | Oui | Oui | Non | Non |
 
 ## Règles structurelles
 

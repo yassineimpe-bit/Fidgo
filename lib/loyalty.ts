@@ -11,7 +11,8 @@ export type StaffPermission =
   | "TRANSACTION_REVERSE"
   | "ESTABLISHMENT_WRITE"
   | "ESTABLISHMENT_SUSPEND"
-  | "BILLING_WRITE";
+  | "BILLING_WRITE"
+  | "CAMPAIGN_WRITE";
 export type LoyaltyProgramRules = { mode: LoyaltyMode; pointsRule: PointsRule; stampsPerVisit: number; pointsPerEuro: number; pointsPerPurchase: number; rewardThreshold: number; };
 
 export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly StaffPermission[]> = {
@@ -26,6 +27,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly StaffPermission[
     "ESTABLISHMENT_WRITE",
     "ESTABLISHMENT_SUSPEND",
     "BILLING_WRITE",
+    "CAMPAIGN_WRITE",
   ],
   MANAGER: [
     "BACKOFFICE_VIEW",
@@ -35,6 +37,7 @@ export const STAFF_ROLE_PERMISSIONS: Record<StaffRole, readonly StaffPermission[
     "STAFF_WRITE",
     "TRANSACTION_REVERSE",
     "ESTABLISHMENT_WRITE",
+    "CAMPAIGN_WRITE",
   ],
   EMPLOYEE: ["SCAN"],
   VIEWER: ["BACKOFFICE_VIEW"],
@@ -55,6 +58,7 @@ export function canManageStaff(role:StaffRole):boolean{return hasStaffPermission
 export function canManageManagers(role:StaffRole):boolean{return hasStaffPermission(role,"MANAGER_WRITE");}
 export function canManageEstablishment(role:StaffRole):boolean{return hasStaffPermission(role,"ESTABLISHMENT_WRITE");}
 export function canManageBilling(role:StaffRole):boolean{return hasStaffPermission(role,"BILLING_WRITE");}
+export function canSendCampaigns(role:StaffRole):boolean{return hasStaffPermission(role,"CAMPAIGN_WRITE");}
 export function canAccessBackoffice(role:StaffRole):boolean{return hasStaffPermission(role,"BACKOFFICE_VIEW");}
 export function canScan(role:StaffRole):boolean{return hasStaffPermission(role,"SCAN");}
 export function canReverse(role:StaffRole):boolean{return hasStaffPermission(role,"TRANSACTION_REVERSE");}

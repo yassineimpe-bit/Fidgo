@@ -101,7 +101,7 @@ Retiko tient deux registres :
 | Rubrique | Contenu |
 |---|---|
 | Responsables | Chaque commerce utilisateur |
-| Traitements | Inscription au programme (page `/j/[commerce]`), carte web / PWA, crédits, récompenses et corrections, récupération de carte par e-mail (si activée), cartes Apple / Google Wallet (si activées), notes internes, export et effacement |
+| Traitements | Inscription au programme (page `/j/[commerce]`), carte web / PWA, crédits, récompenses et corrections, récupération de carte par e-mail (si activée), cartes Apple / Google Wallet (si activées), notes internes, campagnes e-mail du commerce aux seuls clients ayant consenti (voir `CAMPAIGNS.md`), export et effacement |
 | Personnes | Clients finaux des commerces |
 | Données | E-mail (obligatoire), prénom et téléphone (facultatifs), consentement marketing du commerce et sa date, note interne (≤ 500 caractères, visible du commerce seul) ; carte (token opaque, code court, solde, dates) ; ledger ; état Wallet ; empreintes des liens de récupération ; événements scanner pseudonymisés |
 | Données exclues | Aucune donnée sensible ; aucune donnée de contact dans le QR ; tokens absents des URL de suivi et des journaux |
@@ -120,7 +120,7 @@ Retiko tient deux registres :
 | Vercel | Hébergement applicatif, journaux d'exécution, cron | Toutes les données en transit ; journaux filtrés | Actif | Calcul en région `fra1` (`vercel.json`) ; société américaine — **garanties à documenter** |
 | Neon | PostgreSQL | Toutes les données stockées | Actif | Région **à confirmer dans la console** |
 | GitHub (Actions) | Sauvegardes, restauration de contrôle, monitoring, CI | Dump complet **en clair sur le runner pendant le job** ; artefacts chiffrés 14 j | Actif | Société américaine — **garanties à documenter** |
-| Resend | E-mails transactionnels | E-mail du destinataire, nom du commerce, lien à usage unique | Actif (vérification e-mail obligatoire depuis #127) | Domaine d'envoi `retiko.fr`, région `eu-west-1` déclarée par l'exploitant — **garanties à documenter** |
+| Resend | E-mails transactionnels et campagnes des commerces | E-mail du destinataire, nom (et adresse, si renseignée) du commerce, lien à usage unique ou lien de désabonnement, contenu rédigé par le commerce pour les campagnes | Actif (vérification e-mail obligatoire depuis #127) | Domaine d'envoi `retiko.fr`, région `eu-west-1` déclarée par l'exploitant — **garanties à documenter** |
 | Stripe | Paiement des abonnements | E-mail et adresse de facturation, identifiants Stripe | Si activé (désactivé en production) | **À documenter** |
 | Google | Google Wallet | Prénom (20 car.), nom du commerce, solde, QR | Si activé | Société américaine — **garanties à documenter** |
 | Apple | Notifications APNs des passes | Push token de l'appareil, identifiant du pass | Si activé | Société américaine — **garanties à documenter** |

@@ -18,6 +18,7 @@ export const APP_NAV_LINKS: AppNavLink[] = [
   { href: "/dashboard/clients", label: "Clients", roles: BACKOFFICE },
   { href: "/dashboard/program", label: "Programme", roles: MANAGEMENT },
   { href: "/dashboard/transactions", label: "Transactions", roles: BACKOFFICE },
+  { href: "/dashboard/campaigns", label: "Campagnes", roles: BACKOFFICE },
   { href: "/dashboard/employees", label: "Équipe", roles: MANAGEMENT },
   { href: "/dashboard/settings", label: "Commerce", roles: MANAGEMENT },
   { href: "/dashboard/security", label: "Sécurité", roles: ALL },
