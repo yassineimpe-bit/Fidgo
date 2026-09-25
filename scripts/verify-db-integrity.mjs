@@ -128,6 +128,17 @@ try {
       (select count(*)::int from legal_acceptances a join staff_users s on s.id=a.staff_user_id where s.establishment_id<>a.establishment_id) as cross_tenant_acceptances,
       (select count(*)::int from staff_users where marketing_consent <> (marketing_consent_at is not null)) as incoherent_marketing_consents
   ` : [{ cross_tenant_acceptances: 0, incoherent_marketing_consents: 0 }];
+  // Migration 024 : un logo importé référencé doit exister et appartenir au
+  // même commerce ; aucun fichier ne doit rester sans commerce qui l'affiche.
+  const [logoTable] = await sql`select to_regclass('public.establishment_logos') is not null as present`;
+  const [logoData] = logoTable.present ? await sql`
+    select
+      (select count(*)::int from establishments e
+        where e.logo_url like '/api/logos/%'
+          and not exists (select 1 from establishment_logos l where l.id::text=substring(e.logo_url from 12) and l.establishment_id=e.id)) as broken_logo_refs,
+      (select count(*)::int from establishment_logos l join establishments e on e.id=l.establishment_id
+        where e.logo_url is distinct from '/api/logos/' || l.id::text) as orphan_logos
+  ` : [{ broken_logo_refs: 0, orphan_logos: 0 }];
   const [billingData] = await sql`
     select
       (select count(*)::int from establishments e left join subscriptions s on s.establishment_id=e.id where s.id is null) as establishments_without_subscription,
@@ -171,6 +182,8 @@ try {
   if (Number(billingData.duplicate_stripe_subscriptions) > 0) failures.push(`${billingData.duplicate_stripe_subscriptions} abonnement(s) Stripe dupliqué(s)`);
   if (missingTriggers.length > 0) failures.push(`gardes hard-delete manquantes: ${missingTriggers.join(", ")}`);
   if (Number(legalData.cross_tenant_acceptances) > 0) failures.push(`${legalData.cross_tenant_acceptances} acceptation(s) CGU/CGV cross-tenant`);
+  if (Number(logoData.broken_logo_refs) > 0) failures.push(`${logoData.broken_logo_refs} commerce(s) référençant un logo importé absent ou d'un autre tenant`);
+  if (Number(logoData.orphan_logos) > 0) failures.push(`${logoData.orphan_logos} logo(s) importé(s) non référencé(s)`);
   if (Number(legalData.incoherent_marketing_consents) > 0) failures.push(`${legalData.incoherent_marketing_consents} consentement(s) marketing commerçant incohérent(s)`);
 
   console.log(`Cartes vérifiées : ${summary.cards_total}`);
@@ -195,6 +208,7 @@ try {
   console.log(`Gardes hard-delete : ${expectedLifecycleTriggers.length - missingTriggers.length}/${expectedLifecycleTriggers.length}`);
   console.log(`Acceptations CGU/CGV cross-tenant : ${legalTable.present ? legalData.cross_tenant_acceptances : "table absente (migration 022)"}`);
   console.log(`Consentements marketing commerçant incohérents : ${legalData.incoherent_marketing_consents}`);
+  console.log(`Logos importés incohérents : ${logoTable.present ? `${logoData.broken_logo_refs} référence(s) cassée(s), ${logoData.orphan_logos} orphelin(s)` : "table absente (migration 024)"}`);
 
   if (failures.length > 0) {
     console.error(`Intégrité DB invalide : ${failures.join(" ; ")}`);

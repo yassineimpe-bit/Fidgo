@@ -3,6 +3,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isValidHexColor } from "@/lib/brand-color";
 import { BrandPreview } from "@/components/brand-preview";
+import { LogoUploader } from "@/components/logo-uploader";
 
 type Restaurant = { name: string; logo_url?: string | null; primary_color: string; address?: string | null; phone?: string | null; instagram?: string | null; website?: string | null };
 type PreviewData = { rewardThreshold: number; rewardLabel: string; unit: string; qr: string };
@@ -54,7 +55,8 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
           {!isValidHexColor(hexInput) && <small style={{color:"var(--danger, #d33)"}}>Format attendu : #RRGGBB</small>}
         </div>
       </div>
-      <div className="field"><label htmlFor="restaurant-logo">URL du logo</label><input className="input" id="restaurant-logo" type="url" maxLength={500} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png"/><small className="muted">PNG, JPEG ou WebP hébergé en HTTPS. Pas d’upload de fichier pour l’instant.</small></div>
+      <LogoUploader logoUrl={logoUrl} onChange={setLogoUrl}/>
+      <div className="field"><label htmlFor="restaurant-logo">URL du logo</label><input className="input" id="restaurant-logo" type="text" inputMode="url" maxLength={500} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png"/><small className="muted">Ou l’adresse HTTPS d’une image déjà en ligne. Un logo importé apparaît ici sous la forme /api/logos/….</small></div>
       <div className="field"><label htmlFor="restaurant-address">Adresse</label><input className="input" id="restaurant-address" name="address" maxLength={240} defaultValue={restaurant.address || ""}/></div>
       <div className="grid grid-2"><div className="field"><label htmlFor="restaurant-phone">Téléphone</label><input className="input" id="restaurant-phone" name="phone" maxLength={40} defaultValue={restaurant.phone || ""}/></div><div className="field"><label htmlFor="restaurant-instagram">Instagram</label><input className="input" id="restaurant-instagram" name="instagram" maxLength={120} defaultValue={restaurant.instagram || ""}/></div></div>
       <div className="field"><label htmlFor="restaurant-website">Site web</label><input className="input" id="restaurant-website" name="website" type="url" maxLength={500} defaultValue={restaurant.website || ""}/></div>

@@ -112,6 +112,7 @@ la chaîne `SUSPENDRE`. L'opération :
 - invalide recovery, password reset et push web ;
 - marque les Wallets révoqués et notifie Apple si configuré ;
 - conserve clients, transactions, audits et configuration.
+- cesse de servir le logo importé (`GET /api/logos/[id]` répond 404), sans supprimer le fichier, qui fait partie de la configuration conservée.
 
 Il n'existe volontairement aucune route de suppression définitive ou de
 réactivation automatique. Une reprise nécessite une intervention contrôlée et
