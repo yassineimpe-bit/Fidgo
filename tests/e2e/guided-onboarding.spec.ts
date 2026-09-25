@@ -95,7 +95,8 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     await expect(customer.locator(".loyalty-card")).toContainText(reward);
     await customer.close();
     if (mode === "POINTS") {
-      const employeeContext = await page.context().browser()!.newContext();
+      // IP logique dédiée : sans elle, cette connexion entame le quota login partagé de 127.0.0.1.
+      const employeeContext = await page.context().browser()!.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
       const employeePage = await employeeContext.newPage();
       await employeePage.goto(`${origin}/login`);
       await employeePage.getByLabel("Email").fill(employeeEmail);

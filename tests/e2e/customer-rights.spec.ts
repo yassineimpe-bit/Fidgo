@@ -53,8 +53,9 @@ test("droits client : rectification et retrait du consentement marketing, audit�
   await expect(page.getByLabel("E-mail")).toHaveValue(rectified);
   await expect(page.getByRole("heading", { name: "Ines" })).toBeVisible();
 
-  const exported = await (await page.request.get(`${url}/export`)).json();
-  expect(exported.customer).toMatchObject({ first_name: "Ines", email: rectified, phone: "06 12 34 56 78", marketing_consent: true });
+  // expect.poll relance la lecture si la réponse est libérée par une navigation en cours.
+  await expect.poll(async () => (await (await page.request.get(`${url}/export`)).json()).customer)
+    .toMatchObject({ first_name: "Ines", email: rectified, phone: "06 12 34 56 78", marketing_consent: true });
 
   // Le commerce ne peut pas consentir à la place du client, ni saisir n'importe quoi.
   expect((await page.request.patch(url, { headers: { origin }, data: { marketingConsent: true } })).status()).toBe(400);
@@ -111,7 +112,8 @@ test("droits client : unicité par commerce, rôles et isolation tenant", async 
   expect((await page.request.post("/api/employees", {
     headers: { origin }, data: { email: employeeEmail, password, role: "EMPLOYEE" },
   })).ok()).toBeTruthy();
-  const employeeContext = await page.context().browser()!.newContext();
+  // Une IP logique par connexion : le quota login (10/15 min par IP) est partagé par toute la suite.
+  const employeeContext = await page.context().browser()!.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
   const employeePage = await employeeContext.newPage();
   try {
     await employeePage.goto("/login");
