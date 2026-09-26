@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
+import { notifyRewardAvailable } from "../../lib/reward-notification";
 import { createMerchant, origin, testClientIp, unique } from "./helpers";
 
 async function enroll(page: Page, slug: string, firstName: string, marketingConsent: boolean) {
@@ -140,8 +141,6 @@ test("deux franchissements concurrents réservent une seule fenêtre de 24 h par
     process.env.EMAIL_FROM ||= "Fidgo <cards@fidgo.test>";
     process.env.EMAIL_REPLY_TO ||= "support@fidgo.test";
     process.env.CAMPAIGN_EMAIL_TEST_MODE = "true";
-    const { notifyRewardAvailable } = await import("../../lib/reward-notification");
-
     await Promise.all(aliceCrossings.map((row) => notifyRewardAvailable(String(card.establishment_id), String(row.id))));
     expect((await notifications(sql, alice)).map((row) => row.status)).toEqual(["sent"]);
 
