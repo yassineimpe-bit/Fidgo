@@ -12,12 +12,17 @@ already-authenticated GitHub CLI ("gh") on the machine running this worker.
 from __future__ import annotations
 
 import argparse
+import fcntl
+import hashlib
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
+import tempfile
 import time
+import uuid
 from pathlib import Path
 
 REPO = os.environ.get("RETIKO_REPO", "yassineimpe-bit/Fidgo")
@@ -194,6 +199,72 @@ def body_is_untampered(issue: dict) -> bool:
     return editor_login == author
 
 
+# A label add/remove is not atomic across two concurrent workers: both can
+# read "not running yet" via list_candidate_issues(), both then call
+# set_status(..., "running") -- label writes don't fail or conflict with
+# each other, they just both succeed, and both go on to run the task twice.
+#
+# GitHub *does* give us one thing that is effectively atomic and totally
+# ordered even under concurrent writers: issue comment ids. They are
+# assigned server-side, monotonically increasing across the whole site, at
+# the moment a comment is created -- two comments posted at "the same time"
+# by two different clients still get two different, orderable ids. So: post
+# a comment carrying a random claim token, then re-fetch every claim
+# comment on the issue and check whether ours has the lowest id. Whoever
+# posted first (by GitHub's own clock, not ours) wins; the loser abandons
+# without ever calling run_router. This is exactly a compare-and-swap, just
+# implemented on top of "list all writes, take the first" instead of a
+# single atomic write, because the issue/label API does not offer one.
+#
+# Fails closed throughout: any error, any inconsistency, any inability to
+# find our own claim comment back in the re-fetched list means we do NOT
+# proceed, exactly like body_is_untampered().
+CLAIM_MARKER_PREFIX = "<!-- retiko-agent-claim:"
+
+
+def _claim_token() -> str:
+    return f"{platform.node()}:{os.getpid()}:{uuid.uuid4().hex[:12]}"
+
+
+def claim_issue(issue: dict) -> bool:
+    number = issue["number"]
+    token = _claim_token()
+    marker_body = f"{CLAIM_MARKER_PREFIX}{token} -->"
+
+    try:
+        gh("issue", "comment", str(number), "--repo", REPO, "--body", marker_body)
+    except Exception:
+        return False
+
+    try:
+        result = gh("api", f"repos/{REPO}/issues/{number}/comments", "--paginate")
+        comments = json.loads(result.stdout or "[]")
+        if not isinstance(comments, list):
+            return False
+    except Exception:
+        return False
+
+    claim_comments: list[tuple[int, str]] = []
+    for c in comments:
+        if not isinstance(c, dict):
+            return False
+        body = c.get("body")
+        if not isinstance(body, str) or not body.startswith(CLAIM_MARKER_PREFIX):
+            continue
+        comment_id = c.get("id")
+        if not isinstance(comment_id, int):
+            return False  # Unexpected shape: do not guess an ordering.
+        claim_comments.append((comment_id, body))
+
+    if not claim_comments:
+        # We just posted one ourselves; not finding any back is an
+        # inconsistency in the re-fetch, not "nobody has claimed this yet".
+        return False
+
+    claim_comments.sort(key=lambda item: item[0])
+    return claim_comments[0][1] == marker_body
+
+
 def parse_request(issue: dict) -> tuple[str, str]:
     body = (issue.get("body") or "").strip()
     title = (issue.get("title") or "").strip()
@@ -361,6 +432,14 @@ def process_issue(issue: dict) -> None:
         )
         return
 
+    if not claim_issue(issue):
+        # Another worker (possibly on another machine) won the race for
+        # this issue, or the claim itself could not be verified. Either
+        # way: abandon silently. No status change, no run_router call --
+        # the winner (or a future poll, if the "winner" was actually a
+        # verification hiccup) owns this issue's fate, not us.
+        return
+
     try:
         agent, task = parse_request(issue)
     except ValueError as exc:
@@ -424,6 +503,37 @@ def run_once() -> int:
     return len(issues)
 
 
+# Complementary to claim_issue(): stops two instances of THIS worker
+# configuration from ever starting on the same machine at all (e.g. two
+# systemd starts racing, or a manual --once run while the service is
+# already active), so most double-processing never even reaches the
+# GitHub-level race. Scoped by (REPO, ROUTER) rather than one hardcoded
+# path, so a different repo/router configuration on the same machine is
+# not blocked by this one.
+#
+# flock(2) is held for the life of the process and released by the kernel
+# the moment the process exits for ANY reason -- clean shutdown, crash,
+# kill -9. There is no lock file content to go stale and nothing to clean
+# up after a crash, so this cannot deadlock permanently.
+def _local_lock_path() -> Path:
+    key = hashlib.sha256(f"{REPO}:{ROUTER}".encode()).hexdigest()[:16]
+    return Path(tempfile.gettempdir()) / f"retiko-agent-worker-{key}.lock"
+
+
+def acquire_local_lock():
+    lock_path = _local_lock_path()
+    lock_file = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock_file.close()
+        raise SystemExit(
+            f"Une autre instance de ce worker tourne déjà sur cette machine "
+            f"(repo={REPO}, routeur={ROUTER}, verrou={lock_path}). Arrêt."
+        )
+    return lock_file  # Caller must keep this referenced for the process's life.
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -438,6 +548,8 @@ def main() -> None:
         help="Intervalle de polling GitHub en secondes.",
     )
     args = parser.parse_args()
+
+    _lock_handle = acquire_local_lock()  # noqa: F841 -- held for process lifetime
 
     ensure_prerequisites()
     ensure_labels()
