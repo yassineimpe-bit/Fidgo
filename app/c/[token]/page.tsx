@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import QRCode from "qrcode";
-import { contrastTextColor, normalizeHexColor } from "@/lib/brand-color";
+import { cardDesign } from "@/lib/card-design";
 import { sql } from "@/lib/db";
 import { parseCardToken } from "@/lib/loyalty";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
@@ -16,7 +16,7 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   const token = parseCardToken(input);
   if (!token) notFound();
   const [card] = await sql`
-    select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,
+    select c.token,c.short_code,c.balance,c.updated_at,c.expires_at,e.name,e.logo_url,e.primary_color,to_jsonb(e)->>'secondary_color' as secondary_color,to_jsonb(e)->>'card_background' as card_background,
       p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,u.first_name,u.marketing_consent,(u.email is not null) as has_email,
       to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
     from cards c
@@ -36,11 +36,10 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
   // Un commerçant peut choisir une couleur claire (blanc, jaune pâle...) :
   // .loyalty-card impose color:white par défaut, ce qui rendrait alors le
   // texte illisible sur son propre fond. On recalcule systématiquement.
-  const brandColor = normalizeHexColor(card.primary_color, "#111111");
-  const brandTextColor = contrastTextColor(brandColor);
+  const design = cardDesign({ primaryColor: card.primary_color, secondaryColor: card.secondary_color, cardBackground: card.card_background });
 
   return <main className="client-card-page"><section className="client-card-shell">
-    <div className="loyalty-card" style={{background:brandColor,color:brandTextColor}}>
+    <div className="loyalty-card" style={{background:design.background,color:design.textColor,["--card-accent" as string]:design.accentColor}}>
       <div><div style={{display:"flex",alignItems:"center",gap:12}}>{card.logo_url&&<Image src={String(card.logo_url)} alt={`Logo ${card.name}`} width={52} height={52} unoptimized style={{objectFit:"contain",borderRadius:12,background:"white"}}/>}<div><strong style={{fontSize:22}}>{card.name}</strong><div style={{opacity:.8}}>{card.program_name}</div></div></div>
       <div style={{marginTop:30}}><CardLiveStatus token={String(card.token)} initialBalance={Number(card.balance)} initialThreshold={Number(card.reward_threshold)} initialUpdatedAt={new Date(card.updated_at).toISOString()} units={programUnits(card.mode, card.unit_label, card.unit_label_plural)} rewardLabel={String(card.reward_label)}/></div></div>
       <div style={{display:"grid",placeItems:"center",gap:10}}><Image className="qr" src={qr} alt="QR code fidélité" width={220} height={220} unoptimized/><strong style={{letterSpacing:".16em"}}>{card.short_code}</strong></div>

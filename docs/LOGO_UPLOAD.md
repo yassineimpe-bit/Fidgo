@@ -63,8 +63,13 @@ fonctionne normalement (URL externes comprises).
 - **Wallets** : Apple et Google Wallet gardent le logo Retiko statique
   (`public/wallet-logo.png`). Utiliser le logo du commerce impose les formats
   de chaque plateforme et une URL absolue HTTPS : décision produit à prendre.
-- **Fond de carte** : la couleur principale reste le fond de la carte, et le
-  logo s'affiche sur une pastille blanche. Aucun fond image ni couleur
-  secondaire pour l'instant.
+- **Fond de carte** : couleur principale unie ou dégradé principale →
+  secondaire (migration `030_card_design.sql`, `lib/card-design.ts`). La
+  couleur secondaire, facultative, colore aussi la barre de progression quand
+  elle reste lisible sur le fond ; le texte est choisi noir ou blanc selon la
+  teinte moyenne du dégradé. Carte client, aperçu des réglages et onboarding
+  partagent ce rendu. L'affiche imprimable et les Wallets gardent la seule
+  couleur principale (les Wallets n'acceptent qu'une couleur de fond). Le logo
+  s'affiche toujours sur une pastille blanche. Pas encore de fond image.
 - **URL externes existantes** : conservées telles quelles, sans import
   automatique.
