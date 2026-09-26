@@ -101,7 +101,7 @@ Retiko tient deux registres :
 | Rubrique | Contenu |
 |---|---|
 | Responsables | Chaque commerce utilisateur |
-| Traitements | Inscription au programme (page `/j/[commerce]`), carte web / PWA, crédits, récompenses et corrections, récupération de carte par e-mail (si activée), cartes Apple / Google Wallet (si activées), notes internes, campagnes e-mail du commerce aux seuls clients ayant consenti (voir `CAMPAIGNS.md`), export et effacement |
+| Traitements | Inscription au programme (page `/j/[commerce]`), carte web / PWA, crédits, récompenses et corrections, récupération de carte par e-mail (si activée), cartes Apple / Google Wallet (si activées), notes internes, campagnes e-mail du commerce et notification « récompense disponible » (option), aux seuls clients ayant consenti (voir `CAMPAIGNS.md`), export et effacement |
 | Personnes | Clients finaux des commerces |
 | Données | E-mail (obligatoire), prénom et téléphone (facultatifs), consentement marketing du commerce et sa date, note interne (≤ 500 caractères, visible du commerce seul) ; carte (token opaque, code court, solde, dates) ; ledger ; état Wallet ; empreintes des liens de récupération ; événements scanner pseudonymisés |
 | Données exclues | Aucune donnée sensible ; aucune donnée de contact dans le QR ; tokens absents des URL de suivi et des journaux |

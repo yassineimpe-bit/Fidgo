@@ -61,6 +61,16 @@ async function handlePatch(req: Request) {
     return Response.json({ error: "UNIT_LABEL_UNAVAILABLE" }, { status: 503 });
   }
 
+  // Notification « récompense disponible » (migration 028). Absente du corps : inchangée.
+  const rewardEmailSent = "rewardEmailEnabled" in b;
+  if (rewardEmailSent && typeof b.rewardEmailEnabled !== "boolean") return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
+  const [rewardEmailColumn] = rewardEmailSent
+    ? await sql`select 1 from information_schema.columns where table_schema='public' and table_name='loyalty_programs' and column_name='reward_email_enabled'`
+    : [];
+  if (rewardEmailSent && !rewardEmailColumn && b.rewardEmailEnabled) {
+    return Response.json({ error: "REWARD_EMAIL_UNAVAILABLE" }, { status: 503 });
+  }
+
   const program = await sql.begin(async (tx) => {
     const [updated] = await tx`
       update loyalty_programs set
@@ -79,6 +89,10 @@ async function handlePatch(req: Request) {
         where id=${updated.id} returning *
       `;
       Object.assign(updated, labelled);
+    }
+    if (rewardEmailSent && rewardEmailColumn) {
+      const [notified] = await tx`update loyalty_programs set reward_email_enabled=${b.rewardEmailEnabled === true} where id=${updated.id} returning *`;
+      Object.assign(updated, notified);
     }
     if (b.onboarding === true && session.role === "OWNER") {
       await tx`update establishments set onboarding_step=3, updated_at=now() where id=${session.establishmentId} and onboarding_step=2`;
