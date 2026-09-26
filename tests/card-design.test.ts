@@ -23,6 +23,17 @@ describe("apparence de la carte", () => {
   it("ignore les valeurs invalides", () => {
     expect(cardDesign({ primaryColor: "red", secondaryColor: "javascript:alert(1)", cardBackground: "gradient" })).toMatchObject({ background: "#111111", secondary: null });
     expect(isCardBackground("gradient")).toBe(true);
-    expect(isCardBackground("image")).toBe(false);
+    expect(isCardBackground("image")).toBe(true);
+    expect(isCardBackground("video")).toBe(false);
+  });
+
+  it("fond image : visuel importé uniquement, voile sombre et texte blanc", () => {
+    const url = "/api/card-images/123e4567-e89b-42d3-a456-426614174000";
+    const design = cardDesign({ primaryColor: "#fef9c3", cardBackground: "image", cardImageUrl: url });
+    expect(design.background).toBe(`linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url("${url}") center / cover no-repeat, #fef9c3`);
+    expect(design.textColor).toBe("#ffffff");
+    // Sans visuel, ou avec une URL qui n'est pas un visuel importé : couleur unie.
+    expect(cardDesign({ primaryColor: "#fef9c3", cardBackground: "image" }).background).toBe("#fef9c3");
+    expect(cardDesign({ primaryColor: "#fef9c3", cardBackground: "image", cardImageUrl: 'https://evil.example/x.png") ; background:url("x' }).background).toBe("#fef9c3");
   });
 });

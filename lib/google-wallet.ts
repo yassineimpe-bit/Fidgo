@@ -1,6 +1,7 @@
 import { JWT } from "google-auth-library";
 import { importPKCS8, SignJWT } from "jose";
 import { getAppUrl } from "@/lib/app-url";
+import { cardImagePath } from "@/lib/card-image-path";
 import { sql } from "@/lib/db";
 import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
 import { walletCardForRevocationById, type WalletCard } from "@/lib/wallet-data";
@@ -109,6 +110,11 @@ export function objectBody(card: WalletCard, state: "ACTIVE" | "INACTIVE" = "ACT
     },
     barcode: { type: "QR_CODE", value: `LOY1:${card.token}`, alternateText: card.shortCode },
     linksModuleData: base ? { uris: [{ uri: `${base}/c/${card.token}`, description: "Voir ma carte Retiko" }] } : undefined,
+    // Visuel du commerce en bannière : porté par l'objet, mis à jour à chaque synchronisation.
+    heroImage: base && card.cardImageId ? {
+      sourceUri: { uri: `${base}${cardImagePath(card.cardImageId)}` },
+      contentDescription: { defaultValue: { language: "fr-FR", value: `Visuel ${card.restaurantName}` } },
+    } : undefined,
   };
 }
 

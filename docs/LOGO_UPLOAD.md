@@ -70,6 +70,17 @@ fonctionne normalement (URL externes comprises).
   teinte moyenne du dégradé. Carte client, aperçu des réglages et onboarding
   partagent ce rendu. L'affiche imprimable et les Wallets gardent la seule
   couleur principale (les Wallets n'acceptent qu'une couleur de fond). Le logo
-  s'affiche toujours sur une pastille blanche. Pas encore de fond image.
+  s'affiche toujours sur une pastille blanche.
+- **Visuel** (migration `031_card_visuals.sql`, `lib/card-image.ts`) : une
+  photo JPEG/PNG/WebP (4 Mo, 600 × 300 px au minimum) est recadrée au centre
+  en 2:1 et ré-encodée en WebP 1200 × 600 sans métadonnées, stockée dans
+  `establishment_card_images` et servie par `/api/card-images/<id>` (immuable,
+  commerce actif uniquement). Elle sert de fond de carte (`card_background =
+  'image'`, sous un voile sombre avec texte blanc), de bannière en tête de la
+  page d'inscription et d'image `heroImage` de l'objet Google Wallet. Apple
+  Wallet ne l'affiche pas (image « strip » à générer : non fait). Un seul
+  visuel par commerce : l'ancien est supprimé dans la transaction qui le
+  remplace ; le retirer ramène un fond image à la couleur unie. `db:verify`
+  contrôle les visuels orphelins ou d'un autre commerce.
 - **URL externes existantes** : conservées telles quelles, sans import
   automatique.

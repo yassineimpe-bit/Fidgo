@@ -19,6 +19,8 @@ export type WalletCard = {
   rewardThreshold: number;
   rewardLabel: string;
   cardMessage: string | null;
+  /** Visuel importé du commerce (migration 031), s'il existe. */
+  cardImageId?: string | null;
 };
 
 function mapWalletCard(row: Record<string, unknown>): WalletCard {
@@ -39,6 +41,7 @@ function mapWalletCard(row: Record<string, unknown>): WalletCard {
     rewardThreshold: Number(row.reward_threshold),
     rewardLabel: String(row.reward_label),
     cardMessage: row.card_message ? String(row.card_message) : null,
+    cardImageId: row.card_image_id ? String(row.card_image_id) : null,
   };
 }
 
@@ -46,7 +49,7 @@ const SELECT_CARD = `
   select c.id as card_id,c.establishment_id,c.token,c.short_code,c.balance,c.expires_at,
     u.first_name,e.name as restaurant_name,e.slug as restaurant_slug,e.primary_color,
     p.program_name,p.mode,p.reward_threshold,p.reward_label,p.card_message,
-    ${UNIT_COLUMNS_SQL}
+    ${UNIT_COLUMNS_SQL}, to_jsonb(e)->>'card_image_id' as card_image_id
   from cards c
   join customers u on u.id=c.customer_id
   join establishments e on e.id=c.establishment_id
