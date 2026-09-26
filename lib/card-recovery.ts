@@ -11,6 +11,11 @@ export function cardRecoveryEnabled(env: RecoveryEnv = process.env) {
     && Boolean(env.EMAIL_REPLY_TO?.trim());
 }
 
+/** Fournisseur simulé uniquement pour les E2E locaux/CI, jamais en production. */
+export function cardRecoveryTestMode(env: RecoveryEnv = process.env) {
+  return env.NODE_ENV !== "production" && env.CARD_RECOVERY_TEST_MODE === "true";
+}
+
 export function hashCardRecoveryToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }

@@ -15,6 +15,7 @@ const expectedTenantConstraints = [
   "product_events_staff_same_tenant_fk",
   "audit_logs_staff_same_tenant_fk",
   "audit_logs_staff_requires_tenant_check",
+  "card_recovery_tokens_card_same_tenant_fk",
   "transactions_reversal_same_tenant_fk",
 ];
 const expectedLifecycleTriggers = [
@@ -25,6 +26,9 @@ const expectedLifecycleTriggers = [
 const expectedEmailVerificationTriggers = [
   "staff_email_verification_revoke_on_state_change",
   "establishment_email_verification_revoke_on_suspend",
+];
+const expectedCardRecoveryTriggers = [
+  "customer_card_recovery_revoke_on_email_change",
 ];
 
 try {
@@ -131,6 +135,15 @@ try {
           having count(*) > 1
         ) duplicated
       ) as staff_with_multiple_active_email_verification_tokens
+      ,(
+        select count(*)::int from (
+          select card_id
+          from card_recovery_tokens
+          where used_at is null
+          group by card_id
+          having count(*) > 1
+        ) duplicated
+      ) as cards_with_multiple_active_recovery_tokens
   `;
   // Migration 022 : contrôle actif dès que la table existe. Elle n'est pas
   // exigée ici, car la sauvegarde quotidienne vérifie la copie de production
@@ -213,6 +226,17 @@ try {
   const [emailVerificationIndex] = await sql`
     select to_regclass('public.email_verification_tokens_one_active_per_staff') is not null as present
   `;
+  const cardRecoveryTriggers = await sql`
+    select tgname from pg_trigger
+    where not tgisinternal and tgname = any(${expectedCardRecoveryTriggers})
+  `;
+  const presentCardRecoveryTriggers = new Set(cardRecoveryTriggers.map((row) => row.tgname));
+  const missingCardRecoveryTriggers = expectedCardRecoveryTriggers.filter(
+    (name) => !presentCardRecoveryTriggers.has(name),
+  );
+  const [cardRecoveryIndex] = await sql`
+    select to_regclass('public.card_recovery_tokens_one_active_per_card') is not null as present
+  `;
 
   const failures = [];
   if (Number(summary.negative_balances) > 0) failures.push(`${summary.negative_balances} solde(s) négatif(s)`);
@@ -230,6 +254,9 @@ try {
   if (Number(tenantData.active_orphan_password_reset_tokens) > 0) failures.push(`${tenantData.active_orphan_password_reset_tokens} lien(s) password reset actif(s) sur un compte révoqué`);
   if (Number(tenantData.active_orphan_email_verification_tokens) > 0) failures.push(`${tenantData.active_orphan_email_verification_tokens} lien(s) de vérification e-mail actif(s) incohérent(s)`);
   if (Number(tenantData.staff_with_multiple_active_email_verification_tokens) > 0) failures.push(`${tenantData.staff_with_multiple_active_email_verification_tokens} compte(s) avec plusieurs liens de vérification e-mail actifs`);
+  if (Number(tenantData.cards_with_multiple_active_recovery_tokens) > 0) failures.push(`${tenantData.cards_with_multiple_active_recovery_tokens} carte(s) avec plusieurs liens recovery actifs`);
+  if (!cardRecoveryIndex.present) failures.push("index d'unicité des liens recovery manquant");
+  if (missingCardRecoveryTriggers.length > 0) failures.push(`gardes recovery manquantes: ${missingCardRecoveryTriggers.join(", ")}`);
   if (!emailVerificationIndex.present) failures.push("index d'unicité des liens de vérification e-mail manquant");
   if (missingEmailVerificationTriggers.length > 0) failures.push(`gardes vérification e-mail manquantes: ${missingEmailVerificationTriggers.join(", ")}`);
   if (Number(billingData.establishments_without_subscription) > 0) failures.push(`${billingData.establishments_without_subscription} commerce(s) sans état de facturation`);
@@ -265,6 +292,8 @@ try {
   console.log(`Password reset tokens actifs incohérents : ${tenantData.active_orphan_password_reset_tokens}`);
   console.log(`Email verification tokens actifs incohérents : ${tenantData.active_orphan_email_verification_tokens}`);
   console.log(`Comptes avec plusieurs tokens e-mail actifs : ${tenantData.staff_with_multiple_active_email_verification_tokens}`);
+  console.log(`Cartes avec plusieurs tokens recovery actifs : ${tenantData.cards_with_multiple_active_recovery_tokens}`);
+  console.log(`Gardes recovery : ${expectedCardRecoveryTriggers.length - missingCardRecoveryTriggers.length}/${expectedCardRecoveryTriggers.length}, unicité=${Boolean(cardRecoveryIndex.present)}`);
   console.log(`Gardes vérification e-mail : ${expectedEmailVerificationTriggers.length - missingEmailVerificationTriggers.length}/${expectedEmailVerificationTriggers.length}, unicité=${Boolean(emailVerificationIndex.present)}`);
   console.log(`Commerces sans état de facturation : ${billingData.establishments_without_subscription}`);
   console.log(`Webhooks Stripe cross-tenant : ${billingData.webhook_tenant_mismatches}`);

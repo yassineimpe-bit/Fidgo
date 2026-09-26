@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { cardRecoveryEnabled, createCardRecoveryToken } from "@/lib/card-recovery";
+import { cardRecoveryEnabled, cardRecoveryTestMode, createCardRecoveryToken } from "@/lib/card-recovery";
 import { sql } from "@/lib/db";
 import { sendCardRecoveryEmail } from "@/lib/email";
 import { isEmail } from "@/lib/input";
@@ -25,7 +25,11 @@ async function auditDeliveryFailure(establishmentId: string, cardId: string, cod
 async function processRecoveryRequest(slug: string, email: string) {
   try {
     const [card] = await sql`
-      select c.id as card_id, c.establishment_id, e.name as restaurant_name
+      select
+        c.id as card_id,
+        c.customer_id,
+        c.establishment_id,
+        e.name as restaurant_name
       from cards c
       join customers u on u.id = c.customer_id
       join establishments e on e.id = c.establishment_id
@@ -42,6 +46,7 @@ async function processRecoveryRequest(slug: string, email: string) {
 
     const establishmentId = String(card.establishment_id);
     const cardId = String(card.card_id);
+    const customerId = String(card.customer_id);
     const base = getAppUrl();
     if (!base) {
       await auditDeliveryFailure(establishmentId, cardId, "EMAIL_APP_URL_MISSING");
@@ -57,15 +62,18 @@ async function processRecoveryRequest(slug: string, email: string) {
     const recoveryId = String(created.id);
     const recoveryUrl = `${base}/recover/${recovery.token}`;
 
-    let messageId: string;
+    const testMode = cardRecoveryTestMode();
+    let messageId = "test-delivery";
     try {
-      const delivered = await sendCardRecoveryEmail({
-        to: email,
-        restaurantName: String(card.restaurant_name),
-        recoveryUrl,
-        idempotencyKey: `card-recovery-${recovery.tokenHash}`,
-      });
-      messageId = delivered.messageId;
+      if (!testMode) {
+        const delivered = await sendCardRecoveryEmail({
+          to: email,
+          restaurantName: String(card.restaurant_name),
+          recoveryUrl,
+          idempotencyKey: `card-recovery-${recovery.tokenHash}`,
+        });
+        messageId = delivered.messageId;
+      }
     } catch (error) {
       const code = safeErrorCode(error, "EMAIL_SEND_FAILED");
       console.error("Card recovery email delivery failed", { code });
@@ -74,19 +82,73 @@ async function processRecoveryRequest(slug: string, email: string) {
     }
 
     await sql.begin(async (tx) => {
-      // Le nouveau lien n'est activé qu'après confirmation du fournisseur.
-      // Cela conserve le précédent si Resend échoue et sérialise les demandes
-      // concurrentes : le dernier envoi confirmé reste le seul lien actif.
+      // Une clé stable par carte sérialise les confirmations concurrentes sans
+      // imposer un verrou exclusif à toutes les cartes du commerce.
+      await tx`select pg_advisory_xact_lock(hashtextextended(${cardId}, 149))`;
+
+      // Ces verrous sont pris dans le même ordre que les opérations de cycle
+      // de vie. Une rectification, un effacement ou une suspension concurrente
+      // termine donc avant cette revalidation, ou révoque le lien après elle.
+      const [establishment] = await tx`
+        select id from establishments
+        where id=${establishmentId} and status='active'
+        for share
+      `;
+      const [customer] = establishment ? await tx`
+        select id from customers
+        where id=${customerId}
+          and establishment_id=${establishmentId}
+          and deleted_at is null
+          and lower(email)=lower(${email})
+        for share
+      ` : [];
+      const [currentCard] = customer ? await tx`
+        select id from cards
+        where id=${cardId}
+          and customer_id=${customerId}
+          and establishment_id=${establishmentId}
+          and active=true
+        for share
+      ` : [];
+      const [program] = currentCard ? await tx`
+        select id from loyalty_programs
+        where establishment_id=${establishmentId} and active=true
+        limit 1
+        for share
+      ` : [];
+
+      if (!establishment || !customer || !currentCard || !program) {
+        await tx`
+          insert into audit_logs(establishment_id, action, entity_type, entity_id, metadata)
+          values(
+            ${establishmentId},
+            'CARD_RECOVERY_EMAIL_SENT',
+            'card',
+            ${cardId},
+            ${tx.json({ provider: testMode ? "test" : "resend", messageId, activated: false })}
+          )
+        `;
+        return;
+      }
+
+      // Le nouveau lien n'est activé qu'après confirmation du fournisseur et
+      // après la revalidation verrouillée de toutes ses ressources.
       await tx`
         update card_recovery_tokens
         set used_at = now()
         where card_id = ${cardId} and id <> ${recoveryId} and used_at is null
       `;
-      await tx`
+      const [activated] = await tx`
         update card_recovery_tokens
         set used_at = null
-        where id = ${recoveryId} and card_id = ${cardId}
+        where id = ${recoveryId}
+          and card_id = ${cardId}
+          and establishment_id = ${establishmentId}
+          and used_at is not null
+          and expires_at > now()
+        returning id
       `;
+      if (!activated) return;
       await tx`
         insert into audit_logs(establishment_id, action, entity_type, entity_id, metadata)
         values(
@@ -94,7 +156,7 @@ async function processRecoveryRequest(slug: string, email: string) {
           'CARD_RECOVERY_EMAIL_SENT',
           'card',
           ${cardId},
-          ${tx.json({ provider: "resend", messageId })}
+          ${tx.json({ provider: testMode ? "test" : "resend", messageId, activated: true })}
         )
       `;
     });

@@ -27,6 +27,7 @@ export default defineConfig({
       AUTH_SECRET: process.env.AUTH_SECRET || "fidgo-playwright-secret-at-least-32-characters",
       NEXT_PUBLIC_APP_URL: baseURL,
       CARD_RECOVERY_ENABLED: "true",
+      CARD_RECOVERY_TEST_MODE: "true",
       RESEND_API_KEY: "re_test_dummy_key",
       EMAIL_FROM: "Fidgo <cards@fidgo.test>",
       EMAIL_REPLY_TO: "support@fidgo.test",
