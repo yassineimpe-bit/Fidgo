@@ -1,5 +1,7 @@
 # Protocole UX terrain — Retiko V1 pilote
 
+> **Version terrain courte :** [`docs/kit-pilote-ux-retiko.md`](./kit-pilote-ux-retiko.md) contient les 7 fiches imprimables à utiliser pendant la visite. Le présent document reste la référence détaillée.
+
 ## Objectif
 
 Ce protocole complète `docs/protocole-validation-physique-retiko.md`.
