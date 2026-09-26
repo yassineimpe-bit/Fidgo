@@ -3,14 +3,23 @@ import { importSPKI, jwtVerify } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletCard } from "../lib/wallet-data";
 
-const mocks = vi.hoisted(() => ({
-  authorize: vi.fn(async () => ({ access_token: "test-oauth-token" })),
-  sql: vi.fn(async (...args: unknown[]): Promise<Array<Record<string, unknown>>> => {
+const mocks = vi.hoisted(() => {
+  const state = { cardActive: true };
+  const tx = vi.fn();
+  const begin = vi.fn();
+  const sql = vi.fn(async (...args: unknown[]): Promise<Array<Record<string, unknown>>> => {
     void args;
     return [];
-  }),
-  walletCardForRevocationById: vi.fn(async (): Promise<WalletCard | null> => null),
-}));
+  });
+  return {
+    state,
+    tx,
+    begin,
+    sql,
+    authorize: vi.fn(async () => ({ access_token: "test-oauth-token" })),
+    walletCardForRevocationById: vi.fn(async (): Promise<WalletCard | null> => null),
+  };
+});
 
 vi.mock("google-auth-library", () => ({
   JWT: class {
@@ -18,7 +27,7 @@ vi.mock("google-auth-library", () => ({
   },
 }));
 
-vi.mock("@/lib/db", () => ({ sql: mocks.sql }));
+vi.mock("@/lib/db", () => ({ sql: Object.assign(mocks.sql, { begin: mocks.begin }) }));
 vi.mock("@/lib/wallet-data", () => ({ walletCardForRevocationById: mocks.walletCardForRevocationById }));
 
 const fixtureCard: WalletCard = {
@@ -55,10 +64,32 @@ function ok() {
   return new Response(null, { status: 200 });
 }
 
+function queryText(call: unknown[]) {
+  return Array.from(call[0] as readonly string[]).join(" ");
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
   configureGoogle();
+  mocks.state.cardActive = true;
   mocks.authorize.mockClear();
-  mocks.sql.mockClear();
+  mocks.sql.mockReset();
+  mocks.sql.mockResolvedValue([]);
+  mocks.tx.mockReset();
+  mocks.tx.mockImplementation(async (...args: unknown[]) => {
+    const query = queryText(args);
+    if (query.includes("select c.id")) return mocks.state.cardActive ? [{ id: fixtureCard.cardId }] : [];
+    if (query.includes("returning id")) return [{ id: "wallet-pass-1" }];
+    return [];
+  });
+  mocks.begin.mockReset();
+  mocks.begin.mockImplementation(async (fn: unknown) =>
+    (fn as (transaction: typeof mocks.tx) => Promise<unknown>)(mocks.tx));
   mocks.walletCardForRevocationById.mockReset();
   mocks.walletCardForRevocationById.mockResolvedValue(null);
   vi.unstubAllGlobals();
@@ -163,6 +194,88 @@ describe("Google Wallet background sync", () => {
     expect(errorWrite?.[1]).toBe("GOOGLE_OBJECT_PATCH_503");
     expect(JSON.stringify(errorWrite)).not.toContain("sensitive provider response");
   });
+
+  it("compensates an ACTIVE provider object when erase wins during synchronization", async () => {
+    const providerStarted = deferred<void>();
+    const releaseProvider = deferred<Response>();
+    let fetchCount = 0;
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => {
+      fetchCount += 1;
+      if (fetchCount === 3) {
+        providerStarted.resolve();
+        return releaseProvider.promise;
+      }
+      return ok();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { syncGoogleWallet } = await import("../lib/google-wallet");
+    const pending = syncGoogleWallet(fixtureCard);
+    await providerStarted.promise;
+    mocks.state.cardActive = false;
+    releaseProvider.resolve(ok());
+    await expect(pending).resolves.toBeUndefined();
+
+    expect(JSON.parse(String((fetchMock.mock.calls[2][1] as RequestInit).body))).toMatchObject({ state: "ACTIVE" });
+    expect(JSON.parse(String((fetchMock.mock.calls[3][1] as RequestInit).body))).toMatchObject({ state: "INACTIVE" });
+    expect(mocks.tx.mock.calls.some((call) => queryText(call).includes("status='revoked'"))).toBe(true);
+    expect(mocks.sql.mock.calls.some((call) => queryText(call).includes("status='error'"))).toBe(false);
+  });
+});
+
+describe("Google Wallet issue lifecycle race", () => {
+  it("lets erase win after issue started, even when its notifier ran before the provider returned", async () => {
+    const providerStarted = deferred<void>();
+    const releaseProvider = deferred<Response>();
+    let fetchCount = 0;
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => {
+      fetchCount += 1;
+      if (fetchCount === 3) {
+        providerStarted.resolve();
+        return releaseProvider.promise;
+      }
+      return ok();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { googleWalletSaveLink, notifyGoogleWalletRevocation } = await import("../lib/google-wallet");
+    const pending = googleWalletSaveLink(fixtureCard);
+    const rejected = expect(pending).rejects.toThrow("GOOGLE_WALLET_CARD_REVOKED");
+    await providerStarted.promise;
+
+    mocks.state.cardActive = false;
+    await notifyGoogleWalletRevocation(fixtureCard.cardId);
+    expect(mocks.walletCardForRevocationById).not.toHaveBeenCalled();
+
+    releaseProvider.resolve(ok());
+    await rejected;
+
+    const providerStates = fetchMock.mock.calls
+      .map((call) => call[1] as RequestInit | undefined)
+      .filter((init) => init?.body)
+      .map((init) => JSON.parse(String(init?.body)).state);
+    expect(providerStates).toEqual(["ACTIVE", "INACTIVE"]);
+    expect(mocks.tx.mock.calls.some((call) => queryText(call).includes("for update of c"))).toBe(true);
+    expect(mocks.tx.mock.calls.some((call) => queryText(call).includes("status='revoked'"))).toBe(true);
+  });
+
+  it("lets a lifecycle revocation after revalidation force both local and provider state inactive", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => ok());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { ensureGoogleWalletObject, notifyGoogleWalletRevocation } = await import("../lib/google-wallet");
+    await ensureGoogleWalletObject(fixtureCard);
+
+    mocks.state.cardActive = false;
+    mocks.sql.mockResolvedValueOnce([{ id: "wallet-pass-1", external_id: `1234567890123456789.card_${fixtureCard.cardId}` }]);
+    mocks.walletCardForRevocationById.mockResolvedValueOnce(fixtureCard);
+    await notifyGoogleWalletRevocation(fixtureCard.cardId);
+
+    const lastProviderBody = JSON.parse(String((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).body));
+    expect(lastProviderBody).toMatchObject({ state: "INACTIVE" });
+    const lastWrite = mocks.sql.mock.calls.at(-1);
+    expect(queryText(lastWrite || [])).toContain("status='revoked'");
+  });
 });
 
 describe("Google Wallet revocation sync", () => {
@@ -190,7 +303,7 @@ describe("Google Wallet revocation sync", () => {
     expect(Array.from(finalUpdate?.[0] as readonly string[]).join("")).toContain("last_synced_at=now()");
   });
 
-  it("never calls the Google API when no active Google pass is on record for the card", async () => {
+  it("never calls the Google API when no Google pass is on record for the card", async () => {
     mocks.sql.mockImplementationOnce(async () => []);
     vi.stubGlobal("fetch", vi.fn());
 

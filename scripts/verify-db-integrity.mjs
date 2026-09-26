@@ -99,7 +99,14 @@ try {
         join cards c on c.id=wp.card_id
         join customers u on u.id=c.customer_id
         join establishments e on e.id=c.establishment_id
-        where wp.status='active' and (not c.active or u.deleted_at is not null or e.status <> 'active')
+        where wp.status='active' and (
+          not c.active or c.expires_at <= now() or u.deleted_at is not null or e.status <> 'active'
+          or wp.establishment_id <> c.establishment_id
+          or not exists (
+            select 1 from loyalty_programs p
+            where p.establishment_id=c.establishment_id and p.active=true
+          )
+        )
       ) as active_orphan_wallets
       ,(
         select count(*)::int
