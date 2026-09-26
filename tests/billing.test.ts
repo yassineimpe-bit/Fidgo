@@ -3,6 +3,8 @@ import type Stripe from "stripe";
 import {
   BILLING_PLANS,
   BillingInputError,
+  activePriceGrid,
+  offeredPlans,
   type BillingStripeClient,
   checkoutPlanFromRequest,
   checkoutTrialEnd,
@@ -190,5 +192,43 @@ describe("synchronisation d'abonnement", () => {
     expect(BILLING_PLANS.FLEX.priceLabel).toBe("24,99 € HT/mois");
     expect(BILLING_PLANS.RETIKO_12.priceLabel).toBe("19,99 € HT/mois");
     expect(BILLING_PLANS.ANNUAL.priceLabel).toBe("210 € HT/an");
+    expect(BILLING_PLANS.STANDARD_MONTHLY.priceLabel).toBe("25 € HT/mois");
+    expect(BILLING_PLANS.STANDARD_ANNUAL.priceLabel).toBe("250 € HT/an");
+  });
+});
+
+describe("grilles tarifaires pilote / standard", () => {
+  const standardEnv = {
+    ...configuredEnv,
+    BILLING_PRICE_GRID: "standard",
+    STRIPE_PRICE_STANDARD_MONTHLY: "price_standard_monthly",
+    STRIPE_PRICE_STANDARD_ANNUAL: "price_standard_annual",
+  };
+
+  it("propose la grille pilote par défaut, la grille standard sur décision explicite", () => {
+    expect(activePriceGrid({})).toBe("pilot");
+    expect(activePriceGrid({ BILLING_PRICE_GRID: "autre" })).toBe("pilot");
+    expect(offeredPlans({})).toEqual(["FLEX", "RETIKO_12", "ANNUAL"]);
+    expect(offeredPlans(standardEnv)).toEqual(["STANDARD_MONTHLY", "STANDARD_ANNUAL"]);
+  });
+
+  it("n'exige que les Prices de la grille proposée, tous distincts", () => {
+    const { STRIPE_PRICE_FLEX_MONTHLY: _flex, STRIPE_PRICE_RETIKO12_MONTHLY: _r12, STRIPE_PRICE_ANNUAL: _annual, ...standardOnly } = standardEnv;
+    expect(getBillingRuntimeStatus(standardOnly)).toMatchObject({ configured: true, missing: [] });
+    expect(getBillingRuntimeStatus({ ...standardEnv, STRIPE_PRICE_STANDARD_ANNUAL: "" }).missing).toEqual(["STRIPE_PRICE_STANDARD_ANNUAL"]);
+    expect(getBillingRuntimeStatus({ ...standardEnv, STRIPE_PRICE_STANDARD_ANNUAL: "price_annual" }).invalid).toContain("STRIPE_PRICE_IDS_DUPLICATED");
+    expect(getBillingRuntimeStatus({ ...standardEnv, STRIPE_PRICE_STANDARD_MONTHLY: "prod_x" }).invalid).toContain("STRIPE_PRICE_IDS");
+  });
+
+  it("ne souscrit qu'aux offres de la grille proposée", () => {
+    expect(checkoutPlanFromRequest({ plan: "STANDARD_ANNUAL" }, standardEnv)).toBe("STANDARD_ANNUAL");
+    expect(() => checkoutPlanFromRequest({ plan: "RETIKO_12" }, standardEnv)).toThrow(BillingInputError);
+    expect(() => checkoutPlanFromRequest({ plan: "STANDARD_MONTHLY" }, configuredEnv)).toThrow(BillingInputError);
+  });
+
+  it("reconnaît toujours les abonnés d'une grille précédente", () => {
+    expect(planFromStripePriceId("price_retiko12", standardEnv)).toBe("RETIKO_12");
+    expect(planFromStripePriceId("price_standard_monthly", standardEnv)).toBe("STANDARD_MONTHLY");
+    expect(planFromStripePriceId("price_standard_annual", configuredEnv)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/legal-page";
-import { BILLING_PLANS, BILLING_TRIAL_DAYS } from "@/lib/billing";
+import { BILLING_PLANS, BILLING_TRIAL_DAYS, offeredPlans } from "@/lib/billing";
 import { LEGAL_ENTITY, LEGAL_LINKS, LEGAL_VERSION, legalValue } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Conditions générales de vente | Retiko" };
@@ -37,7 +37,7 @@ export default function CgvPage() {
     <h2>4. Offres et prix</h2>
     <div className="table-scroll"><table>
       <thead><tr><th>Offre</th><th>Prix</th><th>Engagement</th></tr></thead>
-      <tbody>{Object.values(BILLING_PLANS).map((plan) => <tr key={plan.label}>
+      <tbody>{offeredPlans().map((key) => BILLING_PLANS[key]).map((plan) => <tr key={plan.label}>
         <td>{plan.label}</td><td>{plan.priceLabel}</td><td>{plan.commitment}</td>
       </tr>)}</tbody>
     </table></div>

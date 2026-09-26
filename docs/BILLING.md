@@ -10,6 +10,21 @@ La facturation est indépendante du cœur fidélité. `STRIPE_ENABLED=false` est
 | Retiko 12 | 19,99 € HT/mois, engagement 12 mois | `STRIPE_PRICE_RETIKO12_MONTHLY` | mensuelle |
 | Retiko annuel | 210 € HT/an | `STRIPE_PRICE_ANNUAL` | annuelle |
 
+### Grilles tarifaires
+
+Deux grilles coexistent dans `lib/billing-plans.ts` :
+
+| Grille | Offres | Price Stripe attendu |
+|---|---|---|
+| `pilot` (défaut) | Retiko Flex 24,99 € HT/mois, Retiko 12 19,99 € HT/mois, Retiko annuel 210 € HT/an | `STRIPE_PRICE_FLEX_MONTHLY`, `STRIPE_PRICE_RETIKO12_MONTHLY`, `STRIPE_PRICE_ANNUAL` |
+| `standard` | Retiko mensuel 25 € HT/mois sans engagement (`STANDARD_MONTHLY`), Retiko annuel 250 € HT/an (`STANDARD_ANNUAL`) | `STRIPE_PRICE_STANDARD_MONTHLY`, `STRIPE_PRICE_STANDARD_ANNUAL` |
+
+`BILLING_PRICE_GRID` (`pilot` ou `standard`) choisit les offres proposées aux **nouvelles** souscriptions, sur le site, dans les CGV et dans *Facturation*. Chaque offre a sa propre clé et son propre Price : un abonné pilote reste reconnu par le webhook et garde son prix quand la grille passe à `standard` (Stripe ne modifie jamais le Price d'un abonnement existant). Une offre qui n'appartient pas à la grille proposée est refusée par Checkout (`INVALID_PLAN`).
+
+Seuls les Prices de la grille proposée sont exigés par `env:check` et par l'état d'exécution ; ceux de l'ancienne grille doivent rester configurés tant que des abonnés y sont rattachés. Tous les Price IDs configurés doivent être distincts.
+
+Passer à la grille standard suppose la migration `029_billing_price_grids.sql` (sinon Checkout répond `503 BILLING_SCHEMA_OUTDATED`), les deux Prices créés dans Stripe, puis un redéploiement. **Décisions restant à prendre** : date de bascule, maintien ou non d'une offre avec engagement dans la grille standard, et mise à jour validée des CGV avant bascule.
+
 Les montants et la fiscalité doivent être configurés dans Stripe Dashboard. Le navigateur envoie uniquement la clé d’offre `FLEX`, `RETIKO_12` ou `ANNUAL`; le serveur choisit le Price ID correspondant. Un `priceId` fourni par le client est rejeté.
 
 Checkout exige l’adresse de facturation et active la collecte de l’identifiant fiscal lorsque Stripe le propose au client. Pour un Customer Stripe déjà lié, l’adresse saisie est recopiée sur le Customer afin de garder ses données de facturation à jour. Cela prépare les données nécessaires à la facturation B2B, mais **n’active pas à lui seul le calcul automatique de TVA** : `automatic_tax` reste volontairement désactivé tant que les immatriculations fiscales et le traitement TVA de Retiko n’ont pas été validés.
@@ -32,11 +47,14 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_PRICE_FLEX_MONTHLY=
 STRIPE_PRICE_RETIKO12_MONTHLY=
 STRIPE_PRICE_ANNUAL=
+BILLING_PRICE_GRID=pilot
+STRIPE_PRICE_STANDARD_MONTHLY=
+STRIPE_PRICE_STANDARD_ANNUAL=
 ```
 
 Aucune clé publiable Stripe n’est nécessaire : Retiko utilise Checkout et Customer Portal hébergés par Stripe. Aucun secret ni Price ID n’est envoyé dans le HTML.
 
-Lorsque `STRIPE_ENABLED=true`, `npm run env:check` exige une clé `sk_`, un secret `whsec_` et trois Price IDs `price_` distincts. `STRIPE_AUTOMATIC_TAX_ENABLED` reste indépendant et vaut `false` tant que la configuration fiscale n'est pas validée ; le passer à `true` active `automatic_tax` sur les nouvelles Checkout Sessions sans nécessiter un nouveau déploiement de code.
+Lorsque `STRIPE_ENABLED=true`, `npm run env:check` exige une clé `sk_`, un secret `whsec_` et les Price IDs `price_` de la grille proposée, tous distincts. `STRIPE_AUTOMATIC_TAX_ENABLED` reste indépendant et vaut `false` tant que la configuration fiscale n'est pas validée ; le passer à `true` active `automatic_tax` sur les nouvelles Checkout Sessions sans nécessiter un nouveau déploiement de code.
 
 ## Parcours et isolation
 

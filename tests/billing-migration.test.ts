@@ -27,3 +27,20 @@ describe("migration Stripe v2", () => {
     expect(schema).not.toMatch(/card_number|card_cvc|payment_method_secret/i);
   });
 });
+
+describe("offres connues des migrations", () => {
+  const grids = readFileSync("db/migrations/029_billing_price_grids.sql", "utf8");
+  const plans = ["FLEX", "RETIKO_12", "ANNUAL", "STANDARD_MONTHLY", "STANDARD_ANNUAL"];
+
+  it("013 (rejouée à chaque db:setup), 029 et le schéma de référence listent toutes les offres", async () => {
+    const { BILLING_PLANS } = await import("@/lib/billing-plans");
+    expect(Object.keys(BILLING_PLANS).sort()).toEqual([...plans].sort());
+    // Sans cela, un rejeu de 013 ramènerait un abonné d'une offre récente à PILOT.
+    const reset = migration.match(/where plan not in \(([^)]*)\)/)?.[1] ?? "";
+    for (const plan of plans) {
+      expect(reset).toContain(`'${plan}'`);
+      expect(grids).toContain(`'${plan}'`);
+      expect(schema).toContain(`'${plan}'`);
+    }
+  });
+});

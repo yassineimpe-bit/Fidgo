@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth";
 import {
   BillingInputError,
   billingEnabled,
+  billingSchemaSupportsPlan,
   checkoutPlanFromRequest,
   createCheckoutSession,
   expireCheckoutSession,
@@ -36,6 +37,10 @@ async function handlePost(request: Request) {
       return Response.json({ error: error.code }, { status: 400 });
     }
     throw error;
+  }
+
+  if (!await billingSchemaSupportsPlan(plan)) {
+    return Response.json({ error: "BILLING_SCHEMA_OUTDATED" }, { status: 503 });
   }
 
   const requestedKey = request.headers.get("idempotency-key");

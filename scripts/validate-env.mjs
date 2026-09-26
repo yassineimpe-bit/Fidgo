@@ -66,25 +66,28 @@ for (const flag of ["APPLE_WALLET_ENABLED", "GOOGLE_WALLET_ENABLED", "CARD_RECOV
   }
 }
 
+const billingGrid = envValue("BILLING_PRICE_GRID");
+if (billingGrid && billingGrid !== "pilot" && billingGrid !== "standard") {
+  fail("BILLING_PRICE_GRID doit valoir pilot ou standard.");
+}
+// Même liste que lib/billing-plans.ts : Prices exigés pour la grille proposée.
+const gridPriceEnvs = billingGrid === "standard"
+  ? ["STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL"]
+  : ["STRIPE_PRICE_FLEX_MONTHLY", "STRIPE_PRICE_RETIKO12_MONTHLY", "STRIPE_PRICE_ANNUAL"];
+const allPriceEnvs = [
+  "STRIPE_PRICE_FLEX_MONTHLY", "STRIPE_PRICE_RETIKO12_MONTHLY", "STRIPE_PRICE_ANNUAL",
+  "STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL",
+];
+
 if (envValue("STRIPE_ENABLED") === "true") {
-  const stripe = [
-    "STRIPE_SECRET_KEY",
-    "STRIPE_WEBHOOK_SECRET",
-    "STRIPE_PRICE_FLEX_MONTHLY",
-    "STRIPE_PRICE_RETIKO12_MONTHLY",
-    "STRIPE_PRICE_ANNUAL",
-  ];
+  const stripe = ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", ...gridPriceEnvs];
   const stripeMissing = stripe.filter((key) => !envValue(key));
   if (stripeMissing.length) fail(`Stripe activé mais variables manquantes: ${stripeMissing.join(", ")}`);
   if (!envValue("STRIPE_SECRET_KEY").startsWith("sk_")) fail("STRIPE_SECRET_KEY doit commencer par sk_.");
   if (!envValue("STRIPE_WEBHOOK_SECRET").startsWith("whsec_")) fail("STRIPE_WEBHOOK_SECRET doit commencer par whsec_.");
-  const priceIds = [
-    envValue("STRIPE_PRICE_FLEX_MONTHLY"),
-    envValue("STRIPE_PRICE_RETIKO12_MONTHLY"),
-    envValue("STRIPE_PRICE_ANNUAL"),
-  ];
+  const priceIds = allPriceEnvs.map((key) => envValue(key)).filter(Boolean);
   if (priceIds.some((value) => !value.startsWith("price_"))) fail("Chaque Price ID Stripe doit commencer par price_.");
-  if (new Set(priceIds).size !== priceIds.length) fail("Les trois Price IDs Stripe doivent être distincts.");
+  if (new Set(priceIds).size !== priceIds.length) fail("Les Price IDs Stripe doivent être distincts.");
 }
 
 if (envValue("APPLE_WALLET_ENABLED") === "true") {
