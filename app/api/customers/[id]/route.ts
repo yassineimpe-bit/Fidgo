@@ -57,6 +57,17 @@ async function handlePatch(req: Request, { params }: { params: Promise<{ id: str
           updated_at=now()
         where id=${id} and establishment_id=${session.establishmentId} and deleted_at is null
       `;
+      if (fields.includes("email")) {
+        await tx`
+          update card_recovery_tokens set used_at=coalesce(used_at,now())
+          where establishment_id=${session.establishmentId}
+            and used_at is null
+            and card_id in (
+              select id from cards
+              where customer_id=${id} and establishment_id=${session.establishmentId}
+            )
+        `;
+      }
       // Noms des champs seulement : les anciennes et nouvelles coordonnées
       // ne doivent jamais survivre dans les journaux.
       if (fields.length) {

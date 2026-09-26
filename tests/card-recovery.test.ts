@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CARD_RECOVERY_TTL_MINUTES,
   cardRecoveryEnabled,
+  cardRecoveryTestMode,
   createCardRecoveryToken,
   hashCardRecoveryToken,
   isValidCardRecoveryToken,
@@ -55,5 +56,10 @@ describe("card recovery tokens", () => {
       EMAIL_FROM: "Fidgo <cards@example.com>",
       EMAIL_REPLY_TO: "support@example.com",
     })).toBe(true);
+  });
+
+  it("never enables the simulated provider in production", () => {
+    expect(cardRecoveryTestMode({ NODE_ENV: "test", CARD_RECOVERY_TEST_MODE: "true" })).toBe(true);
+    expect(cardRecoveryTestMode({ NODE_ENV: "production", CARD_RECOVERY_TEST_MODE: "true" })).toBe(false);
   });
 });
