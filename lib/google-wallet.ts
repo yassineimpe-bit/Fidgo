@@ -65,6 +65,13 @@ async function walletFetch(path: string, init: RequestInit = {}) {
   });
 }
 
+class GoogleWalletCardRevokedError extends Error {
+  constructor() {
+    super("GOOGLE_WALLET_CARD_REVOKED");
+    this.name = "GoogleWalletCardRevokedError";
+  }
+}
+
 function logoUri() {
   const base = getAppUrl();
   if (!base) throw new Error("APP_URL is required");
@@ -118,6 +125,66 @@ export function objectBody(card: WalletCard, state: "ACTIVE" | "INACTIVE" = "ACT
   };
 }
 
+async function persistGoogleWalletAfterProvider(card: WalletCard, objectId: string) {
+  return sql.begin(async (tx) => {
+    const [active] = await tx`
+      select c.id
+      from cards c
+      join customers u on u.id=c.customer_id
+      join establishments e on e.id=c.establishment_id
+      join loyalty_programs p on p.establishment_id=c.establishment_id
+      where c.id=${card.cardId} and c.establishment_id=${card.establishmentId}
+        and c.active=true and (c.expires_at is null or c.expires_at > now())
+        and u.deleted_at is null and e.status='active' and p.active=true
+      for update of c
+    `;
+
+    if (!active) {
+      const [walletPass] = await tx`
+        insert into wallet_passes(establishment_id,card_id,provider,external_id,status,last_error,updated_at)
+        values(${card.establishmentId},${card.cardId},'GOOGLE',${objectId},'revoked',null,now())
+        on conflict(card_id,provider) do update set
+          external_id=excluded.external_id,status='revoked',last_error=null,updated_at=now()
+        returning id
+      `;
+      return { active: false as const, walletPassId: String(walletPass.id) };
+    }
+
+    await tx`
+      insert into wallet_passes(establishment_id,card_id,provider,external_id,status,last_synced_at)
+      values(${card.establishmentId},${card.cardId},'GOOGLE',${objectId},'active',now())
+      on conflict(card_id,provider) do update set
+        external_id=excluded.external_id,status='active',last_synced_at=now(),last_error=null,updated_at=now()
+    `;
+    return { active: true as const, walletPassId: null };
+  });
+}
+
+async function deactivateGoogleWalletObject(card: WalletCard, objectId: string, walletPassId?: string) {
+  try {
+    const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(objectBody(card, "INACTIVE")),
+    });
+    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_REVOKE_${updated.status}`);
+    if (walletPassId) {
+      await sql`
+        update wallet_passes set status='revoked',last_synced_at=now(),last_error=null,updated_at=now()
+        where id=${walletPassId}
+      `;
+    }
+  } catch (error) {
+    if (walletPassId) {
+      const code = safeErrorCode(error, "GOOGLE_WALLET_REVOKE_FAILED");
+      await sql`
+        update wallet_passes set status='revoked',last_error=${code},updated_at=now()
+        where id=${walletPassId}
+      `;
+    }
+    throw error;
+  }
+}
+
 export async function ensureGoogleWalletObject(card: WalletCard) {
   const { classId, objectId } = ids(card);
   const classGet = await walletFetch(`/loyaltyClass/${encodeURIComponent(classId)}`);
@@ -139,11 +206,19 @@ export async function ensureGoogleWalletObject(card: WalletCard) {
     throw new Error(`GOOGLE_OBJECT_GET_${objectGet.status}`);
   }
 
-  await sql`
-    insert into wallet_passes(establishment_id,card_id,provider,external_id,status,last_synced_at)
-    values(${card.establishmentId},${card.cardId},'GOOGLE',${objectId},'active',now())
-    on conflict(card_id,provider) do update set external_id=excluded.external_id,status='active',last_synced_at=now(),last_error=null,updated_at=now()
-  `;
+  let persisted: Awaited<ReturnType<typeof persistGoogleWalletAfterProvider>>;
+  try {
+    persisted = await persistGoogleWalletAfterProvider(card, objectId);
+  } catch (error) {
+    // Le provider a déjà rendu l'objet ACTIVE. Si la revalidation DB échoue,
+    // on échoue fermé côté Wallet au lieu de laisser un objet actif orphelin.
+    await deactivateGoogleWalletObject(card, objectId).catch(() => undefined);
+    throw error;
+  }
+  if (!persisted.active) {
+    await deactivateGoogleWalletObject(card, objectId, persisted.walletPassId);
+    throw new GoogleWalletCardRevokedError();
+  }
   return { classId, objectId };
 }
 
@@ -172,8 +247,12 @@ export async function syncGoogleWallet(card: WalletCard) {
   try {
     await ensureGoogleWalletObject(card);
   } catch (error) {
+    if (error instanceof GoogleWalletCardRevokedError) return;
     const code = safeErrorCode(error, "GOOGLE_WALLET_SYNC_FAILED");
-    await sql`update wallet_passes set status='error',last_error=${code},updated_at=now() where card_id=${card.cardId} and provider='GOOGLE'`;
+    await sql`
+      update wallet_passes set status='error',last_error=${code},updated_at=now()
+      where card_id=${card.cardId} and provider='GOOGLE' and status<>'revoked'
+    `;
   }
 }
 
@@ -187,20 +266,18 @@ export async function syncGoogleWallet(card: WalletCard) {
 export async function notifyGoogleWalletRevocation(cardId: string) {
   if (!googleWalletEnabled()) return;
   const [walletPass] = await sql`
-    select id from wallet_passes
-    where card_id=${cardId} and provider='GOOGLE' and status='revoked'
+    select id,external_id from wallet_passes
+    where card_id=${cardId} and provider='GOOGLE'
     limit 1
   `;
   if (!walletPass) return;
   const card = await walletCardForRevocationById(cardId);
   if (!card) return;
+  const objectId = walletPass.external_id ? String(walletPass.external_id) : ids(card).objectId;
   try {
-    const { objectId } = ids(card);
-    const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card, "INACTIVE")) });
-    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_REVOKE_${updated.status}`);
-    await sql`update wallet_passes set last_synced_at=now(),last_error=null,updated_at=now() where id=${walletPass.id}`;
-  } catch (error) {
-    const code = safeErrorCode(error, "GOOGLE_WALLET_REVOKE_FAILED");
-    await sql`update wallet_passes set last_error=${code},updated_at=now() where id=${walletPass.id}`;
+    await deactivateGoogleWalletObject(card, objectId, String(walletPass.id));
+  } catch {
+    // deactivateGoogleWalletObject conserve déjà la ligne en revoked et y
+    // enregistre l'erreur pour qu'une relance ne perde jamais l'intention.
   }
 }
