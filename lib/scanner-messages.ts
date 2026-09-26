@@ -14,7 +14,7 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     sessionExpired: false,
   },
   NETWORK_ERROR: {
-    message: "Connexion perdue pendant l’action. Réessaie : Retiko réutilise la même clé pour éviter un double crédit.",
+    message: "Connexion perdue : l’action n’a pas été confirmée. Réessaie : Retiko réutilise la même clé, sans risque de double crédit.",
     retryable: true,
     network: true,
     sessionExpired: false,

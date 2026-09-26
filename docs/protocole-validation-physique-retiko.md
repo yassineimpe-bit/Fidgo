@@ -335,6 +335,10 @@ Obtenue séparément, jamais à partir des métriques navigateur :
 - [ ] Aucun clavier virtuel intempestif.
 - [ ] Verrou anti-double action pendant l'appel réseau.
 - [ ] Une erreur réseau permet une reprise claire sans double crédit.
+- [ ] Ouverture caméra : noter la valeur « ouverture caméra » affichée dans `/s/stats` (dernière, médiane, max sur l'appareil).
+- [ ] Bouton « Torche » : présent seulement si le téléphone la pilote (souvent absent sur iPhone). Si présent, il allume et éteint réellement le flash.
+- [ ] Son coupé par défaut ; le bouton « Son » l'active pour ce téléphone seulement. Vibration seulement si le téléphone la gère.
+- [ ] Chaque état (validé, récompense, délai, carte inconnue, QR non reconnu, réseau, session) se comprend sans la couleur : icône et titre distincts.
 
 ### Checklist Apple Wallet (§10)
 

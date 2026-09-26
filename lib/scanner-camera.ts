@@ -126,3 +126,57 @@ export const REAR_CAMERA_CONSTRAINTS: MediaStreamConstraints = {
     height: { ideal: 720 },
   },
 };
+
+type TorchCapableTrack = Pick<MediaStreamTrack, "readyState"> & {
+  getCapabilities?: () => MediaTrackCapabilities & { torch?: boolean };
+};
+
+/**
+ * Vrai seulement si le navigateur expose getCapabilities() ET déclare la
+ * torche pour cette piste : aucune supposition par user-agent, pas de bouton
+ * mort sur un appareil qui ne la pilote pas (Safari iOS notamment).
+ */
+export function trackSupportsTorch(track: TorchCapableTrack | null | undefined): boolean {
+  if (!track || track.readyState !== "live" || typeof track.getCapabilities !== "function") return false;
+  try {
+    return track.getCapabilities()?.torch === true;
+  } catch {
+    return false;
+  }
+}
+
+export const CAMERA_READY_STORAGE_KEY = "retiko.scanner.cameraReadyMs";
+const CAMERA_READY_LIMIT = 20;
+
+type CameraReadyStorage = Pick<Storage, "getItem" | "setItem">;
+
+function readCameraReadySamples(storage: CameraReadyStorage): number[] {
+  try {
+    const parsed: unknown = JSON.parse(storage.getItem(CAMERA_READY_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 60_000)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Durée CAMERA_START → CAMERA_READY mesurée sur cet appareil (20 dernières, locale uniquement). */
+export function recordCameraReady(storage: CameraReadyStorage, durationMs: number) {
+  const bounded = Math.min(60_000, Math.max(0, Math.round(durationMs)));
+  try {
+    storage.setItem(CAMERA_READY_STORAGE_KEY, JSON.stringify([...readCameraReadySamples(storage), bounded].slice(-CAMERA_READY_LIMIT)));
+  } catch {}
+}
+
+export function summarizeCameraReady(storage: CameraReadyStorage): { count: number; last: number | null; median: number | null; max: number | null } {
+  const samples = readCameraReadySamples(storage);
+  if (!samples.length) return { count: 0, last: null, median: null, max: null };
+  const sorted = [...samples].sort((a, b) => a - b);
+  return {
+    count: samples.length,
+    last: samples[samples.length - 1],
+    median: sorted[Math.ceil(sorted.length / 2) - 1],
+    max: sorted[sorted.length - 1],
+  };
+}
