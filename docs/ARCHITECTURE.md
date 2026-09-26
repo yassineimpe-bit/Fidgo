@@ -24,6 +24,8 @@ Un seul déploiement Next.js App Router contient les pages publiques, le dashboa
 
 Chaque entité métier porte `establishment_id` directement ou via une FK. Toutes les routes privées récupèrent l'établissement depuis la session serveur et ne font jamais confiance à un `restaurantId` envoyé par le client.
 
+Un compte staff appartient à un seul établissement. Les évolutions vers plusieurs établissements par propriétaire et les décisions qu'elles demandent sont décrites dans `docs/MULTI_ETABLISSEMENTS.md`.
+
 ## Ledger fidélité
 
 `cards.balance` est un cache de lecture rapide. `transactions` est le ledger append-only et la source d'audit. Une annulation crée une transaction `reversal`; elle ne supprime pas la transaction originale.
