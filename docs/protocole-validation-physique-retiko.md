@@ -1,6 +1,8 @@
 # Protocole de Validation Physique - Retiko (Pré-Pilote)
 
 **Objectif :** Valider les conditions réelles d'utilisation (Gate Pilote §23) et fermer les sections §6, §7, §10, §11 en s'assurant que l'application est prête pour un usage intensif en commerce.  
+
+> **Complément UX :** l'autonomie, la compréhension et les frictions humaines du premier commerce pilote sont évaluées séparément dans [`docs/protocole-ux-pilote-retiko.md`](./protocole-ux-pilote-retiko.md). Ce protocole UX ne remplace aucun test physique, mesure p95 ou audit du ledger ci-dessous.
 **Ressources :** 1 testeur, 2 smartphones (1 iPhone récent, 1 Android récent), 1 Mac avec le dépôt Retiko (`npm ci`) pour l'analyse.
 
 > **Ce qui est automatisé :** uniquement la collecte et le calcul des mesures (export `/s/stats`, `npm run pilot:field-report`) et le rapprochement en lecture seule avec le ledger (`npm run pilot:ledger-audit`).
