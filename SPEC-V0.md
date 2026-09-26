@@ -293,6 +293,61 @@ haptique
 
 La récompense débloquée doit avoir un retour distinct.
 
+## Mode récompense : scan et débit automatique
+
+Le commerçant doit pouvoir utiliser le **même QR client** pour créditer ou consommer une récompense. C’est le mode choisi dans le scanner commerçant qui détermine l’action ; aucun second QR n’est nécessaire côté client.
+
+Flux cible :
+
+```text
+scanner commerçant
+→ mode Récompense
+→ scan du QR client
+→ vérification du solde et des récompenses disponibles
+→ affichage de la récompense et du coût
+→ confirmation
+→ débit atomique côté serveur
+→ récompense marquée comme utilisée
+→ solde client mis à jour
+→ REWARD_REDEEMED enregistré
+```
+
+Exemple :
+
+```text
+RÉCOMPENSE DISPONIBLE
+
+Menu offert
+Coût : 100 points
+
+Solde actuel : 135
+Solde après utilisation : 35
+
+[ UTILISER LA RÉCOMPENSE ]
+```
+
+Contraintes obligatoires :
+
+```text
+contrôle d'éligibilité côté serveur
+solde suffisant vérifié au moment de la transaction
+débit et enregistrement de la récompense dans une même transaction atomique
+idempotency_key unique pour empêcher un double débit
+refus propre si la récompense a déjà été consommée ou si le solde a changé
+historique avec commerce, staff, carte, récompense, ancien solde, nouveau solde et date
+aucun débit silencieux sans feedback visuel immédiat
+```
+
+Le retour après succès doit être distinct d’un crédit :
+
+```text
+✓ Récompense utilisée
+-100 points
+Nouveau solde : 35
+```
+
+Le débit automatique ne signifie pas une consommation sans contrôle : le scan identifie la carte et Retiko prépare l’opération, puis le staff confirme la récompense à consommer.
+
 ---
 
 # 8. P0 : anti double-crédit
@@ -1171,6 +1226,7 @@ La prospection commerciale active peut commencer lorsque les points suivants son
 [ ] code court fonctionnel
 [ ] crédit fonctionnel
 [ ] récompense fonctionnelle
+[ ] consommation de récompense par scan avec débit atomique fonctionnelle
 [ ] récupération email fonctionnelle
 [ ] test iPhone réel effectué
 [ ] test Android réel effectué
