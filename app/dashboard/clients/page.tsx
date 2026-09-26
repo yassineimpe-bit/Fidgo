@@ -130,6 +130,9 @@ export default async function ClientsPage({
             placeholder="Nom, email, téléphone ou code"
           />
         </form>
+        {canManageProgram(session.role) && <a className="btn" href={`/api/customers/export${term ? `?q=${encodeURIComponent(term)}` : ""}`}>
+          Télécharger le CSV clients
+        </a>}
       </div>
 
       <p className="muted">{total} client{total > 1 ? "s" : ""} · page {currentPage}/{totalPages}</p>
