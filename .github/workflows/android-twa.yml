@@ -34,11 +34,11 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android 16 SDK
-        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          sdkmanager --version
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Build debug APK and release bundle
         working-directory: android-app
