@@ -21,6 +21,7 @@ import {
   scanMetricsExportFilename,
   suggestScannerDevice,
 } from "@/lib/scan-metrics";
+import { summarizeCameraReady } from "@/lib/scanner-camera";
 
 type Feedback = { tone: "success" | "error" | "info"; message: string } | null;
 
@@ -55,12 +56,14 @@ export function ScanStats() {
   const [device, setDevice] = useState<ScannerDevice | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [manualJson, setManualJson] = useState<string | null>(null);
+  const [camera, setCamera] = useState<ReturnType<typeof summarizeCameraReady>>({ count: 0, last: null, median: null, max: null });
 
   useEffect(() => {
     try {
       const loaded = loadScanMetrics(window.localStorage);
       setMetrics(loaded.metrics);
       setStoredCount(loaded.storedCount);
+      setCamera(summarizeCameraReady(window.localStorage));
     } catch {}
     setDevice(suggestScannerDevice(navigator.userAgent));
   }, []);
@@ -205,6 +208,14 @@ export function ScanStats() {
         <div className="card metric"><strong>{formatDurationMs(view.networkP95)}</strong><span>p95 réseau action</span></div>
         <div className="card metric"><strong>{formatDurationMs(view.serverP95)}</strong><span>p95 serveur action</span></div>
       </div>
+
+      <div className="grid grid-4">
+        <div className="card metric"><strong>{formatDurationMs(camera.last)}</strong><span>ouverture caméra (dernière)</span></div>
+        <div className="card metric"><strong>{formatDurationMs(camera.median)}</strong><span>ouverture caméra (médiane)</span></div>
+        <div className="card metric"><strong>{formatDurationMs(camera.max)}</strong><span>ouverture caméra (max)</span></div>
+        <div className="card metric"><strong>{camera.count}</strong><span>ouvertures mesurées (20 dernières)</span></div>
+      </div>
+      <p className="muted" style={{ marginTop: -6, fontSize: 13 }}>Ouverture caméra : de la demande d’accès à la caméra jusqu’au flux prêt à scanner, sur cet appareil. Indicatif : l’ouverture rapide se valide sur le téléphone réel du commerce.</p>
 
       <div className="card">
         <h3>Critère pilote</h3>

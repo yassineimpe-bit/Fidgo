@@ -8,10 +8,21 @@ import {
   classifyCameraError,
   extractLoyaltyQr,
   isDuplicateQr,
+  recordCameraReady,
   stopMediaStream,
+  trackSupportsTorch,
   type CameraIssue,
 } from "@/lib/scanner-camera";
 import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
+import {
+  SLOW_RESPONSE_MS,
+  SUCCESS_RESET_MS,
+  readScannerSound,
+  scanErrorFeedback,
+  writeScannerSound,
+  type ScanFeedbackTone,
+} from "@/lib/scanner-feedback";
+import { ScanFeedback } from "@/components/scan-feedback";
 import { normalizeScanErrorCode } from "@/lib/pilot-field-report.mjs";
 import { appendScanMetric, type RecordedScanMetric } from "@/lib/scan-metrics";
 import { PwaInstallHint } from "@/components/pwa-install-hint";
@@ -72,8 +83,39 @@ function formatLastPassage(iso: string): string {
   return `il y a ${Math.round(diffMs / 86_400_000)} j`;
 }
 
-function feedback(kind: "success" | "reward" | "error") {
+type PendingKind = "lookup" | "credit" | "redeem";
+type PendingState = { kind: PendingKind; slow: boolean } | null;
+type PendingSetter = (update: PendingState | ((current: PendingState) => PendingState)) => void;
+type TimerRef = { current: number | undefined };
+
+// Fonctions de module (setter + ref uniquement) : utilisables depuis l'effet caméra.
+function beginPending(setPending: PendingSetter, timer: TimerRef, kind: PendingKind) {
+  window.clearTimeout(timer.current);
+  setPending({ kind, slow: false });
+  timer.current = window.setTimeout(() => setPending((current) => current ? { ...current, slow: true } : current), SLOW_RESPONSE_MS);
+}
+
+function endPending(setPending: PendingSetter, timer: TimerRef) {
+  window.clearTimeout(timer.current);
+  timer.current = undefined;
+  setPending(null);
+}
+
+function safeStorage(): Storage | null {
   try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Retour sensoriel facultatif : l'état est toujours lisible à l'écran. La
+ * vibration n'est utilisée que si le navigateur l'expose ; le son reste coupé
+ * tant que le poste ne l'a pas activé explicitement (bouton « Son »).
+ */
+function feedback(kind: "success" | "reward" | "error", sound: boolean) {
+  if (sound) try {
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (AudioContextCtor) {
       const context = new AudioContextCtor();
@@ -88,9 +130,11 @@ function feedback(kind: "success" | "reward" | "error") {
       oscillator.stop(context.currentTime + (kind === "reward" ? 0.18 : 0.08));
     }
   } catch {}
-  if (navigator.vibrate) {
-    navigator.vibrate(kind === "error" ? [90, 60, 90] : kind === "reward" ? [60, 50, 140] : 60);
-  }
+  try {
+    if (typeof navigator.vibrate === "function") {
+      navigator.vibrate(kind === "error" ? [90, 60, 90] : kind === "reward" ? [60, 50, 140] : 60);
+    }
+  } catch {}
 }
 
 export function ScannerClient() {
@@ -118,7 +162,49 @@ export function ScannerClient() {
   const [clock, setClock] = useState(() => Date.now());
   const [restartTick, setRestartTick] = useState(0);
   const [rewardJustReached, setRewardJustReached] = useState(false);
+  // Requête en cours (fiche ou action) : l'écran annonce l'attente au-delà de
+  // SLOW_RESPONSE_MS, jamais un succès avant la réponse du serveur.
+  const [pending, setPending] = useState<PendingState>(null);
+  const pendingTimerRef = useRef<number | undefined>(undefined);
+  // Succès confirmé par le serveur, affiché jusqu'au retour automatique à la caméra.
+  const [confirmed, setConfirmed] = useState<{ tone: ScanFeedbackTone; title: string } | null>(null);
+  const resetTimerRef = useRef<number | undefined>(undefined);
+  const soundRef = useRef(false);
+  const [sound, setSound] = useState(false);
+  const torchTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [torch, setTorch] = useState<{ available: boolean; on: boolean }>({ available: false, on: false });
   const permissionError = cameraIssue !== null;
+
+  useEffect(() => {
+    const enabled = readScannerSound(safeStorage());
+    soundRef.current = enabled;
+    setSound(enabled);
+    const timers = [pendingTimerRef, resetTimerRef];
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer.current);
+    };
+  }, []);
+
+  function toggleSound() {
+    const next = !soundRef.current;
+    soundRef.current = next;
+    setSound(next);
+    writeScannerSound(safeStorage(), next);
+  }
+
+  async function toggleTorch() {
+    const track = torchTrackRef.current;
+    if (!track) return;
+    const next = !torch.on;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: next } as MediaTrackConstraintSet] });
+      setTorch({ available: true, on: next });
+    } catch {
+      // La piste a refusé la contrainte : on retire le bouton plutôt que de laisser un contrôle mort.
+      torchTrackRef.current = null;
+      setTorch({ available: false, on: false });
+    }
+  }
 
   useEffect(() => {
     if (!cooldownEndsAt) return;
@@ -138,6 +224,7 @@ export function ScannerClient() {
 
     const networkStarted = performance.now();
     let serverMs = 0;
+    beginPending(setPending, pendingTimerRef, "lookup");
     try {
       const scanRequest = fetch("/api/scan", {
         method: "POST",
@@ -171,6 +258,8 @@ export function ScannerClient() {
       saveMetric({ phase: "lookup", source, networkMs: Math.max(0, elapsed - serverMs), serverMs, totalMs, ok: false, at: new Date().toISOString(), errorCode: normalizeScanErrorCode(errorCode) });
       recordPilotEvent("SCAN_FAILED", totalMs, source, errorCode);
       throw caught;
+    } finally {
+      endPending(setPending, pendingTimerRef);
     }
   }
 
@@ -227,6 +316,8 @@ export function ScannerClient() {
       const currentStream = stream;
       scanner = null;
       stream = null;
+      torchTrackRef.current = null;
+      setTorch({ available: false, on: false });
       currentScanner?.destroy();
       // qr-scanner ne retire pas son overlay au destroy(). Sans ceci, chaque
       // retour d'arrière-plan PWA empilerait un nouveau viseur dans le DOM.
@@ -259,7 +350,7 @@ export function ScannerClient() {
         const invalid = scannerErrorInfo(new Error("INVALID_QR"));
         setError(invalid);
         setStatus("QR non reconnu");
-        feedback("error");
+        feedback("error", soundRef.current);
         recordPilotEvent("SCAN_FAILED", 0, "qr", "INVALID_QR");
         clearFeedbackTimer();
         feedbackTimer = window.setTimeout(() => {
@@ -283,7 +374,7 @@ export function ScannerClient() {
       } catch (caught) {
         const info = scannerErrorInfo(caught);
         setError(info);
-        feedback("error");
+        feedback("error", soundRef.current);
         setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Scan refusé");
         if (info.sessionExpired || info.network) busyRef.current = false;
         else {
@@ -376,7 +467,15 @@ export function ScannerClient() {
         }
         setCameraIssue(null);
         setStatus(navigator.onLine ? "Caméra prête" : "Hors ligne");
-        recordPilotEvent("CAMERA_READY", Math.round(performance.now() - startedAt), "qr");
+        const readyMs = Math.round(performance.now() - startedAt);
+        recordPilotEvent("CAMERA_READY", readyMs, "qr");
+        const storage = safeStorage();
+        if (storage) recordCameraReady(storage, readyMs);
+        const videoTrack = nextStream.getVideoTracks()[0];
+        if (trackSupportsTorch(videoTrack)) {
+          torchTrackRef.current = videoTrack;
+          setTorch({ available: true, on: false });
+        }
       } catch (caught) {
         if (disposed || document.hidden || attempt !== generation) return;
         reportCameraFailure(classifyCameraError(caught, {
@@ -422,16 +521,22 @@ export function ScannerClient() {
 
   async function manualLookup(event: FormEvent) {
     event.preventDefault();
-    if (!manualQuery.trim()) return;
+    if (!manualQuery.trim() || busyRef.current) return;
     setError(null);
     busyRef.current = true;
     const detectedAt = performance.now();
     let cardRequestStarted = false;
     try {
       if (!navigator.onLine) throw new Error("OFFLINE");
-      const response = await fetch(`/api/lookup?q=${encodeURIComponent(manualQuery.trim())}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "NOT_FOUND");
+      beginPending(setPending, pendingTimerRef, "lookup");
+      let data: { token?: string; error?: string };
+      try {
+        const response = await fetch(`/api/lookup?q=${encodeURIComponent(manualQuery.trim())}`);
+        data = await response.json();
+        if (!response.ok) throw new Error(data.error || "NOT_FOUND");
+      } finally {
+        endPending(setPending, pendingTimerRef);
+      }
       cardRequestStarted = true;
       await loadCardFromToken(`LOY1:${data.token}`, detectedAt, "manual");
     } catch (caught) {
@@ -439,7 +544,7 @@ export function ScannerClient() {
       const info = scannerErrorInfo(caught);
       if (!cardRequestStarted) recordPilotEvent("SCAN_FAILED", Math.round(performance.now() - detectedAt), "manual", info.code);
       setError(info);
-      feedback("error");
+      feedback("error", soundRef.current);
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion indisponible" : "Recherche refusée");
     }
   }
@@ -458,7 +563,9 @@ export function ScannerClient() {
   }
 
   async function perform(kind: "credit" | "redeem", reason?: string) {
-    if (!card) return;
+    // Une seule requête à la fois, et plus rien après une confirmation : le
+    // prochain crédit passe par un nouveau scan.
+    if (!card || action || confirmed) return;
     if (!navigator.onLine) {
       setOnline(false);
       setStatus("Hors ligne — aucune action envoyée");
@@ -474,6 +581,7 @@ export function ScannerClient() {
     const idempotencyKey = actionKeyRef.current.key;
     const started = performance.now();
     let serverMs = 0;
+    beginPending(setPending, pendingTimerRef, kind);
 
     try {
       const payload: { token: string; idempotencyKey: string; purchaseAmountCents?: number; overrideReason?: string; expectedLastEarnAt?: string | null } = {
@@ -496,6 +604,7 @@ export function ScannerClient() {
         body: JSON.stringify(payload),
       });
       const data = await response.json();
+      endPending(setPending, pendingTimerRef);
       const actionMs = Math.round(performance.now() - started);
       serverMs = Number(data.serverMs || 0);
       if (!response.ok) {
@@ -509,15 +618,21 @@ export function ScannerClient() {
       setCard({ ...card, balance: newBalance, rewardAvailable: newBalance >= card.threshold, lastEarnAt: kind === "credit" ? (data.lastEarnAt ?? new Date().toISOString()) : card.lastEarnAt });
       setRewardJustReached(rewardReached);
       setCooldownEndsAt(null);
-      feedback(kind === "redeem" || rewardReached ? "reward" : "success");
-      setStatus(kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`);
+      feedback(kind === "redeem" || rewardReached ? "reward" : "success", soundRef.current);
+      setConfirmed({
+        tone: kind === "redeem" || rewardReached ? "reward" : "success",
+        title: kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`,
+      });
+      setStatus("Confirmé par Retiko");
       saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
-      window.setTimeout(reset, 1_250);
+      window.clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = window.setTimeout(reset, SUCCESS_RESET_MS);
     } catch (caught) {
+      endPending(setPending, pendingTimerRef);
       const info = scannerErrorInfo(caught);
       const actionMs = Math.round(performance.now() - started);
       setError(info);
-      feedback("error");
+      feedback("error", soundRef.current);
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion perdue — retry sûr" : "Action refusée");
       saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: false, at: new Date().toISOString(), errorCode: normalizeScanErrorCode(info.code) });
       if (!info.retryable) actionKeyRef.current = null;
@@ -527,6 +642,9 @@ export function ScannerClient() {
   }
 
   function reset() {
+    window.clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = undefined;
+    setConfirmed(null);
     setCard(null);
     setPurchase("");
     setManualQuery("");
@@ -553,12 +671,29 @@ export function ScannerClient() {
       ? "Ajouter les points"
       : `+${formatUnits(card?.defaultEarn || 0, units)}`;
 
+  const pendingTitle = pending?.kind === "lookup" ? "Recherche de la carte…" : pending?.kind === "redeem" ? "Envoi de la récompense…" : "Envoi du crédit…";
+  const pendingBanner = pending?.slow ? <ScanFeedback tone="pending" title={pendingTitle} live="polite">
+    <div>Réseau lent : Retiko attend la réponse du serveur. Rien n’est validé tant que ce message est affiché : ne rescanne pas.</div>
+  </ScanFeedback> : null;
+  const errorBanner = (info: ScannerErrorInfo) => {
+    const kind = scanErrorFeedback(info);
+    return <ScanFeedback tone={kind.tone} title={kind.title}>
+      <div className="scan-error" role="alert">{info.message}</div>
+      {info.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
+    </ScanFeedback>;
+  };
+  const actionsLocked = !online || Boolean(action) || Boolean(confirmed);
+
   return <main className="scanner-page">
     <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
     <div className="scanner-shade" />
     <div className="scanner-top">
       <span className="scanner-pill" role="status" aria-live="polite">{online ? status : "Hors ligne"}</span>
-      <a className="scanner-pill" href="/s/stats">Stats</a>
+      <div className="scanner-top-actions">
+        {torch.available && <button type="button" className="scanner-pill" aria-pressed={torch.on} onClick={() => void toggleTorch()}>{torch.on ? "Torche allumée" : "Torche"}</button>}
+        <button type="button" className="scanner-pill" aria-pressed={sound} onClick={toggleSound}>{sound ? "Son activé" : "Son coupé"}</button>
+        <a className="scanner-pill" href="/s/stats">Stats</a>
+      </div>
     </div>
     <section className="scan-sheet">
       {card ? <div className="scan-result" aria-live="polite">
@@ -566,43 +701,47 @@ export function ScannerClient() {
         <strong>{card.firstName || "Client"}</strong>
         <div style={{fontSize:20}}>{card.balance} / {card.threshold} {units.plural}</div>
         {card.lastEarnAt && <div style={{color:"#aaa",fontSize:13}}>Dernier passage : {formatLastPassage(card.lastEarnAt)}</div>}
+        {confirmed && <ScanFeedback tone={confirmed.tone} title={confirmed.title}>
+          <div>Confirmé par le serveur. Retour à la caméra…</div>
+        </ScanFeedback>}
         {rewardJustReached
           ? <div className="scan-success" style={{fontSize:18,fontWeight:900}}>🎁 Récompense débloquée : {card.rewardLabel}</div>
-          : card.rewardAvailable && <div className="scan-success">Récompense disponible : {card.rewardLabel}</div>}
-        {card.mode === "POINTS" && card.pointsRule === "PER_EURO" && <div className="field">
-          <label>Montant achat (€)</label>
-          <input className="input" inputMode="decimal" value={purchase} onChange={(event) => setPurchase(event.target.value)} placeholder="12,50" />
+          : card.rewardAvailable && !confirmed && <div className="scan-success">🎁 Récompense disponible : {card.rewardLabel}</div>}
+        {card.mode === "POINTS" && card.pointsRule === "PER_EURO" && !confirmed && <div className="field">
+          <label htmlFor="scanner-purchase-amount">Montant achat (€)</label>
+          <input className="input" id="scanner-purchase-amount" inputMode="decimal" value={purchase} onChange={(event) => setPurchase(event.target.value)} placeholder="12,50" />
         </div>}
-        {cooldownLeft > 0 ? <div className="scan-error" role="alert">
-          <strong>Crédit récent détecté</strong>
-          <div>Temps restant : {formatRemaining(cooldownLeft)}</div>
+        {pendingBanner}
+        {cooldownLeft > 0 ? <ScanFeedback tone="cooldown" title="Crédit récent détecté">
+          <div role="alert">Temps restant : {formatRemaining(cooldownLeft)}</div>
           {card.canOverrideCooldown
-            ? <button className="btn btn-danger" style={{marginTop:8,width:"100%"}} disabled={!online || Boolean(action)} onClick={confirmNewPurchase}>Nouvel achat : autoriser un nouveau crédit</button>
+            ? <button className="btn btn-danger" style={{marginTop:8,width:"100%"}} disabled={actionsLocked} onClick={confirmNewPurchase}>Nouvel achat : autoriser un nouveau crédit</button>
             : <div style={{marginTop:6,fontSize:13}}>Pour un nouvel achat pendant ce délai, appelle un responsable.</div>}
-        </div> : error && error.code !== "COOLDOWN" && <div className="scan-error" role="alert">
-          {error.message}
-          {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
+        </ScanFeedback> : error && error.code !== "COOLDOWN" && errorBanner(error)}
+        {!confirmed && <div className="scan-actions">
+          <button className="scan-main" disabled={actionsLocked} aria-busy={action === "credit"} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>
+          <button className="scan-redeem" disabled={actionsLocked || !card.rewardAvailable} aria-busy={action === "redeem"} onClick={() => perform("redeem")}>{retryingRedeem ? "Réessayer sans doublon" : "Utiliser récompense"}</button>
         </div>}
-        <div className="scan-actions">
-          <button className="scan-main" disabled={!online || Boolean(action)} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>
-          <button className="scan-redeem" disabled={!online || !card.rewardAvailable || Boolean(action)} onClick={() => perform("redeem")}>{retryingRedeem ? "Réessayer sans doublon" : "Utiliser récompense"}</button>
-        </div>
-        <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} onClick={reset}>Annuler</button>
+        <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} disabled={Boolean(action)} onClick={reset}>{confirmed ? "Scanner le client suivant" : "Annuler"}</button>
       </div> : <div>
-        <strong style={{fontSize:20}}>{cameraIssue ? CAMERA_ISSUE_INFO[cameraIssue].title : online ? "Présente le QR client" : "Connexion internet requise"}</strong>
-        <p style={{margin:"6px 0 12px",color:"#aaa"}}>{cameraIssue ? CAMERA_ISSUE_INFO[cameraIssue].detail : online ? "Cadre le QR dans le viseur : la détection est automatique." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
-        {cameraIssue && CAMERA_ISSUE_INFO[cameraIssue].retryable && <button className="btn" style={{marginBottom:12}} onClick={retryCamera}>Réessayer la caméra</button>}
-        <form onSubmit={manualLookup}>
+        {cameraIssue
+          ? <ScanFeedback tone="camera" title={CAMERA_ISSUE_INFO[cameraIssue].title}>
+            <p style={{margin:"4px 0 0",color:"#d4d4d8"}}>{CAMERA_ISSUE_INFO[cameraIssue].detail}</p>
+          </ScanFeedback>
+          : <>
+            <strong style={{fontSize:20}}>{online ? "Présente le QR client" : "Connexion internet requise"}</strong>
+            <p style={{margin:"6px 0 12px",color:"#aaa"}}>{online ? "Cadre le QR dans le viseur : la détection est automatique." : "Aucune action fidélité ne sera envoyée tant que le réseau n’est pas revenu."}</p>
+          </>}
+        {cameraIssue && CAMERA_ISSUE_INFO[cameraIssue].retryable && <button className="btn" style={{margin:"12px 0"}} onClick={retryCamera}>Réessayer la caméra</button>}
+        <form onSubmit={manualLookup} style={{marginTop: cameraIssue ? 12 : 0}}>
           <label htmlFor="scanner-manual-query" style={{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0,0,0,0)"}}>Code court, email ou téléphone du client</label>
           <div style={{display:"flex",gap:8}}>
             <input className="input" id="scanner-manual-query" style={{minWidth:0}} value={manualQuery} onChange={(event) => setManualQuery(event.target.value)} placeholder="Code court ou email, ou téléphone" disabled={!online} />
-            <button className="btn" type="submit" style={{flexShrink:0,whiteSpace:"nowrap"}} disabled={!online}>Chercher</button>
+            <button className="btn" type="submit" style={{flexShrink:0,whiteSpace:"nowrap"}} disabled={!online || Boolean(pending)}>Chercher</button>
           </div>
         </form>
-        {error && <div className="scan-error" role="alert" style={{marginTop:10}}>
-          {error.message}
-          {error.sessionExpired && <div style={{marginTop:8}}><a className="btn" href="/login">Se reconnecter</a></div>}
-        </div>}
+        {pendingBanner && <div style={{marginTop:10}}>{pendingBanner}</div>}
+        {error && <div style={{marginTop:10}}>{errorBanner(error)}</div>}
         <div style={{marginTop:12}}><PwaInstallHint tone="dark"/></div>
       </div>}
     </section>
