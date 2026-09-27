@@ -50,6 +50,7 @@ test("récompense disponible : e-mail au franchissement du seuil, une fois, seul
     // Option désactivée par défaut, activée depuis la page Programme.
     expect(program.reward_email_enabled).toBe(false);
     await page.goto("/dashboard/program");
+    await page.getByText("Personnalisation (facultatif)").click();
     await page.getByRole("checkbox", { name: /Prévenir le client par e-mail/ }).check();
     await page.getByRole("button", { name: "Enregistrer" }).click();
     await expect(page.getByText("Programme enregistré.")).toBeVisible({ timeout: 15_000 });
