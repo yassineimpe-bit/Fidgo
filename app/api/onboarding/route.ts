@@ -17,8 +17,11 @@ async function handlePost(request: Request) {
   if (action !== "team-created" && action !== "team-skip" && action !== "finish") {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
-  const from = action === "finish" ? 4 : 3;
-  const next = from + 1;
+  // « finish » part de l'étape QR : 3 depuis que l'équipe n'est plus dans le
+  // chemin critique (#151), 4 pour un onboarding commencé avant. Les actions
+  // « team-* » restent acceptées pour les onglets encore ouverts sur l'ancien écran.
+  const from = 3;
+  const next = action === "finish" ? 5 : 4;
   const result = await sql.begin(async (tx) => {
     // Serialize retries and concurrent tabs. Never accept a tenant from the body.
     const [establishment] = await tx`select onboarding_step from establishments where id=${session.establishmentId} for update`;

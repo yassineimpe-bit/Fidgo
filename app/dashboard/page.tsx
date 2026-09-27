@@ -20,6 +20,7 @@ export default async function DashboardPage() {
       (select count(*)::int from transactions where establishment_id=${session.establishmentId} and type='redeem') rewards_redeemed,
       (select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and created_at >= now()-interval '7 days') active_week,
       (select count(*)::int from transactions where establishment_id=${session.establishmentId}) transactions,
+      (select count(*)::int from staff_users where establishment_id=${session.establishmentId} and role<>'OWNER' and active=true) team_members,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='JOIN_PAGE_VIEW') join_views,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='JOIN_SUBMIT') join_submits,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='SCAN_SUCCESS') scan_success,
@@ -65,6 +66,8 @@ export default async function DashboardPage() {
     { label: "Imprimer le QR", done: false, href: "/dashboard/poster" },
     { label: "Installer Retiko sur le téléphone caisse", done: false, href: "/s" },
     { label: "Faire un premier test", done: testDone, href: "/s" },
+    // Sorti du parcours de configuration (#151) : utile, jamais bloquant.
+    { label: "Ajouter un employé (facultatif)", done: Number(stats.team_members) > 0, href: "/dashboard/employees" },
   ];
   const nextStep = !commerceDone
     ? { text: "Étape suivante : personnalise ton commerce (logo et couleur).", href: "/dashboard/settings", cta: "Configurer mon commerce" }
