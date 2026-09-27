@@ -67,8 +67,8 @@ test("campagnes : ciblage, envoi par lots, historique, anti-spam et limite hebdo
     await expect(page.getByText("2 client(s) recevront cet e-mail.")).toBeVisible();
     await page.getByLabel("Objet").fill("Café offert cette semaine");
     await page.getByLabel("Message").fill("Bonjour,\n\nPassez nous voir : un café vous attend.");
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Envoyer à 2 client(s)" }).click();
+    await page.getByRole("dialog", { name: "Confirmer l’envoi de la campagne ?" }).getByRole("button", { name: "Confirmer l’envoi à 2 clients" }).click();
     await expect(page.getByText("Campagne envoyée.")).toBeVisible({ timeout: 15_000 });
     const history = page.getByRole("row", { name: /Café offert cette semaine/ });
     await expect(history).toContainText("2 / 2");
