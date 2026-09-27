@@ -5,7 +5,7 @@ une qualification juridique ni une durée de conservation imposée par la loi.
 Les durées doivent être validées par le responsable de traitement avant
 activation en production.
 
-## État réel des durées (vérifié sur `main` le 25/09/2026)
+## État réel des durées (vérifié sur `main` le 27/09/2026)
 
 Trois statuts, à ne jamais confondre dans un document public :
 
@@ -18,8 +18,8 @@ Trois statuts, à ne jamais confondre dans un document public :
 |---|---|---|---|
 | Session staff (cookie `loyalty_staff`) | 12 h | appliquée | `maxAge` du cookie + `token_version` |
 | Liens vérification e-mail / reset / récupération | 24 h / 30 min / 15 min, usage unique | appliquée | expiration et `used_at` en base |
-| Liens utilisés ou expirés (4 tables de tokens) | suppression à J+30 | prévue, non active | purge data lifecycle |
-| `rate_limits` | 2 jours | prévue (cron Vercel quotidien, exécution non vérifiée) | `/api/cron/purge` si `CRON_SECRET` configuré en production |
+| Liens utilisés ou expirés (3 tables de tokens) | suppression à J+30 | prévue, non active | purge data lifecycle |
+| `rate_limits` | 2 jours | prévue (cron Vercel quotidien, exécution non vérifiée ici) | `/api/cron/purge` si `CRON_SECRET` configuré en production |
 | `product_events` | 180 jours | prévue, non active | purge data lifecycle |
 | `audit_logs` | 730 jours | prévue, non active | purge data lifecycle |
 | Inscriptions Apple de passes révoqués | 30 jours | prévue, non active | purge data lifecycle |
@@ -33,14 +33,14 @@ Trois statuts, à ne jamais confondre dans un document public :
 | `subscriptions`, `stripe_webhook_events` | illimitée | à décider (obligations comptables) | aucune purge |
 | Journaux Vercel | selon le plan | à documenter | hors base |
 
-**Constat au 25/09/2026 :** le workflow `data-lifecycle` échoue chaque nuit
-(runs du 24 et du 25/09) avec `DATABASE_URL est requis` : le secret
-`DATABASE_URL` n'est pas configuré dans l'environnement GitHub `production`
-(les sauvegardes, elles, obtiennent l'accès par le broker OIDC réservé au
-workflow `database-backup`). Aucune purge — même en dry-run — n'est donc
-exécutée en production. Tant que ce point n'est pas corrigé et que
+**Constat au 27/09/2026 :** le workflow `data-lifecycle` échoue chaque nuit
+(runs #1 à #8, dernier : 27/09 02:47 UTC) avec `DATABASE_URL est requis` : le
+secret `DATABASE_URL` n'est pas configuré dans l'environnement GitHub
+`production` (les sauvegardes, elles, obtiennent l'accès par le broker OIDC
+réservé au workflow `database-backup`). Aucune purge — même en dry-run — n'est
+donc exécutée en production. Tant que ce point n'est pas corrigé et que
 `DATA_LIFECYCLE_EXECUTE` n'est pas activé, les durées « prévues » ne doivent
-pas être présentées comme appliquées.
+pas être présentées comme appliquées. Détail : `DATA_LIFECYCLE_AUDIT_2026-09-27.md`.
 
 ## Cartographie
 
@@ -137,7 +137,7 @@ Aucune transaction, carte ledger, client actif, staff, établissement,
 configuration de programme ou donnée de facturation n'est supprimé par ce
 script. Le workflow `.github/workflows/data-lifecycle.yml` exécute chaque jour
 un dry-run sur l'environnement GitHub `production`, à condition que son secret
-`DATABASE_URL` soit configuré — ce qui n'est pas le cas au 25/09/2026 (voir
+`DATABASE_URL` soit configuré — ce qui n'est pas le cas au 27/09/2026 (voir
 « État réel des durées »). La suppression planifiée ne s'exécute que si la
 variable GitHub d'environnement `DATA_LIFECYCLE_EXECUTE=true` est explicitement
 activée ; un déclenchement manuel peut également demander l'exécution. Les
