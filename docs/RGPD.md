@@ -16,8 +16,8 @@
 
 La cartographie technique détaillée, les effets exacts de l'effacement et
 l'état réel de chaque durée (appliquée / prévue non active / à décider)
-figurent dans `DATA_LIFECYCLE.md`. Au 25/09/2026, aucune purge automatique
-n'est exécutée en production.
+figurent dans `DATA_LIFECYCLE.md`. Au 27/09/2026, aucune purge automatique
+n'est exécutée en production. Preuves : `DATA_LIFECYCLE_AUDIT_2026-09-27.md`.
 
 ## Répartition des rôles pour le programme fidélité
 
