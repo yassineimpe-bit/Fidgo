@@ -76,11 +76,19 @@ fonctionne normalement (URL externes comprises).
   en 2:1 et ré-encodée en WebP 1200 × 600 sans métadonnées, stockée dans
   `establishment_card_images` et servie par `/api/card-images/<id>` (immuable,
   commerce actif uniquement). Elle sert de fond de carte (`card_background =
-  'image'`, sous un voile sombre avec texte blanc), de bannière en tête de la
+  'image'`, texte blanc ; voile sombre activé par défaut et retirable par le
+  commerçant, migration `033_card_image_overlay.sql`), de bannière en tête de la
   page d'inscription et d'image `heroImage` de l'objet Google Wallet. Apple
   Wallet ne l'affiche pas (image « strip » à générer : non fait). Un seul
   visuel par commerce : l'ancien est supprimé dans la transaction qui le
   remplace ; le retirer ramène un fond image à la couleur unie. `db:verify`
   contrôle les visuels orphelins ou d'un autre commerce.
+- **Lisibilité** : les réglages affichent en temps réel un avertissement si
+  le contraste texte / fond passe sous 4,5:1 (WCAG AA), si une extrémité du
+  dégradé est peu lisible, si la couleur secondaire est invisible sur le fond
+  ou si le visuel est affiché sans voile. Les couleurs choisies ne sont jamais
+  modifiées. Le pass Apple Wallet choisit un texte noir ou blanc selon la
+  couleur principale, comme la carte web. Un aperçu Apple Wallet / Google
+  Wallet indicatif explique ce que chaque Wallet reprend.
 - **URL externes existantes** : conservées telles quelles, sans import
   automatique.

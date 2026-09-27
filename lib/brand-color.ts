@@ -24,3 +24,21 @@ export function contrastTextColor(background: unknown, fallback = "#111111"): "#
   const perceivedBrightness = (r * 299 + g * 587 + b * 114) / 1000;
   return perceivedBrightness >= 150 ? "#000000" : "#ffffff";
 }
+
+function channelLuminance(value: number) {
+  const srgb = value / 255;
+  return srgb <= 0.03928 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+}
+
+/** Luminance relative WCAG 2.x d'une couleur #RRGGBB. */
+export function relativeLuminance(color: unknown): number {
+  const hex = normalizeHexColor(color);
+  const [r, g, b] = [1, 3, 5].map((index) => channelLuminance(parseInt(hex.slice(index, index + 2), 16)));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Ratio de contraste WCAG 2.x entre deux couleurs (1 à 21). */
+export function contrastRatio(a: unknown, b: unknown): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}

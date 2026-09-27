@@ -6,8 +6,10 @@ import { BrandPreview } from "@/components/brand-preview";
 import { LogoUploader } from "@/components/logo-uploader";
 import { CardImageUploader } from "@/components/card-image-uploader";
 import { cardImagePath } from "@/lib/card-image-path";
+import { cardContrastWarnings, readCardImageOverlay } from "@/lib/card-design";
+import { WalletPreviews } from "@/components/wallet-previews";
 
-type Restaurant = { name: string; logo_url?: string | null; primary_color: string; secondary_color?: string | null; card_background?: string | null; card_image_id?: string | null; address?: string | null; phone?: string | null; instagram?: string | null; website?: string | null };
+type Restaurant = { name: string; logo_url?: string | null; primary_color: string; secondary_color?: string | null; card_background?: string | null; card_image_id?: string | null; card_image_overlay?: string | boolean | null; address?: string | null; phone?: string | null; instagram?: string | null; website?: string | null };
 type PreviewData = { rewardThreshold: number; rewardLabel: string; unit: string; qr: string };
 
 export function RestaurantForm({ restaurant, preview, onboarding = false }: { restaurant: Restaurant; preview: PreviewData; onboarding?: boolean }) {
@@ -27,6 +29,7 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
       ? String(restaurant.card_background)
       : "solid",
   );
+  const [cardImageOverlay, setCardImageOverlay] = useState(readCardImageOverlay(restaurant.card_image_overlay));
   // Fond réellement applicable : dégradé sans secondaire ou image sans visuel retombent sur l'uni.
   const effectiveBackground = (cardBackground === "gradient" && !secondaryColor) || (cardBackground === "image" && !cardImageUrl) ? "solid" : cardBackground;
 
@@ -44,10 +47,10 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
     event.preventDefault(); setBusy(true); setMessage("");
     const f = new FormData(event.currentTarget);
     try {
-      const response = await fetch("/api/restaurant", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ onboarding,name,logoUrl,primaryColor,secondaryColor:secondaryColor||null,cardBackground:effectiveBackground,address:f.get("address"),phone:f.get("phone"),instagram:f.get("instagram"),website:f.get("website") }) });
+      const response = await fetch("/api/restaurant", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ onboarding,name,logoUrl,primaryColor,secondaryColor:secondaryColor||null,cardBackground:effectiveBackground,cardImageOverlay,address:f.get("address"),phone:f.get("phone"),instagram:f.get("instagram"),website:f.get("website") }) });
       const error = response.ok ? "" : String((await response.json().catch(() => ({}))).error || "");
       setMessage(response.ok ? "Commerce enregistré." : error === "CARD_DESIGN_UNAVAILABLE"
-        ? "La couleur secondaire n’est pas encore disponible sur ce serveur."
+        ? "Cette option d’apparence n’est pas encore disponible sur ce serveur."
         : "Impossible d’enregistrer. Vérifie les champs et les URL HTTPS.");
       if (response.ok && onboarding) { router.push("/onboarding?step=2"); router.refresh(); }
     } catch {
@@ -56,8 +59,11 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
       setBusy(false);
     }
   }
+  const previewColor = isValidHexColor(hexInput) ? primaryColor : "#111111";
+  const warnings = cardContrastWarnings({ primaryColor: previewColor, secondaryColor: secondaryColor || null, cardBackground: effectiveBackground, cardImageUrl, cardImageOverlay });
   return <div className="grid grid-2" style={{alignItems:"start"}}>
     <form className="card form" onSubmit={submit}>
+      <a className="mobile-only" href="#apercu-carte">Voir l’aperçu de la carte</a>
       <div className="grid grid-2">
         <div className="field"><label htmlFor="restaurant-name">Nom</label><input className="input" id="restaurant-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required/></div>
         <div className="field">
@@ -87,6 +93,10 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
           </select>
         </div>
       </div>
+      {effectiveBackground === "image" && <label className="check-row check-row--touch">
+        <input type="checkbox" checked={cardImageOverlay} onChange={(e) => setCardImageOverlay(e.target.checked)}/>
+        <span>Assombrir le visuel (voile) pour garder le texte lisible</span>
+      </label>}
       {!onboarding && <CardImageUploader cardImageUrl={cardImageUrl} onChange={(url) => { setCardImageUrl(url); if (url) setCardBackground("image"); router.refresh(); }}/>}
       <LogoUploader logoUrl={logoUrl} onChange={setLogoUrl}/>
       <div className="field"><label htmlFor="restaurant-logo">URL du logo</label><input className="input" id="restaurant-logo" type="text" inputMode="url" maxLength={500} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png"/><small className="muted">Ou l’adresse HTTPS d’une image déjà en ligne. Un logo importé apparaît ici sous la forme /api/logos/….</small></div>
@@ -95,10 +105,14 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
       <div className="field"><label htmlFor="restaurant-website">Site web</label><input className="input" id="restaurant-website" name="website" type="url" maxLength={500} defaultValue={restaurant.website || ""}/></div>
       {message && <div className="notice" role={message.includes("enregistré") ? undefined : "alert"}>{message}</div>}<button className="btn btn-primary" disabled={busy || !isValidHexColor(hexInput)}>{busy ? "Enregistrement…" : onboarding ? "Enregistrer et continuer" : "Enregistrer"}</button>
     </form>
-    <div className="card" style={{background:"var(--surface-2, #f5f6f8)"}}>
+    <div className="card" id="apercu-carte" style={{background:"var(--surface-2, #f5f6f8)"}}>
       <h3 style={{marginTop:0}}>Aperçu</h3>
-      <p className="muted" style={{marginTop:-8}}>Ce que verra ton client sur sa carte et l’affiche.</p>
-      <BrandPreview name={name} logoUrl={logoUrl} primaryColor={isValidHexColor(hexInput) ? primaryColor : "#111111"} secondaryColor={secondaryColor || null} cardBackground={effectiveBackground} cardImageUrl={cardImageUrl} rewardThreshold={preview.rewardThreshold} rewardLabel={preview.rewardLabel} unit={preview.unit} qr={preview.qr}/>
+      <p className="muted" style={{marginTop:-8}}>Ce que verra ton client sur sa carte web et l’affiche.</p>
+      <BrandPreview name={name} logoUrl={logoUrl} primaryColor={previewColor} secondaryColor={secondaryColor || null} cardBackground={effectiveBackground} cardImageUrl={cardImageUrl} cardImageOverlay={cardImageOverlay} rewardThreshold={preview.rewardThreshold} rewardLabel={preview.rewardLabel} unit={preview.unit} qr={preview.qr}/>
+      <div aria-live="polite">
+        {warnings.map((warning) => <p key={warning} className="notice error contrast-warning" style={{marginTop:12}}><strong>⚠ Lisibilité :</strong> {warning}</p>)}
+      </div>
+      <WalletPreviews name={name} primaryColor={previewColor} cardImageUrl={cardImageUrl} rewardThreshold={preview.rewardThreshold} rewardLabel={preview.rewardLabel} unit={preview.unit} qr={preview.qr}/>
     </div>
   </div>;
 }

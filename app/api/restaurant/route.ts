@@ -34,7 +34,8 @@ async function handleGet() {
   const [restaurant] = await sql`
     select id, slug, name, logo_url, primary_color, address, phone, instagram, website, status, created_at, updated_at,
       to_jsonb(e)->>'secondary_color' as secondary_color, coalesce(to_jsonb(e)->>'card_background', 'solid') as card_background,
-      to_jsonb(e)->>'card_image_id' as card_image_id
+      to_jsonb(e)->>'card_image_id' as card_image_id,
+      coalesce((to_jsonb(e)->>'card_image_overlay')::boolean, true) as card_image_overlay
     from establishments e where id = ${session.establishmentId}
   `;
   return Response.json(restaurant, { headers: { "cache-control": "no-store" } });
@@ -95,6 +96,16 @@ async function handlePatch(req: Request) {
   if (designSent && !designColumns && (secondaryColor || values.cardBackground === "gradient" || values.cardBackground === "image")) {
     return Response.json({ error: "CARD_DESIGN_UNAVAILABLE" }, { status: 503 });
   }
+  // Voile sur le visuel (migration 033) : choix explicite, jamais imposé.
+  if (values.cardImageOverlay !== undefined && typeof values.cardImageOverlay !== "boolean") {
+    return Response.json({ error: "INVALID_FIELD", field: "cardImageOverlay" }, { status: 400 });
+  }
+  const [overlayColumn] = values.cardImageOverlay !== undefined
+    ? await sql`select 1 from information_schema.columns where table_schema='public' and table_name='establishments' and column_name='card_image_overlay'`
+    : [];
+  if (values.cardImageOverlay === false && !overlayColumn) {
+    return Response.json({ error: "CARD_DESIGN_UNAVAILABLE" }, { status: 503 });
+  }
   const address = typeof values.address === "string" ? values.address.trim() || null : null;
   const phone = typeof values.phone === "string" ? values.phone.trim() || null : null;
   const instagram = typeof values.instagram === "string" ? values.instagram.trim() || null : null;
@@ -125,6 +136,14 @@ async function handlePatch(req: Request) {
         returning secondary_color, card_background
       `;
       Object.assign(updated, designed);
+    }
+    if (overlayColumn) {
+      const [overlay] = await tx`
+        update establishments set card_image_overlay=${values.cardImageOverlay === true}
+        where id=${session.establishmentId}
+        returning card_image_overlay
+      `;
+      Object.assign(updated, overlay);
     }
     await tx`
       insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id)
