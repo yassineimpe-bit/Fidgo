@@ -1,8 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { pasteTotpCode } from "@/components/auth-form";
-import { secondFactorPayload } from "@/lib/one-time-code";
+import { pasteTotpCode, secondFactorPayload } from "@/lib/one-time-code";
 
 type Status = { available: boolean; enabled: boolean; recoveryCodesRemaining: number };
 type Step = "idle" | "password" | "scan" | "codes" | "disable" | "regenerate";

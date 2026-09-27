@@ -1,3 +1,5 @@
+import type { ClipboardEvent } from "react";
+
 /**
  * Code à 6 chiffres collé depuis une application d'authentification : certaines
  * le copient avec une espace ou un tiret (« 123 456 »). Sans nettoyage, la
@@ -16,4 +18,12 @@ export function secondFactorPayload(value: string): { code: string } | { recover
   const trimmed = value.trim();
   const totp = pastedTotpCode(trimmed);
   return totp ? { code: totp } : { recoveryCode: trimmed };
+}
+
+/** Colle « 123 456 » en « 123456 » au lieu de laisser la limite de 6 caractères tronquer le code. */
+export function pasteTotpCode(event: ClipboardEvent<HTMLInputElement>) {
+  const code = pastedTotpCode(event.clipboardData.getData("text"));
+  if (!code) return;
+  event.preventDefault();
+  event.currentTarget.value = code;
 }

@@ -1,17 +1,9 @@
 "use client";
 import Link from "next/link";
-import { ClipboardEvent, FormEvent, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LEGAL_LINKS, LEGAL_VERSION } from "@/lib/legal";
-import { pastedTotpCode } from "@/lib/one-time-code";
-
-/** Colle « 123 456 » en « 123456 » au lieu de laisser la limite de 6 caractères tronquer le code. */
-export function pasteTotpCode(event: ClipboardEvent<HTMLInputElement>) {
-  const code = pastedTotpCode(event.clipboardData.getData("text"));
-  if (!code) return;
-  event.preventDefault();
-  event.currentTarget.value = code;
-}
+import { pasteTotpCode } from "@/lib/one-time-code";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_EXISTS: "Un compte existe déjà avec cet email.",
