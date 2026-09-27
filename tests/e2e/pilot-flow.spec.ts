@@ -53,6 +53,7 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   // Instrumentation pilote : JOIN_PAGE_VIEW/SCAN_SUCCESS doivent avoir été
   // enregistrés et agrégés, sans quoi ce compteur resterait à zéro.
   await page.goto("/dashboard");
+  await page.getByText("Indicateurs techniques du scanner (pilote)").click();
   const scanSuccessMetric = page.locator(".metric", { hasText: "scans réussis" }).locator("strong");
   await expect(scanSuccessMetric).toBeVisible();
   await expect(scanSuccessMetric).not.toHaveText("0");
