@@ -44,7 +44,8 @@ test("2FA TOTP : activation, connexion en deux étapes, rejeu refusé, codes de 
     await page.getByRole("button", { name: "Activer la double authentification" }).click();
     await page.locator("#two-factor-password").fill("wrong-password");
     await page.getByRole("button", { name: "Continuer" }).click();
-    await expect(page.getByText("Mot de passe incorrect.")).toBeVisible();
+    // Premier appel de /api/account/two-factor : compilation à la demande du serveur de dev.
+    await expect(page.getByText("Mot de passe incorrect.")).toBeVisible({ timeout: 15_000 });
     await page.locator("#two-factor-password").fill(password);
     await page.getByRole("button", { name: "Continuer" }).click();
     await expect(page.getByRole("img", { name: "QR code de la double authentification" })).toBeVisible();
@@ -88,7 +89,8 @@ test("2FA TOTP : activation, connexion en deux étapes, rejeu refusé, codes de 
     const wrong = ["000000", "111111", "222222"].find((candidate) => !valid.has(candidate))!;
     await first.page.getByLabel("Code de vérification").fill(wrong);
     await first.page.getByRole("button", { name: "Vérifier" }).click();
-    await expect(first.page.getByText(/Code incorrect ou déjà utilisé/)).toBeVisible();
+    // Premier appel de /api/auth/login/verify : même compilation à la demande.
+    await expect(first.page.getByText(/Code incorrect ou déjà utilisé/)).toBeVisible({ timeout: 15_000 });
     const loginCode = code(secret, enabledStep + 1);
     await first.page.getByLabel("Code de vérification").fill(loginCode);
     await first.page.getByRole("button", { name: "Vérifier" }).click();
