@@ -142,6 +142,8 @@ h3 { letter-spacing: -.025em; }
 .notice.success { border-color: #cbe5d7; background: #f1faf5; color: var(--success); }
 .disclosure > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 760; }
 .disclosure[open] > summary { margin-bottom: 8px; }
+.wallet-diagnostic > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 720; }
+.role-help { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
 .form-section { border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; }
 .form-section > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 720; }
 .form-section[open] { padding-bottom: 14px; }

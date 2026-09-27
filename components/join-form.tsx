@@ -89,12 +89,12 @@ export function JoinForm({ slug, recoveryEnabled = false }: { slug: string; reco
 
   return <form className="form" onSubmit={submit}>
     <div className="field">
-      <label htmlFor="join-first-name">Prénom <span className="muted">(facultatif)</span></label>
-      <input className="input" id="join-first-name" name="firstName" autoComplete="given-name"/>
+      <label htmlFor="join-email">Email</label>
+      <input className="input" id="join-email" name="email" type="email" required autoComplete="email" inputMode="email"/>
     </div>
     <div className="field">
-      <label htmlFor="join-email">Email</label>
-      <input className="input" id="join-email" name="email" type="email" required autoComplete="email"/>
+      <label htmlFor="join-first-name">Prénom <span className="muted">(facultatif)</span></label>
+      <input className="input" id="join-first-name" name="firstName" autoComplete="given-name"/>
     </div>
     <div className="field">
       <label htmlFor="join-phone">Téléphone <span className="muted">(facultatif)</span></label>

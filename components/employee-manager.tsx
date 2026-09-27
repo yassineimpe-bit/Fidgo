@@ -7,6 +7,7 @@ import {
   staffRoleLabel,
   type StaffRole,
 } from "@/lib/loyalty";
+import { STAFF_ROLE_HELP, staffErrorMessage } from "@/lib/staff-messages";
 
 type Employee = { id: string; email: string; role: StaffRole; active: boolean; created_at: string };
 
@@ -28,7 +29,7 @@ export function EmployeeManager({ initial, currentRole }: { initial: Employee[];
         body: JSON.stringify({ email: form.get("email"), password: form.get("password"), role: form.get("role") }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setMessage(data.error || "Erreur"); return; }
+      if (!response.ok) { setMessage(staffErrorMessage(data.error)); return; }
       setRows((previous) => [...previous, data]);
       formElement.reset();
       setMessage("Accès créé.");
@@ -49,7 +50,7 @@ export function EmployeeManager({ initial, currentRole }: { initial: Employee[];
         body: JSON.stringify(patch),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setMessage(data.error || "Erreur"); return; }
+      if (!response.ok) { setMessage(staffErrorMessage(data.error)); return; }
       setRows((previous) => previous.map((row) => row.id === employee.id ? data : row));
       setMessage("Accès mis à jour.");
     } catch {
@@ -70,10 +71,14 @@ export function EmployeeManager({ initial, currentRole }: { initial: Employee[];
       <form className="form" onSubmit={createEmployee}>
         <div className="field"><label htmlFor="employee-email">Email</label><input className="input" id="employee-email" name="email" type="email" required autoComplete="off"/></div>
         <div className="field"><label htmlFor="employee-password">Mot de passe temporaire</label><input className="input" id="employee-password" name="password" type="password" minLength={8} required autoComplete="new-password"/></div>
-        <div className="field"><label htmlFor="employee-role">Rôle</label><select className="select" id="employee-role" name="role">
+        <div className="field"><label htmlFor="employee-role">Rôle</label><select className="select" id="employee-role" name="role" aria-describedby="employee-role-help">
           {createRoles.map((role) => <option key={role} value={role}>{staffRoleLabel(role)}</option>)}
-        </select></div>
-        {message && <div className="notice">{message}</div>}
+        </select>
+          <ul id="employee-role-help" className="muted role-help">
+            {createRoles.map((role) => <li key={role}><strong>{staffRoleLabel(role)}</strong> : {STAFF_ROLE_HELP[role as keyof typeof STAFF_ROLE_HELP]}</li>)}
+          </ul>
+        </div>
+        {message && <div className="notice" role={message.startsWith("Accès") ? "status" : "alert"}>{message}</div>}
         <button className="btn btn-primary" disabled={busy}>{busy ? "Création…" : "Créer l’accès"}</button>
       </form>
     </section>
