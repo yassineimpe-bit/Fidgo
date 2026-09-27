@@ -82,17 +82,24 @@ Toujours ouvrir `/s/stats` depuis le bouton **Stats** du scanner, dans la même 
 
 **Analyse**
 
-9. Copier `iphone.json` et `android.json` sur le Mac (AirDrop, e-mail à soi-même, Google Drive ou câble), sans les ouvrir dans un éditeur.
+9. Depuis la racine du dépôt, créer `../retiko-pilot-evidence`, puis y copier les deux exports sans les ouvrir dans un éditeur :
+
+```bash
+mkdir -p ../retiko-pilot-evidence
+```
+
+Les chemins attendus sont `../retiko-pilot-evidence/iphone.json` et `../retiko-pilot-evidence/android.json`.
 10. Depuis le dépôt Retiko, lancer :
 
 ```bash
 npm run pilot:field-report -- \
-  --iphone iphone.json \
-  --android android.json \
-  --markdown-output pilot-result.md
+  --iphone ../retiko-pilot-evidence/iphone.json \
+  --android ../retiko-pilot-evidence/android.json \
+  --markdown-output ../retiko-pilot-evidence/pilot-result.md \
+  --json-output ../retiko-pilot-evidence/pilot-result.json
 ```
 
-11. Reporter p50, p90, p95, max et le verdict dans la section 5, puis archiver `iphone.json`, `android.json` et `pilot-result.md` avec ce protocole.
+11. Reporter p50, p90, p95, max et le verdict dans la section 5. Conserver ensemble les deux exports bruts et les deux rapports dans `../retiko-pilot-evidence` ; ne jamais les committer.
 
 **Règles qui conditionnent la validité des mesures**
 
@@ -158,6 +165,46 @@ Ces scénarios ne sont **pas inclus** dans les calculs médiane / p90 / p95 : le
 
 Les erreurs attendues ne sont pas considérées comme des échecs si Retiko réagit conformément au comportement attendu.
 
+### Checklist téléphone simplifiée
+
+Exécuter cette checklist **après l'export des 15 mesures nominales de chaque appareil et après les commandes `pilot:field-report` et `pilot:ledger-audit`**. Les opérations adverses, ajustements et annulations ne doivent pas contaminer le calcul p95 ni la fenêtre du rapprochement nominal.
+
+**TEST ANDROID — Chrome puis PWA installée**
+
+- [ ] Ouvrir le scanner et vérifier que la session Employé est active.
+- [ ] Autoriser la caméra et vérifier que le flux vidéo démarre.
+- [ ] Refuser la caméra, vérifier le message, la réautoriser dans les réglages du site puis reprendre sans réinstaller la PWA.
+- [ ] Scanner un QR réel et effectuer un crédit.
+- [ ] Effectuer un redeem avec confirmation, puis vérifier le solde.
+- [ ] Effectuer un ajustement OWNER/MANAGER avec motif, puis vérifier l'historique.
+- [ ] Annuler une transaction éligible, puis vérifier l'écriture de reversal et le solde.
+- [ ] Passer l'application en arrière-plan pendant le parcours, revenir et reprendre sans état incohérent.
+- [ ] Couper le réseau pendant une requête, le rétablir et reprendre sans double crédit.
+- [ ] Faire une double lecture rapide, puis une tentative pendant le cooldown : aucune seconde écriture non autorisée.
+- [ ] Scanner la même carte avec l'iPhone et vérifier une transaction par action réellement réussie.
+
+**TEST IPHONE — Safari puis PWA installée**
+
+- [ ] Ouvrir le scanner et vérifier que la session Employé est active.
+- [ ] Autoriser la caméra et vérifier que le flux vidéo démarre.
+- [ ] Refuser la caméra, vérifier le message, la réautoriser dans les réglages Safari puis reprendre sans réinstaller la PWA.
+- [ ] Scanner un QR réel et effectuer un crédit.
+- [ ] Effectuer un redeem avec confirmation, puis vérifier le solde.
+- [ ] Effectuer un ajustement OWNER/MANAGER avec motif, puis vérifier l'historique.
+- [ ] Annuler une transaction éligible, puis vérifier l'écriture de reversal et le solde.
+- [ ] Passer Safari/PWA en arrière-plan pendant le parcours, revenir et reprendre sans état incohérent.
+- [ ] Couper le réseau pendant une requête, le rétablir et reprendre sans double crédit.
+- [ ] Faire une double lecture rapide, puis une tentative pendant le cooldown : aucune seconde écriture non autorisée.
+- [ ] Scanner la même carte avec l'Android et vérifier une transaction par action réellement réussie.
+
+**SÉRIE RUSH — avant les tests ci-dessus**
+
+- [ ] Effacer les anciennes mesures dans `/s/stats` sur chaque scanner.
+- [ ] Réaliser 15 scans nominaux réussis avec l'Android comme scanner.
+- [ ] Réaliser 15 scans nominaux réussis avec l'iPhone comme scanner.
+- [ ] Vérifier visuellement qu'aucun double crédit n'apparaît.
+- [ ] Exporter immédiatement `android.json` et `iphone.json` avant tout scénario adverse.
+
 | ID | Scanner | Client (Support) | Scénario adverse | Résultat attendu | Résultat (OK/KO) | Notes |
 |---|---|---|---|---|---|---|
 | A1 | iPhone | Android (PWA Chrome) | **Réseau lent** sur le scanner | Succès ou attente contrôlée, aucun crash, aucun double crédit | | |
@@ -172,6 +219,15 @@ Les erreurs attendues ne sont pas considérées comme des échecs si Retiko réa
 | A10 | iPhone | Android (Google Wallet) | **Deuxième tentative sur la même récompense** | Refus, aucun double débit, ledger inchangé | | |
 | A11 | iPhone | Android (PWA Chrome) | **Manager : override manuel** (« Nouvel achat : autoriser un nouveau crédit ») | Succès, solde ajusté correctement, historique correct | | |
 | A12 | Android | iPhone (PWA Safari) | **Manager : override manuel** (« Nouvel achat : autoriser un nouveau crédit ») | Succès, solde ajusté correctement, historique correct | | |
+| A13 | iPhone | — | **Permission caméra refusée puis réautorisée** | Message exploitable, retour au scan sans réinstallation | | |
+| A14 | Android | — | **Permission caméra refusée puis réautorisée** | Message exploitable, retour au scan sans réinstallation | | |
+| A15 | iPhone | Android (PWA Chrome) | **Arrière-plan puis reprise** pendant le parcours | Reprise sans état incohérent ni double action | | |
+| A16 | Android | iPhone (PWA Safari) | **Arrière-plan puis reprise** pendant le parcours | Reprise sans état incohérent ni double action | | |
+| A17 | iPhone | Android (PWA Chrome) | **Perte réseau puis reconnexion** pendant une requête | Reprise claire, aucune transaction dupliquée | | |
+| A18 | Android | iPhone (PWA Safari) | **Nouvelle tentative pendant le cooldown** | Refus explicite, aucune seconde écriture non autorisée | | |
+| A19 | iPhone + Android | Même carte client | **Deux scanners sur la même carte** dans le cooldown | Une transaction par action autorisée, aucune course ni double crédit | | |
+| A20 | OWNER/MANAGER | Fiche client | **Ajustement manuel avec motif** | Solde et historique exacts, acteur et motif présents | | |
+| A21 | OWNER/MANAGER | Transaction éligible | **Annulation / reversal** | Écriture compensatrice unique, solde et historique exacts | | |
 
 ### Validation des scénarios adverses
 
@@ -270,9 +326,10 @@ Obtenue séparément, jamais à partir des métriques navigateur :
    ```bash
    DATABASE_URL="<url de lecture, fournie par l'environnement>" npm run pilot:ledger-audit -- \
      --establishment <slug-du-commerce-de-test> \
-     --iphone iphone.json \
-     --android android.json \
-     --markdown-output ledger-result.md
+     --iphone ../retiko-pilot-evidence/iphone.json \
+     --android ../retiko-pilot-evidence/android.json \
+     --markdown-output ../retiko-pilot-evidence/ledger-result.md \
+     --json-output ../retiko-pilot-evidence/ledger-result.json
    ```
 
    Pour chaque série, sur la fenêtre horaire de ses actions (horloge du téléphone, ± 1 min par défaut, `--margin-minutes` pour ajuster) : exactement une transaction `earn` par crédit réussi et une `redeem` par récompense réussie, aucun ajustement, aucune annulation, aucun override de cooldown ; sur toutes les cartes du commerce, ledger = solde et aucun solde négatif. Code 0 = COHÉRENT, 1 = À ANALYSER, 2 = erreur. Le slug du commerce figure dans son lien d'inscription `/j/<slug>`. Ne réaliser aucune autre opération sur le commerce de test pendant les séries.
@@ -402,7 +459,7 @@ La Gate Pilote (§23) est **GO** uniquement si toutes les conditions suivantes s
 - [ ] Google Wallet validé sur un vrai Android.
 - [ ] Safari iOS validé.
 - [ ] Chrome Android validé.
-- [ ] Les scénarios adverses A1 à A12 ont tous été exécutés.
+- [ ] Les scénarios adverses A1 à A21 ont tous été exécutés.
 - [ ] Les comportements d'erreur correspondent aux résultats attendus.
 - [ ] Zéro bug P0.
 - [ ] Zéro bug P1.
