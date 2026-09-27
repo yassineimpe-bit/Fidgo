@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { isValidHexColor } from "@/lib/brand-color";
 import { BrandPreview } from "@/components/brand-preview";
@@ -75,34 +75,38 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
           {!isValidHexColor(hexInput) && <small style={{color:"var(--danger, #d33)"}}>Format attendu : #RRGGBB</small>}
         </div>
       </div>
-      <div className="grid grid-2">
-        <div className="field">
-          <label htmlFor="restaurant-secondary-color">Couleur secondaire</label>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <input id="restaurant-secondary-color" aria-label="Couleur secondaire" type="color" value={secondaryColor || "#ffffff"} onChange={(e) => setSecondaryColor(e.target.value)} style={{width:44,height:40,padding:2,flexShrink:0}}/>
-            {secondaryColor ? <button type="button" className="btn" onClick={() => setSecondaryColor("")}>Retirer</button> : <small className="muted">Facultative</small>}
+      {/* À l'onboarding, seuls le nom et la couleur précèdent le premier test :
+          le reste est replié et reste modifiable ensuite dans Commerce. */}
+      <OptionalSettings collapsed={onboarding}>
+        <div className="grid grid-2">
+          <div className="field">
+            <label htmlFor="restaurant-secondary-color">Couleur secondaire</label>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input id="restaurant-secondary-color" aria-label="Couleur secondaire" type="color" value={secondaryColor || "#ffffff"} onChange={(e) => setSecondaryColor(e.target.value)} style={{width:44,height:40,padding:2,flexShrink:0}}/>
+              {secondaryColor ? <button type="button" className="btn" onClick={() => setSecondaryColor("")}>Retirer</button> : <small className="muted">Facultative</small>}
+            </div>
+            <small className="muted">Barre de progression et fin du dégradé.</small>
           </div>
-          <small className="muted">Barre de progression et fin du dégradé.</small>
+          <div className="field">
+            <label htmlFor="restaurant-card-background">Fond de la carte</label>
+            <select className="select" id="restaurant-card-background" value={effectiveBackground} disabled={!secondaryColor && !cardImageUrl} onChange={(e) => setCardBackground(e.target.value)}>
+              <option value="solid">Couleur principale unie</option>
+              <option value="gradient" disabled={!secondaryColor}>Dégradé principale → secondaire</option>
+              <option value="image" disabled={!cardImageUrl}>Visuel importé</option>
+            </select>
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="restaurant-card-background">Fond de la carte</label>
-          <select className="select" id="restaurant-card-background" value={effectiveBackground} disabled={!secondaryColor && !cardImageUrl} onChange={(e) => setCardBackground(e.target.value)}>
-            <option value="solid">Couleur principale unie</option>
-            <option value="gradient" disabled={!secondaryColor}>Dégradé principale → secondaire</option>
-            <option value="image" disabled={!cardImageUrl}>Visuel importé</option>
-          </select>
-        </div>
-      </div>
-      {effectiveBackground === "image" && <label className="check-row check-row--touch">
-        <input type="checkbox" checked={cardImageOverlay} onChange={(e) => setCardImageOverlay(e.target.checked)}/>
-        <span>Assombrir le visuel (voile) pour garder le texte lisible</span>
-      </label>}
-      {!onboarding && <CardImageUploader cardImageUrl={cardImageUrl} onChange={(url) => { setCardImageUrl(url); if (url) setCardBackground("image"); router.refresh(); }}/>}
-      <LogoUploader logoUrl={logoUrl} onChange={setLogoUrl}/>
-      <div className="field"><label htmlFor="restaurant-logo">URL du logo</label><input className="input" id="restaurant-logo" type="text" inputMode="url" maxLength={500} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png"/><small className="muted">Ou l’adresse HTTPS d’une image déjà en ligne. Un logo importé apparaît ici sous la forme /api/logos/….</small></div>
-      <div className="field"><label htmlFor="restaurant-address">Adresse</label><input className="input" id="restaurant-address" name="address" maxLength={240} defaultValue={restaurant.address || ""}/></div>
-      <div className="grid grid-2"><div className="field"><label htmlFor="restaurant-phone">Téléphone</label><input className="input" id="restaurant-phone" name="phone" maxLength={40} defaultValue={restaurant.phone || ""}/></div><div className="field"><label htmlFor="restaurant-instagram">Instagram</label><input className="input" id="restaurant-instagram" name="instagram" maxLength={120} defaultValue={restaurant.instagram || ""}/></div></div>
-      <div className="field"><label htmlFor="restaurant-website">Site web</label><input className="input" id="restaurant-website" name="website" type="url" maxLength={500} defaultValue={restaurant.website || ""}/></div>
+        {effectiveBackground === "image" && <label className="check-row check-row--touch">
+          <input type="checkbox" checked={cardImageOverlay} onChange={(e) => setCardImageOverlay(e.target.checked)}/>
+          <span>Assombrir le visuel (voile) pour garder le texte lisible</span>
+        </label>}
+        {!onboarding && <CardImageUploader cardImageUrl={cardImageUrl} onChange={(url) => { setCardImageUrl(url); if (url) setCardBackground("image"); router.refresh(); }}/>}
+        <LogoUploader logoUrl={logoUrl} onChange={setLogoUrl}/>
+        <div className="field"><label htmlFor="restaurant-logo">URL du logo</label><input className="input" id="restaurant-logo" type="text" inputMode="url" maxLength={500} value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png"/><small className="muted">Ou l’adresse HTTPS d’une image déjà en ligne. Un logo importé apparaît ici sous la forme /api/logos/….</small></div>
+        <div className="field"><label htmlFor="restaurant-address">Adresse</label><input className="input" id="restaurant-address" name="address" maxLength={240} defaultValue={restaurant.address || ""}/></div>
+        <div className="grid grid-2"><div className="field"><label htmlFor="restaurant-phone">Téléphone</label><input className="input" id="restaurant-phone" name="phone" maxLength={40} defaultValue={restaurant.phone || ""}/></div><div className="field"><label htmlFor="restaurant-instagram">Instagram</label><input className="input" id="restaurant-instagram" name="instagram" maxLength={120} defaultValue={restaurant.instagram || ""}/></div></div>
+        <div className="field"><label htmlFor="restaurant-website">Site web</label><input className="input" id="restaurant-website" name="website" type="url" maxLength={500} defaultValue={restaurant.website || ""}/></div>
+      </OptionalSettings>
       {message && <div className="notice" role={message.includes("enregistré") ? undefined : "alert"}>{message}</div>}<button className="btn btn-primary" disabled={busy || !isValidHexColor(hexInput)}>{busy ? "Enregistrement…" : onboarding ? "Enregistrer et continuer" : "Enregistrer"}</button>
     </form>
     <div className="card" id="apercu-carte" style={{background:"var(--surface-2, #f5f6f8)"}}>
@@ -115,4 +119,13 @@ export function RestaurantForm({ restaurant, preview, onboarding = false }: { re
       <WalletPreviews name={name} primaryColor={previewColor} cardImageUrl={cardImageUrl} rewardThreshold={preview.rewardThreshold} rewardLabel={preview.rewardLabel} unit={preview.unit} qr={preview.qr}/>
     </div>
   </div>;
+}
+
+function OptionalSettings({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
+  if (!collapsed) return <>{children}</>;
+  return <details className="optional-settings">
+    <summary>Logo, coordonnées et fond de carte (facultatif)</summary>
+    <p className="muted" style={{marginTop:8}}>Rien d’obligatoire ici pour faire ton premier test : tu pourras tout compléter plus tard dans Commerce.</p>
+    <div className="form">{children}</div>
+  </details>;
 }
