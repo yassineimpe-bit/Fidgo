@@ -46,7 +46,8 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
   await expect(page.getByText(/Récompense disponible/)).toBeVisible();
   await page.getByRole("button", { name: "Utiliser la récompense" }).click();
   await page.getByRole("button", { name: "Confirmer l’utilisation" }).click();
-  await expect(page.getByText("Récompense utilisée")).toBeVisible();
+  // Premier appel de /api/redeem : compilé à la demande par le serveur de dev.
+  await expect(page.getByText("Récompense utilisée")).toBeVisible({ timeout: 15_000 });
   await expect(cardPage.getByText("0 / 10")).toBeVisible({ timeout: 8_000 });
 
   // Instrumentation pilote : JOIN_PAGE_VIEW/SCAN_SUCCESS doivent avoir été
