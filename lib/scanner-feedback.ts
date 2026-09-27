@@ -28,7 +28,6 @@ const REFUSED_CODES = new Set([
   "CARD_EXPIRED",
   "DAILY_LIMIT",
   "STALE_CARD_STATE",
-  "INSUFFICIENT_BALANCE",
 ]);
 
 /** Titre court et catégorie d'une erreur du scanner (le message détaillé reste celui de scannerErrorInfo). */
@@ -42,8 +41,21 @@ export function scanErrorFeedback(info: ScannerErrorInfo): ScanFeedbackKind {
   // « carte inconnue » : aucune information ne fuit d'un tenant à l'autre.
   if (info.code === "CARD_NOT_FOUND" || info.code === "NOT_FOUND") return { tone: "wrong-card", title: "Carte inconnue ici" };
   if (info.code === "RATE_LIMITED" || info.code === "TOO_MANY_ATTEMPTS") return { tone: "limit", title: "Patiente un instant" };
+  if (info.code === "INSUFFICIENT_BALANCE") return { tone: "refused", title: "Récompense indisponible" };
   if (REFUSED_CODES.has(info.code)) return { tone: "refused", title: "Refusé" };
   return { tone: "technical", title: "Erreur technique" };
+}
+
+export type RedeemPreview = { cost: number; before: number; after: number };
+
+/**
+ * Récapitulatif affiché avant de consommer une récompense : même calcul que
+ * /api/redeem (débit du seuil du programme). Null si le solde affiché ne
+ * suffit pas ; le serveur revalide de toute façon au moment du débit.
+ */
+export function redeemPreview(balance: number, threshold: number): RedeemPreview | null {
+  if (!Number.isFinite(balance) || !Number.isFinite(threshold) || threshold <= 0 || balance < threshold) return null;
+  return { cost: threshold, before: balance, after: balance - threshold };
 }
 
 /** Au-delà de ce délai sans réponse, le scanner annonce explicitement qu'il attend le serveur. */

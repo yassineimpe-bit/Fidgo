@@ -106,8 +106,10 @@ const CODE_MESSAGES: Record<string, Omit<ScannerErrorInfo, "code">> = {
     network: false,
     sessionExpired: false,
   },
+  // Seul /api/redeem renvoie ce code : le solde a été consommé ailleurs entre
+  // l'affichage de la confirmation et le clic final (le serveur fait foi).
   INSUFFICIENT_BALANCE: {
-    message: "Le solde est insuffisant pour utiliser cette récompense.",
+    message: "Le solde a changé. Cette récompense n’est plus disponible. Rescanne la carte pour afficher le solde à jour.",
     retryable: false,
     network: false,
     sessionExpired: false,
@@ -141,4 +143,20 @@ export function scannerErrorInfo(error: unknown): ScannerErrorInfo {
     network: false,
     sessionExpired: false,
   };
+}
+
+/**
+ * Variante d'un message pour une utilisation de récompense : le texte
+ * générique parle d'un crédit, ce qui serait faux pour un redeem.
+ */
+export function scannerActionErrorInfo(error: unknown, kind: "credit" | "redeem"): ScannerErrorInfo {
+  const info = scannerErrorInfo(error);
+  if (kind !== "redeem") return info;
+  if (info.code === "OFFLINE") {
+    return { ...info, message: "Connexion internet nécessaire : la récompense n’a pas été utilisée. Reprends l’opération quand le réseau revient." };
+  }
+  if (info.code === "NETWORK_ERROR") {
+    return { ...info, message: "Connexion perdue : l’utilisation de la récompense n’a pas été confirmée. Réessaie : Retiko réutilise la même opération, sans risque de double utilisation." };
+  }
+  return info;
 }
