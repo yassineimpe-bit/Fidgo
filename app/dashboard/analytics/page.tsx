@@ -8,6 +8,12 @@ import { ANALYTICS_PERIODS, parseAnalyticsPeriod } from "@/lib/analytics-period"
 
 export const dynamic = "force-dynamic";
 
+/** Colonne SQL `date` : postgres.js la renvoie en Date à minuit UTC (ou en chaîne AAAA-MM-JJ). */
+function formatCalendarDate(value: unknown, options: Intl.DateTimeFormatOptions = {}) {
+  const date = value instanceof Date ? value : new Date(`${String(value)}T00:00:00Z`);
+  return date.toLocaleDateString("fr-FR", { ...options, timeZone: "UTC" });
+}
+
 export default async function AnalyticsPage({
   searchParams,
 }: {
@@ -25,9 +31,16 @@ export default async function AnalyticsPage({
         where establishment_id=${session.establishmentId}
           and deleted_at is null
           and created_at >= now() - (${period.days}::int * interval '1 day')) as new_customers,
+      -- Client actif = au moins un passage crédité (earn) : un ajustement manuel,
+      -- une annulation ou une récompense seule ne prouvent pas un passage client.
       (select count(distinct card_id)::int from transactions
         where establishment_id=${session.establishmentId}
+          and type='earn'
           and created_at >= now() - (${period.days}::int * interval '1 day')) as active_customers,
+      (select count(*)::int from transactions
+        where establishment_id=${session.establishmentId}
+          and type='earn'
+          and created_at >= now() - (${period.days}::int * interval '1 day')) as earn_transactions,
       (select count(*)::int from transactions
         where establishment_id=${session.establishmentId}
           and created_at >= now() - (${period.days}::int * interval '1 day')) as transactions,
@@ -39,9 +52,11 @@ export default async function AnalyticsPage({
           and type='redeem'
           and created_at >= now() - (${period.days}::int * interval '1 day')) as rewards_redeemed,
       (select count(*)::int from (
+        -- Même définition que active_customers, dont il est le numérateur.
         select card_id
         from transactions
         where establishment_id=${session.establishmentId}
+          and type='earn'
           and created_at >= now() - (${period.days}::int * interval '1 day')
         group by card_id
         having count(distinct date_trunc('day', created_at at time zone 'Europe/Paris')) >= 2
@@ -134,7 +149,7 @@ export default async function AnalyticsPage({
     select
       (created_at at time zone 'Europe/Paris')::date as day,
       count(*)::int as transactions,
-      count(distinct card_id)::int as active_customers,
+      count(distinct card_id) filter (where type='earn')::int as active_customers,
       coalesce(sum(case when delta > 0 then delta else 0 end),0)::int as units_issued,
       count(*) filter (where type='redeem')::int as rewards_redeemed
     from transactions
@@ -233,6 +248,7 @@ export default async function AnalyticsPage({
   const activeCustomers = Number(stats.active_customers || 0);
   const returningCustomers = Number(stats.returning_customers || 0);
   const transactions = Number(stats.transactions || 0);
+  const earnTransactions = Number(stats.earn_transactions || 0);
   const joinViews = Number(stats.join_views || 0);
   const joinSubmits = Number(stats.join_submits || 0);
   const scanSuccess = Number(stats.scan_success || 0);
@@ -244,7 +260,7 @@ export default async function AnalyticsPage({
   const returningRate = activeCustomers > 0 ? Math.round((returningCustomers / activeCustomers) * 100) : 0;
   const joinConversion = joinViews > 0 ? Math.round((joinSubmits / joinViews) * 100) : 0;
   const scanErrorRate = scans > 0 ? Math.round((scanFailed / scans) * 100) : 0;
-  const visitsPerCustomer = activeCustomers > 0 ? (transactions / activeCustomers).toFixed(1) : "0,0";
+  const visitsPerCustomer = activeCustomers > 0 ? (earnTransactions / activeCustomers).toFixed(1) : "0,0";
   const rewardUsageRate = rewardOpportunities > 0 ? Math.round((rewardsRedeemed / rewardOpportunities) * 100) : 0;
 
   return <><AppNav restaurantName={String(restaurant?.name || "Retiko")}/><main className="shell page">
@@ -267,11 +283,12 @@ export default async function AnalyticsPage({
       <div className="card metric"><strong>{transactions}</strong><span>transactions</span></div>
       <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
     </section>
+    <p className="muted" style={{fontSize:13,margin:"8px 0 0"}}>Client actif : au moins un passage crédité sur la période. Un ajustement manuel ou une annulation ne rend pas un client actif.</p>
 
     <h3 style={{margin:"24px 0 12px"}}>Fidélisation</h3>
     <section className="grid grid-4">
       <div className="card metric"><strong>{returningRate} %</strong><span>clients revenus ≥2 jours</span></div>
-      <div className="card metric"><strong>{visitsPerCustomer}</strong><span>transactions / client actif</span></div>
+      <div className="card metric"><strong>{visitsPerCustomer}</strong><span>passages crédités / client actif</span></div>
       <div className="card metric"><strong>{rewardsAvailable}</strong><span>récompenses disponibles</span></div>
       <div className="card metric"><strong>{rewardUsageRate} %</strong><span>taux d’utilisation des récompenses</span></div>
     </section>
@@ -298,7 +315,7 @@ export default async function AnalyticsPage({
       <div className="section-head"><div><h3>Activité quotidienne</h3><p className="muted">Détail des {period.label.toLowerCase()} sélectionnés.</p></div><Link className="btn" href="/dashboard/transactions">Voir les transactions</Link></div>
       {daily.length === 0 ? <div className="empty-state"><strong>Pas encore d’activité sur cette période.</strong><p>Les premiers passages apparaîtront ici dès qu’une carte sera créditée.</p></div> :
         <div className="table-wrap"><table><thead><tr><th>Jour</th><th>Transactions</th><th>Clients actifs</th><th>Unités</th><th>Récompenses</th></tr></thead><tbody>
-          {daily.map((row) => <tr key={String(row.day)}><td>{new Date(`${row.day}T12:00:00`).toLocaleDateString("fr-FR")}</td><td>{row.transactions}</td><td>{row.active_customers}</td><td>{row.units_issued}</td><td>{row.rewards_redeemed}</td></tr>)}
+          {daily.map((row) => <tr key={String(row.day)}><td>{formatCalendarDate(row.day)}</td><td>{row.transactions}</td><td>{row.active_customers}</td><td>{row.units_issued}</td><td>{row.rewards_redeemed}</td></tr>)}
         </tbody></table></div>}
     </section>
 
@@ -313,7 +330,7 @@ export default async function AnalyticsPage({
             const total = Number(row.customers || 0);
             const active = Number(row.active_customers || 0);
             const rate = total > 0 ? Math.round((active / total) * 100) : 0;
-            return <tr key={String(row.cohort)}><td>{new Date(`${row.cohort}T12:00:00`).toLocaleDateString("fr-FR",{month:"short",year:"numeric"})}</td><td>{total}</td><td>{active}</td><td>{rate} %</td></tr>;
+            return <tr key={String(row.cohort)}><td>{formatCalendarDate(row.cohort,{month:"short",year:"numeric"})}</td><td>{total}</td><td>{active}</td><td>{rate} %</td></tr>;
           })}
         </tbody></table></div>}
       </section>

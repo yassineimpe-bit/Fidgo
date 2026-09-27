@@ -70,10 +70,10 @@ const billingGrid = envValue("BILLING_PRICE_GRID");
 if (billingGrid && billingGrid !== "pilot" && billingGrid !== "standard") {
   fail("BILLING_PRICE_GRID doit valoir pilot ou standard.");
 }
-// Même liste que lib/billing-plans.ts : Prices exigés pour la grille proposée.
-const gridPriceEnvs = billingGrid === "standard"
-  ? ["STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL"]
-  : ["STRIPE_PRICE_FLEX_MONTHLY", "STRIPE_PRICE_RETIKO12_MONTHLY", "STRIPE_PRICE_ANNUAL"];
+// Même règle que lib/billing-plans.ts : grille standard sauf BILLING_PRICE_GRID=pilot.
+const gridPriceEnvs = billingGrid === "pilot"
+  ? ["STRIPE_PRICE_FLEX_MONTHLY", "STRIPE_PRICE_RETIKO12_MONTHLY", "STRIPE_PRICE_ANNUAL"]
+  : ["STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL"];
 const allPriceEnvs = [
   "STRIPE_PRICE_FLEX_MONTHLY", "STRIPE_PRICE_RETIKO12_MONTHLY", "STRIPE_PRICE_ANNUAL",
   "STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL",

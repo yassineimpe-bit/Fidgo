@@ -18,7 +18,10 @@ import {
 } from "@/lib/billing";
 import { safeErrorCode } from "@/lib/observability";
 
+// Environnement resté explicitement sur la grille pilote : les tests de
+// mécanique Stripe (webhooks, Checkout) s'y appuient.
 const configuredEnv = {
+  BILLING_PRICE_GRID: "pilot",
   STRIPE_ENABLED: "true",
   STRIPE_SECRET_KEY: "sk_test_placeholder",
   STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
@@ -205,11 +208,24 @@ describe("grilles tarifaires pilote / standard", () => {
     STRIPE_PRICE_STANDARD_ANNUAL: "price_standard_annual",
   };
 
-  it("propose la grille pilote par défaut, la grille standard sur décision explicite", () => {
-    expect(activePriceGrid({})).toBe("pilot");
-    expect(activePriceGrid({ BILLING_PRICE_GRID: "autre" })).toBe("pilot");
-    expect(offeredPlans({})).toEqual(["FLEX", "RETIKO_12", "ANNUAL"]);
+  it("propose la grille standard par défaut, la grille pilote sur décision explicite", () => {
+    expect(activePriceGrid({})).toBe("standard");
+    expect(activePriceGrid({ BILLING_PRICE_GRID: "autre" })).toBe("standard");
+    expect(activePriceGrid({ BILLING_PRICE_GRID: "pilot" })).toBe("pilot");
+    expect(offeredPlans({})).toEqual(["STANDARD_MONTHLY", "STANDARD_ANNUAL"]);
     expect(offeredPlans(standardEnv)).toEqual(["STANDARD_MONTHLY", "STANDARD_ANNUAL"]);
+    expect(offeredPlans({ BILLING_PRICE_GRID: "pilot" })).toEqual(["FLEX", "RETIKO_12", "ANNUAL"]);
+  });
+
+  it("sans BILLING_PRICE_GRID, exige les Prices standard et garde ceux des abonnés pilotes", () => {
+    const pilotPricesOnly = { ...configuredEnv, BILLING_PRICE_GRID: undefined };
+    expect(getBillingRuntimeStatus(pilotPricesOnly).missing).toEqual(["STRIPE_PRICE_STANDARD_MONTHLY", "STRIPE_PRICE_STANDARD_ANNUAL"]);
+    const defaultEnv = { ...pilotPricesOnly, STRIPE_PRICE_STANDARD_MONTHLY: "price_standard_monthly", STRIPE_PRICE_STANDARD_ANNUAL: "price_standard_annual" };
+    expect(getBillingRuntimeStatus(defaultEnv)).toMatchObject({ configured: true, missing: [], invalid: [] });
+    expect(checkoutPlanFromRequest({ plan: "STANDARD_MONTHLY" }, defaultEnv)).toBe("STANDARD_MONTHLY");
+    expect(() => checkoutPlanFromRequest({ plan: "FLEX" }, defaultEnv)).toThrow(BillingInputError);
+    expect(planFromStripePriceId("price_flex", defaultEnv)).toBe("FLEX");
+    expect(planFromStripePriceId("price_annual", defaultEnv)).toBe("ANNUAL");
   });
 
   it("n'exige que les Prices de la grille proposée, tous distincts", () => {

@@ -70,6 +70,8 @@ jobs:
           STRIPE_PRICE_FLEX_MONTHLY: price_ci_flex
           STRIPE_PRICE_RETIKO12_MONTHLY: price_ci_retiko12
           STRIPE_PRICE_ANNUAL: price_ci_annual
+          STRIPE_PRICE_STANDARD_MONTHLY: price_ci_standard_monthly
+          STRIPE_PRICE_STANDARD_ANNUAL: price_ci_standard_annual
         run: npm run env:check
       - name: Reject technical Vercel URL as canonical production URL
         env:
