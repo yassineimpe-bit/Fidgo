@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { importSPKI, jwtVerify } from "jose";
+import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WalletCard } from "../lib/wallet-data";
 
@@ -140,6 +141,92 @@ describe("Google Wallet loyalty object", () => {
       label: fixtureCard.rewardLabel,
       balance: { string: "Disponible" },
     });
+  });
+});
+
+describe("Google Wallet loyalty class", () => {
+  it("creates one compliant merchant class with stable identifiers and branding", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(ok());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { ensureGoogleWalletObject } = await import("../lib/google-wallet");
+    await ensureGoogleWalletObject(fixtureCard);
+
+    const classRequest = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(classRequest[0]).toBe("https://walletobjects.googleapis.com/walletobjects/v1/loyaltyClass");
+    expect(classRequest[1].method).toBe("POST");
+    const body = JSON.parse(String(classRequest[1].body));
+    expect(body).toEqual({
+      id: "1234567890123456789.fidgo_le-retiko-test",
+      issuerName: fixtureCard.restaurantName,
+      reviewStatus: "UNDER_REVIEW",
+      programName: fixtureCard.programName,
+      programLogo: {
+        sourceUri: { uri: "https://wallet.test/wallet-logo.png" },
+        contentDescription: {
+          defaultValue: { language: "fr-FR", value: `Logo ${fixtureCard.restaurantName}` },
+        },
+      },
+      accountNameLabel: "Client",
+      accountIdLabel: "Carte",
+      hexBackgroundColor: fixtureCard.primaryColor,
+    });
+    expect(body.id).toMatch(/^\d+\.[A-Za-z0-9._-]+$/);
+  });
+
+  it("ships a square PNG logo above Google's documented 660px minimum", async () => {
+    const metadata = await sharp("public/wallet-logo.png").metadata();
+    expect(metadata.format).toBe("png");
+    expect(metadata.width).toBeGreaterThanOrEqual(660);
+    expect(metadata.height).toBe(metadata.width);
+  });
+
+  it("logs a bounded Google 400 diagnostic without provider or card secrets", async () => {
+    const privateKey = "PRIVATE_KEY_SENTINEL";
+    const accessToken = "ACCESS_TOKEN_SENTINEL";
+    const authorization = "AUTHORIZATION_SENTINEL";
+    const serviceAccount = Buffer.from(JSON.stringify({ private_key: "SERVICE_ACCOUNT_SENTINEL" })).toString("base64");
+    const providerMessage = [
+      `private_key=${privateKey}`,
+      `access_token=${accessToken}`,
+      `Authorization: Bearer ${authorization}`,
+      `card=${fixtureCard.token}`,
+      `service_account_json=${serviceAccount}`,
+    ].join(" ");
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(Response.json({
+        error: {
+          code: 400,
+          status: "INVALID_ARGUMENT",
+          message: providerMessage,
+          errors: [{ reason: "invalidImage" }],
+        },
+      }, { status: 400 })));
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { ensureGoogleWalletObject } = await import("../lib/google-wallet");
+    await expect(ensureGoogleWalletObject(fixtureCard)).rejects.toMatchObject({
+      code: "GOOGLE_CLASS_CREATE_400",
+      message: "GOOGLE_CLASS_CREATE_400",
+    });
+
+    const serialized = JSON.stringify(log.mock.calls);
+    expect(serialized).toContain("GOOGLE_WALLET_PROVIDER_ERROR");
+    expect(serialized).toContain("GOOGLE_CLASS_CREATE");
+    expect(serialized).toContain("invalidImage");
+    expect(serialized).toContain("INVALID_ARGUMENT");
+    const diagnostic = log.mock.calls[0]?.[1] as { message?: string };
+    expect(diagnostic.message?.length).toBeLessThanOrEqual(240);
+    expect(serialized).not.toContain(privateKey);
+    expect(serialized).not.toContain(accessToken);
+    expect(serialized).not.toContain(authorization);
+    expect(serialized).not.toContain(serviceAccount);
+    expect(serialized).not.toContain(fixtureCard.token);
   });
 });
 

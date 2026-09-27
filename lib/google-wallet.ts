@@ -5,7 +5,7 @@ import { cardImagePath } from "@/lib/card-image-path";
 import { sql } from "@/lib/db";
 import { isValidGoogleIssuerId } from "@/lib/google-wallet-config";
 import { walletCardForRevocationById, type WalletCard } from "@/lib/wallet-data";
-import { safeErrorCode } from "@/lib/observability";
+import { safeErrorCode, sanitizeAuditText } from "@/lib/observability";
 
 function capitalize(value: string) {
   return value.charAt(0).toLocaleUpperCase("fr-FR") + value.slice(1);
@@ -13,6 +13,23 @@ function capitalize(value: string) {
 
 const WALLET_SCOPE = "https://www.googleapis.com/auth/wallet_object.issuer";
 const WALLET_API = "https://walletobjects.googleapis.com/walletobjects/v1";
+const GOOGLE_ERROR_BODY_LIMIT = 16_384;
+
+type GoogleWalletOperation =
+  | "GOOGLE_CLASS_GET"
+  | "GOOGLE_CLASS_CREATE"
+  | "GOOGLE_OBJECT_GET"
+  | "GOOGLE_OBJECT_CREATE"
+  | "GOOGLE_OBJECT_PATCH"
+  | "GOOGLE_OBJECT_REVOKE";
+
+type GoogleWalletProviderDiagnostic = {
+  operation: GoogleWalletOperation;
+  status: number;
+  googleCode?: string;
+  reason?: string;
+  message?: string;
+};
 
 type ServiceAccount = { client_email: string; private_key: string };
 
@@ -63,6 +80,68 @@ async function walletFetch(path: string, init: RequestInit = {}) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(init.headers || {}) },
     cache: "no-store",
   });
+}
+
+class GoogleWalletProviderError extends Error {
+  readonly code: string;
+
+  constructor(readonly diagnostic: GoogleWalletProviderDiagnostic) {
+    const code = `${diagnostic.operation}_${diagnostic.status}`;
+    super(code);
+    this.name = "GoogleWalletProviderError";
+    this.code = code;
+  }
+}
+
+function sanitizeProviderDiagnostic(
+  value: unknown,
+  sensitiveValues: string[],
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== "string" && typeof value !== "number") return undefined;
+  let text = String(value);
+  for (const sensitive of sensitiveValues) {
+    if (sensitive) text = text.split(sensitive).join("[redacted]");
+  }
+  text = text
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/gi, "[secret]")
+    .replace(/\b(?:private_key|access_token|service_account_json)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "[secret]")
+    .replace(/\bAuthorization\s*[:=]\s*(?:Bearer\s+)?[^\s,;}"']+/gi, "Authorization=[secret]")
+    .replace(/\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[jwt]")
+    .replace(/\b[A-Za-z0-9+/]{80,}={0,2}\b/g, "[secret]");
+  const sanitized = sanitizeAuditText(text, maxLength);
+  return sanitized || undefined;
+}
+
+async function googleWalletProviderError(
+  operation: GoogleWalletOperation,
+  response: Response,
+  sensitiveValues: string[] = [],
+) {
+  let providerError: Record<string, unknown> | undefined;
+  try {
+    const raw = (await response.text()).slice(0, GOOGLE_ERROR_BODY_LIMIT);
+    const parsed = JSON.parse(raw) as { error?: unknown };
+    if (parsed.error && typeof parsed.error === "object" && !Array.isArray(parsed.error)) {
+      providerError = parsed.error as Record<string, unknown>;
+    }
+  } catch {
+    // Le corps brut n'est jamais journalisé : un fournisseur peut y recopier
+    // un header, un credential ou un payload sensible.
+  }
+
+  const firstDetail = Array.isArray(providerError?.errors)
+    ? providerError.errors.find((item) => item && typeof item === "object" && !Array.isArray(item)) as Record<string, unknown> | undefined
+    : undefined;
+  const diagnostic: GoogleWalletProviderDiagnostic = {
+    operation,
+    status: response.status,
+    googleCode: sanitizeProviderDiagnostic(providerError?.status ?? providerError?.code, sensitiveValues, 64),
+    reason: sanitizeProviderDiagnostic(firstDetail?.reason ?? providerError?.status, sensitiveValues, 80),
+    message: sanitizeProviderDiagnostic(providerError?.message, sensitiveValues, 240),
+  };
+  console.error("GOOGLE_WALLET_PROVIDER_ERROR", diagnostic);
+  return new GoogleWalletProviderError(diagnostic);
 }
 
 class GoogleWalletCardRevokedError extends Error {
@@ -166,7 +245,7 @@ async function deactivateGoogleWalletObject(card: WalletCard, objectId: string, 
       method: "PATCH",
       body: JSON.stringify(objectBody(card, "INACTIVE")),
     });
-    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_REVOKE_${updated.status}`);
+    if (!updated.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_REVOKE", updated, [card.token]);
     if (walletPassId) {
       await sql`
         update wallet_passes set status='revoked',last_synced_at=now(),last_error=null,updated_at=now()
@@ -190,20 +269,20 @@ export async function ensureGoogleWalletObject(card: WalletCard) {
   const classGet = await walletFetch(`/loyaltyClass/${encodeURIComponent(classId)}`);
   if (classGet.status === 404) {
     const created = await walletFetch("/loyaltyClass", { method: "POST", body: JSON.stringify(classBody(card)) });
-    if (!created.ok) throw new Error(`GOOGLE_CLASS_CREATE_${created.status}`);
+    if (!created.ok) throw await googleWalletProviderError("GOOGLE_CLASS_CREATE", created, [card.token]);
   } else if (!classGet.ok) {
-    throw new Error(`GOOGLE_CLASS_GET_${classGet.status}`);
+    throw await googleWalletProviderError("GOOGLE_CLASS_GET", classGet, [card.token]);
   }
 
   const objectGet = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`);
   if (objectGet.status === 404) {
     const created = await walletFetch("/loyaltyObject", { method: "POST", body: JSON.stringify(objectBody(card)) });
-    if (!created.ok) throw new Error(`GOOGLE_OBJECT_CREATE_${created.status}`);
+    if (!created.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_CREATE", created, [card.token]);
   } else if (objectGet.ok) {
     const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card)) });
-    if (!updated.ok) throw new Error(`GOOGLE_OBJECT_PATCH_${updated.status}`);
+    if (!updated.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_PATCH", updated, [card.token]);
   } else {
-    throw new Error(`GOOGLE_OBJECT_GET_${objectGet.status}`);
+    throw await googleWalletProviderError("GOOGLE_OBJECT_GET", objectGet, [card.token]);
   }
 
   let persisted: Awaited<ReturnType<typeof persistGoogleWalletAfterProvider>>;
