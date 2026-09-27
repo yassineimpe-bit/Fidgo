@@ -140,6 +140,10 @@ h3 { letter-spacing: -.025em; }
 .notice { border: 1px solid var(--line); background: #faf9f6; padding: 14px 15px; border-radius: 10px; color: var(--muted); font-size: 14px; }
 .notice.error { border-color: #efd0cb; background: #fff6f4; color: var(--danger); }
 .notice.success { border-color: #cbe5d7; background: #f1faf5; color: var(--success); }
+.optional-settings { border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; }
+.optional-settings > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 720; }
+.optional-settings[open] { padding-bottom: 14px; }
+.ready-later { margin: 0; padding-left: 20px; line-height: 1.8; }
 .adjust-dialog { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: #fff; color: var(--text); }
 .adjust-dialog::backdrop { background: rgba(23,23,23,.45); }
 .adjust-dialog .actions .btn { min-height: 44px; }
