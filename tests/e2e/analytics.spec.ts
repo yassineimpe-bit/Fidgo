@@ -12,6 +12,9 @@ test("analytics : période sélectionnable et état vide exploitable", async ({ 
   await page.getByRole("link", { name: "7 jours" }).click();
   await expect(page).toHaveURL(/period=7/);
   await expect(page.getByText("nouveaux clients")).toBeVisible();
+  // Télémétrie du pilote : conservée, mais repliée hors du premier niveau (#152).
+  await expect(page.getByText("p95 QR → fiche client")).toBeHidden();
+  await page.getByText("Indicateurs techniques du scanner (pilote)").click();
   await expect(page.getByText("p95 QR → fiche client")).toBeVisible();
 });
 
@@ -149,6 +152,7 @@ test("analytics avancées : horaire, rétention, récompenses, cohortes et RFM r
   await expect(hourlyTable).toContainText("14h");
   await expect(hourlyTable).toContainText("18h");
 
+  await page.getByText("Analyses avancées : cohortes et segmentation RFM").click();
   await expect(page.getByRole("heading", { name: "Cohortes" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Segmentation RFM" })).toBeVisible();
   await expect(page.getByText(/Champions|Fidèles|À réactiver|Nouveaux|À développer/).first()).toBeVisible();

@@ -249,7 +249,7 @@ export default async function AnalyticsPage({
 
   return <><AppNav restaurantName={String(restaurant?.name || "Retiko")}/><main className="shell page">
     <div className="section-head">
-      <div><span className="eyebrow">Analytics</span><h2 style={{margin:"12px 0 4px"}}>Activité du programme</h2><p className="muted">Des indicateurs exploitables, pas un cockpit de centrale nucléaire.</p></div>
+      <div><span className="eyebrow">Analytics</span><h2 style={{margin:"12px 0 4px"}}>Activité du programme</h2><p className="muted">Les indicateurs utiles pour suivre ton programme. Les analyses avancées sont regroupées plus bas.</p></div>
       <div className="actions">
         {canManageProgram(session.role) && <Link className="btn" href="/dashboard/activity">Journal d’activité</Link>}
         {ANALYTICS_PERIODS.map((option) => <Link
@@ -260,66 +260,38 @@ export default async function AnalyticsPage({
       </div>
     </div>
 
+    <h3 style={{marginBottom:12}}>L’essentiel</h3>
     <section className="grid grid-4">
       <div className="card metric"><strong>{stats.new_customers}</strong><span>nouveaux clients</span></div>
       <div className="card metric"><strong>{activeCustomers}</strong><span>clients actifs</span></div>
       <div className="card metric"><strong>{transactions}</strong><span>transactions</span></div>
-      <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
+      <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
     </section>
 
-    <section className="grid grid-4" style={{marginTop:18}}>
-      <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
+    <h3 style={{margin:"24px 0 12px"}}>Fidélisation</h3>
+    <section className="grid grid-4">
       <div className="card metric"><strong>{returningRate} %</strong><span>clients revenus ≥2 jours</span></div>
       <div className="card metric"><strong>{visitsPerCustomer}</strong><span>transactions / client actif</span></div>
-      <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
+      <div className="card metric"><strong>{rewardsAvailable}</strong><span>récompenses disponibles</span></div>
+      <div className="card metric"><strong>{rewardUsageRate} %</strong><span>taux d’utilisation des récompenses</span></div>
     </section>
-
     <section className="grid grid-4" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.avg_gap_hours} h</strong><span>délai moyen entre visites</span></div>
       <div className="card metric"><strong>{stats.visits_before_reward}</strong><span>visites moyennes avant récompense</span></div>
-      <div className="card metric"><strong>{rewardUsageRate} %</strong><span>taux d’utilisation des récompenses</span></div>
-      <div className="card metric"><strong>{rewardsAvailable}</strong><span>récompenses disponibles</span></div>
-    </section>
-
-    <section className="grid grid-4" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.inactive_customers}</strong><span>clients inactifs 30–89 j</span></div>
       <div className="card metric"><strong>{stats.lost_customers}</strong><span>clients perdus ≥90 j</span></div>
-      <div className="card metric"><strong>{scanSuccess}</strong><span>scans réussis</span></div>
-      <div className="card metric"><strong>{scanErrorRate} %</strong><span>erreurs scanner</span></div>
     </section>
-
     <section className="grid grid-2" style={{marginTop:18}}>
-      <div className="card">
-        <h3>Fréquentation par heure</h3>
-        <p className="muted">Visites créditées, heure locale Europe/Paris.</p>
-        <div className="table-wrap"><table><thead><tr><th>Heure</th><th>Visites</th></tr></thead><tbody>
-          {hourly.map((row) => <tr key={String(row.hour)}><td>{String(row.hour).padStart(2,"0")}h</td><td>{row.visits}</td></tr>)}
-        </tbody></table></div>
-      </div>
-      <div className="card">
-        <h3>Cohortes</h3>
-        <p className="muted">Clients inscrits par mois et encore actifs sur la période sélectionnée.</p>
-        {cohorts.length === 0 ? <div className="empty-state"><strong>Aucune cohorte.</strong></div> : <div className="table-wrap"><table><thead><tr><th>Cohorte</th><th>Inscrits</th><th>Actifs</th><th>Taux</th></tr></thead><tbody>
-          {cohorts.map((row) => {
-            const total = Number(row.customers || 0);
-            const active = Number(row.active_customers || 0);
-            const rate = total > 0 ? Math.round((active / total) * 100) : 0;
-            return <tr key={String(row.cohort)}><td>{new Date(`${row.cohort}T12:00:00`).toLocaleDateString("fr-FR",{month:"short",year:"numeric"})}</td><td>{total}</td><td>{active}</td><td>{rate} %</td></tr>;
-          })}
-        </tbody></table></div>}
-      </div>
+      <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
+      <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
     </section>
 
     <section className="card" style={{marginTop:18}}>
-      <div className="section-head"><div><h3>Segmentation RFM</h3><p className="muted">Récence, fréquence et montant d’achat connu. Les passages sans montant saisi contribuent à 0 € au score M.</p></div></div>
-      {rfm.length === 0 ? <div className="empty-state"><strong>Aucun client à segmenter.</strong></div> : <div className="table-wrap"><table><thead><tr><th>Segment</th><th>Clients</th><th>Récence moy.</th><th>Fréquence moy.</th><th>Montant moy.</th></tr></thead><tbody>
-        {rfm.map((row) => <tr key={String(row.segment)}><td>{row.segment}</td><td>{row.customers}</td><td>{row.avg_recency_days} j</td><td>{row.avg_frequency}</td><td>{Number(row.avg_monetary_euros).toLocaleString("fr-FR",{style:"currency",currency:"EUR"})}</td></tr>)}
-      </tbody></table></div>}
-    </section>
-
-    <section className="grid grid-2" style={{marginTop:18}}>
-      <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
-      <div className="card metric"><strong>{period.label}</strong><span>période analysée</span></div>
+      <h3>Fréquentation par heure</h3>
+      <p className="muted">Visites créditées, heure locale Europe/Paris.</p>
+      <div className="table-wrap"><table><thead><tr><th>Heure</th><th>Visites</th></tr></thead><tbody>
+        {hourly.map((row) => <tr key={String(row.hour)}><td>{String(row.hour).padStart(2,"0")}h</td><td>{row.visits}</td></tr>)}
+      </tbody></table></div>
     </section>
 
     <section className="card" style={{marginTop:18}}>
@@ -329,5 +301,39 @@ export default async function AnalyticsPage({
           {daily.map((row) => <tr key={String(row.day)}><td>{new Date(`${row.day}T12:00:00`).toLocaleDateString("fr-FR")}</td><td>{row.transactions}</td><td>{row.active_customers}</td><td>{row.units_issued}</td><td>{row.rewards_redeemed}</td></tr>)}
         </tbody></table></div>}
     </section>
+
+    <details className="card disclosure" style={{marginTop:18}}>
+      <summary>Analyses avancées : cohortes et segmentation RFM</summary>
+      <p className="muted">Pour aller plus loin : aucune de ces analyses n’est nécessaire pour utiliser Retiko au quotidien.</p>
+      <section className="card" style={{marginTop:12}}>
+        <h3>Cohortes</h3>
+        <p className="muted">Clients inscrits par mois et encore actifs sur la période sélectionnée.</p>
+        {cohorts.length === 0 ? <div className="empty-state"><strong>Aucune cohorte pour l’instant.</strong><p>Elles apparaissent dès les premières inscriptions de clients.</p></div> : <div className="table-wrap"><table><thead><tr><th>Cohorte</th><th>Inscrits</th><th>Actifs</th><th>Taux</th></tr></thead><tbody>
+          {cohorts.map((row) => {
+            const total = Number(row.customers || 0);
+            const active = Number(row.active_customers || 0);
+            const rate = total > 0 ? Math.round((active / total) * 100) : 0;
+            return <tr key={String(row.cohort)}><td>{new Date(`${row.cohort}T12:00:00`).toLocaleDateString("fr-FR",{month:"short",year:"numeric"})}</td><td>{total}</td><td>{active}</td><td>{rate} %</td></tr>;
+          })}
+        </tbody></table></div>}
+      </section>
+      <section className="card" style={{marginTop:18}}>
+        <div className="section-head"><div><h3>Segmentation RFM</h3><p className="muted">Récence, fréquence et montant d’achat connu. Les passages sans montant saisi contribuent à 0 € au score M.</p></div></div>
+        {rfm.length === 0 ? <div className="empty-state"><strong>Aucun client à segmenter pour l’instant.</strong><p>La segmentation apparaît dès qu’un client a une visite créditée.</p></div> : <div className="table-wrap"><table><thead><tr><th>Segment</th><th>Clients</th><th>Récence moy.</th><th>Fréquence moy.</th><th>Montant moy.</th></tr></thead><tbody>
+          {rfm.map((row) => <tr key={String(row.segment)}><td>{row.segment}</td><td>{row.customers}</td><td>{row.avg_recency_days} j</td><td>{row.avg_frequency}</td><td>{Number(row.avg_monetary_euros).toLocaleString("fr-FR",{style:"currency",currency:"EUR"})}</td></tr>)}
+        </tbody></table></div>}
+      </section>
+    </details>
+
+    <details className="card disclosure" style={{marginTop:18}}>
+      <summary>Indicateurs techniques du scanner (pilote)</summary>
+      <p className="muted">Fiabilité et rapidité du scanner, suivies pendant le pilote.</p>
+      <section className="grid grid-4">
+        <div className="card metric"><strong>{scanSuccess}</strong><span>scans réussis</span></div>
+        <div className="card metric"><strong>{scanErrorRate} %</strong><span>erreurs scanner</span></div>
+        <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
+        <div className="card metric"><strong>{period.label}</strong><span>période analysée</span></div>
+      </section>
+    </details>
   </main></>;
 }

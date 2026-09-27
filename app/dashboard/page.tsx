@@ -92,28 +92,32 @@ export default async function DashboardPage() {
         <p className="muted" style={{marginTop:8, marginBottom:0}}>Aucune donnée n’est créée automatiquement : le test utilise le vrai parcours client.</p>
       </div>}
     </section>
-    <section className="grid grid-4 dashboard-kpis" style={{marginTop:18}}>
+    {/* Premier niveau : ce qu'un commerce regarde chaque jour. */}
+    <section className="grid grid-4 dashboard-kpis" style={{marginTop:18}} aria-label="L’essentiel">
       <div className="card metric"><strong>{stats.customers}</strong><span>clients inscrits</span></div>
-      <div className="card metric"><strong>{stats.active_cards}</strong><span>cartes actives</span></div>
-      <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
-      <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
-    </section>
-    <section className="grid grid-2 dashboard-secondary-kpis" style={{marginTop:18}}>
       <div className="card metric"><strong>{stats.scan_today}</strong><span>scans du jour</span></div>
       <div className="card metric"><strong>{stats.rewards_available}</strong><span>récompenses disponibles</span></div>
-    </section>
-    <section className="grid grid-4 dashboard-secondary-kpis" style={{marginTop:18}}>
-      <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
-      <div className="card metric"><strong>{stats.scan_success}</strong><span>scans réussis</span></div>
-      <div className="card metric"><strong>{scanErrorRate} %</strong><span>taux d’erreur scanner</span></div>
-      <div className="card metric"><strong>{stats.scan_failed}</strong><span>scans échoués</span></div>
+      <div className="card metric"><strong>{stats.rewards_redeemed}</strong><span>récompenses utilisées</span></div>
     </section>
     <section className="grid grid-3 dashboard-secondary-kpis" style={{marginTop:18}}>
-      <div className="card metric"><strong>{stats.scan_p50} ms</strong><span>p50 QR → fiche client</span></div>
-      <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
+      <div className="card metric"><strong>{stats.active_cards}</strong><span>cartes actives</span></div>
+      <div className="card metric"><strong>{stats.units_issued}</strong><span>unités distribuées</span></div>
       <div className="card metric"><strong>{recurringRate} %</strong><span>clients revenus sur ≥2 jours</span></div>
     </section>
     <section className="card" style={{marginTop:18}}><div className="section-head"><div><h3>Dernières transactions</h3><p className="muted">{stats.active_week} clients actifs sur 7 jours</p></div><Link className="btn" href="/dashboard/transactions">Tout voir</Link></div>{latest.length === 0 ? <div className="empty-state"><strong>Aucun passage enregistré.</strong><p>Fais ton premier test ou attends ton premier vrai client.</p><Link className="btn btn-primary" href="/s">Ouvrir le scanner</Link></div> : <div className="table-wrap"><table><thead><tr><th>Client</th><th>Action</th><th>Variation</th><th>Solde</th><th>Date</th></tr></thead><tbody>{latest.map((row)=><tr key={String(row.id)}><td>{row.first_name || row.short_code}</td><td>{row.type}</td><td>{Number(row.delta)>0?"+":""}{row.delta}</td><td>{row.balance_after}</td><td>{new Date(row.created_at).toLocaleString("fr-FR")}</td></tr>)}</tbody></table></div>}</section>
-    <section className="grid grid-2" style={{marginTop:18}}><div className="card"><h3>QR d’inscription</h3><p className="muted">Lien public du commerce : <code>/j/{restaurant.slug}</code></p><Link className="btn" href="/dashboard/poster">Créer l’affiche A4</Link></div><div className="card"><h3>Wallet</h3><p className="muted">Apple Wallet et Google Wallet sont implémentés. Vérifie ici les credentials, passes émises et erreurs de synchronisation.</p><Link className="btn" href="/dashboard/wallet">Diagnostic Wallet</Link></div></section>
+    <section className="grid grid-2" style={{marginTop:18}}><div className="card"><h3>QR d’inscription</h3><p className="muted">Lien public du commerce : <code>/j/{restaurant.slug}</code></p><Link className="btn" href="/dashboard/poster">Créer l’affiche A4</Link></div><div className="card"><h3>Wallet</h3><p className="muted">Vérifie si tes clients peuvent ajouter leur carte à Apple Wallet ou Google Wallet.</p><Link className="btn" href="/dashboard/wallet">Voir l’état Wallet</Link></div></section>
+    {/* Télémétrie utile au pilote (gate p95), gardée intacte mais hors du premier niveau. */}
+    <details className="card disclosure" style={{marginTop:18}}>
+      <summary>Indicateurs techniques du scanner (pilote)</summary>
+      <p className="muted">Fiabilité et rapidité du scanner, suivies pendant le pilote. Rien à faire de ton côté tant que tout fonctionne en caisse.</p>
+      <section className="grid grid-3 dashboard-secondary-kpis">
+        <div className="card metric"><strong>{joinConversion} %</strong><span>conversion inscription</span></div>
+        <div className="card metric"><strong>{stats.scan_success}</strong><span>scans réussis</span></div>
+        <div className="card metric"><strong>{stats.scan_failed}</strong><span>scans échoués</span></div>
+        <div className="card metric"><strong>{scanErrorRate} %</strong><span>taux d’erreur scanner</span></div>
+        <div className="card metric"><strong>{stats.scan_p50} ms</strong><span>p50 QR → fiche client</span></div>
+        <div className="card metric"><strong>{stats.scan_p95} ms</strong><span>p95 QR → fiche client</span></div>
+      </section>
+    </details>
   </main></>;
 }
