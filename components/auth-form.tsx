@@ -3,6 +3,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LEGAL_LINKS, LEGAL_VERSION } from "@/lib/legal";
+import { pasteTotpCode } from "@/lib/one-time-code";
 
 const ERROR_MESSAGES: Record<string, string> = {
   EMAIL_EXISTS: "Un compte existe déjà avec cet email.",
@@ -148,7 +149,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <input key={useRecoveryCode ? "recovery" : "totp"} className="input" id="login-second-factor" name="secondFactor" required autoFocus
           autoComplete={useRecoveryCode ? "off" : "one-time-code"} inputMode={useRecoveryCode ? "text" : "numeric"}
           pattern={useRecoveryCode ? "[A-Za-z2-7]{5}-?[A-Za-z2-7]{5}" : "[0-9]{6}"} maxLength={useRecoveryCode ? 11 : 6}
-          placeholder={useRecoveryCode ? "XXXXX-XXXXX" : "123456"} />
+          placeholder={useRecoveryCode ? "XXXXX-XXXXX" : "123456"}
+          onPaste={useRecoveryCode ? undefined : pasteTotpCode} />
       </div>
       {error && <div className="notice error" role="alert">{error}</div>}
       <button className="btn btn-primary" disabled={loading}>{loading ? "Vérification…" : "Vérifier"}</button>

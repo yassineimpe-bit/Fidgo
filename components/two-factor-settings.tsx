@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { pasteTotpCode, secondFactorPayload } from "@/lib/one-time-code";
 
 type Status = { available: boolean; enabled: boolean; recoveryCodesRemaining: number };
 type Step = "idle" | "password" | "scan" | "codes" | "disable" | "regenerate";
@@ -92,7 +93,7 @@ export function TwoFactorSettings({ initial }: { initial: Status }) {
         <img src={setup.qr} alt="QR code de la double authentification" width={200} height={200} style={{ background: "white", padding: 8, borderRadius: 12 }}/>
         <p className="muted">Impossible de scanner ? Saisis cette clé dans l’application : <code data-testid="two-factor-secret">{setup.secret}</code></p>
         <div className="field"><label htmlFor="two-factor-code">2. Code à 6 chiffres affiché par l’application</label>
-          <input className="input" id="two-factor-code" name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6}/></div>
+          <input className="input" id="two-factor-code" name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} onPaste={pasteTotpCode}/></div>
         {message && <div className="notice error" role="alert">{message}</div>}
         <div className="actions">
           <button className="btn btn-primary" disabled={busy}>{busy ? "Activation…" : "Activer la double authentification"}</button>
@@ -110,8 +111,7 @@ export function TwoFactorSettings({ initial }: { initial: Status }) {
   if (step === "disable" || step === "regenerate") {
     const disable = step === "disable";
     return <form className="form" onSubmit={(event) => run(event, async (form) => {
-      const value = String(form.get("factor") || "").trim();
-      const factor: Record<string, string> = /^\d{6}$/.test(value) ? { code: value } : { recoveryCode: value };
+      const factor: Record<string, string> = secondFactorPayload(String(form.get("factor") || ""));
       const { ok, data } = await post(disable
         ? { action: "disable", password: String(form.get("password") || ""), ...factor }
         : { action: "regenerate", ...factor });
