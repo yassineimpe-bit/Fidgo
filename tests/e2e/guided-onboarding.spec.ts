@@ -21,7 +21,7 @@ async function continueForm(page: Page, next: string) {
 }
 
 for (const mode of ["STAMPS", "POINTS"] as const) {
-  test(`onboarding guidé ${mode} : identité, programme, équipe et QR fonctionnel`, async ({ page, context }) => {
+  test(`onboarding guidé ${mode} : identité, programme et QR fonctionnel, équipe après coup`, async ({ page, context }) => {
     const marker = await signup(page);
     const name = mode === "POINTS" ? "Boucherie du centre" : "Boulangerie du centre";
     const reward = mode === "POINTS" ? "10 € de remise" : "Un pain offert";
@@ -29,6 +29,8 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     const logo = "https://example.com/logo-onboarding.png";
     await context.route(logo, route => route.fulfill({ path: `${process.cwd()}/public/icon-192.png`, contentType: "image/png" }));
     await page.getByLabel("Nom", { exact: true }).fill(name);
+    // Logo et coordonnées restent possibles, repliés hors du chemin critique.
+    await page.getByText("Logo, coordonnées et fond de carte (facultatif)").click();
     await page.getByLabel("URL du logo").fill(logo);
     await page.getByLabel("Code hexadécimal de la couleur").fill("#7a3e2d");
     await page.getByLabel("Adresse", { exact: true }).fill("12 rue du commerce, 19200 Ussel");
@@ -36,7 +38,7 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     const preview = page.getByLabel("Aperçu de la carte fidélité");
     await expect(preview).toContainText(name);
     await expect(preview).toHaveCSS("background-color", "rgb(122, 62, 45)");
-    await continueForm(page, "Étape 2 sur 4 · Programme");
+    await continueForm(page, "Étape 2 sur 3 · Programme");
     await page.getByLabel("Mode", { exact: true }).selectOption(mode);
     if (mode === "POINTS") {
       await page.getByLabel("Calcul des points").selectOption("PER_EURO");
@@ -46,20 +48,8 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     await page.getByLabel("Récompense", { exact: true }).fill(reward);
     await expect(preview).toContainText(`${threshold} ${mode === "POINTS" ? "points" : "tampons"}`);
     await expect(preview).toContainText(reward);
-    await continueForm(page, "Étape 3 sur 4 · Équipe");
+    await continueForm(page, "Étape 3 sur 3 · QR d’inscription");
     const employeeEmail = `${marker}-employee@example.com`;
-    if (mode === "POINTS") {
-      await page.getByLabel("Email de l’employé").fill(employeeEmail);
-      await page.getByLabel("Mot de passe temporaire").fill("Employee-test-123!");
-      await page.getByRole("button", { name: "Créer l’accès employé" }).click();
-      await expect(page.getByRole("status")).toContainText(employeeEmail);
-      // Creation survives refresh without offering to create the employee twice.
-      await page.reload();
-      await expect(page.getByRole("status")).toContainText(employeeEmail);
-      await page.getByRole("button", { name: "Continuer vers mon QR" }).click();
-    } else {
-      await page.getByRole("button", { name: "Je travaille seul pour le moment" }).click();
-    }
     await expect(page.getByRole("heading", { name: "Ton QR d’inscription est prêt" })).toBeVisible();
     await expect(page.getByRole("img", { name: "QR d'inscription" })).toBeVisible();
     const joinUrl = await page.getByRole("link", { name: "Ouvrir l’inscription client" }).getAttribute("href");
@@ -75,6 +65,7 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     await page.getByRole("button", { name: "Terminer la configuration" }).click();
     await expect(page).toHaveURL(/\/onboarding\/ready$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { name: "Tout est prêt" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Ajouter un employé" })).toHaveAttribute("href", "/dashboard/employees");
     await page.getByRole("link", { name: "Aller au dashboard" }).click();
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15_000 });
     await expect(page.getByRole("link", { name: "Reprendre la configuration" })).toHaveCount(0);
@@ -98,6 +89,8 @@ for (const mode of ["STAMPS", "POINTS"] as const) {
     await expect(customer.locator(".loyalty-card")).toContainText(reward);
     await customer.close();
     if (mode === "POINTS") {
+      // L'équipe s'ajoute après la configuration, depuis le dashboard.
+      expect((await page.request.post("/api/employees", { headers: { origin }, data: { email: employeeEmail, password: "Employee-test-123!", role: "EMPLOYEE" } })).ok()).toBeTruthy();
       // IP logique dédiée : sans elle, cette connexion entame le quota login partagé de 127.0.0.1.
       const employeeContext = await page.context().browser()!.newContext({ extraHTTPHeaders: { "x-real-ip": testClientIp() } });
       const employeePage = await employeeContext.newPage();
@@ -122,7 +115,7 @@ test("onboarding : reprise, erreurs réseau, étapes interdites et isolation ten
   expect((await advance("unknown")).status()).toBe(400);
   expect((await page.request.post("/api/onboarding", { headers: { origin: "https://evil.example" }, data: { action: "finish" } })).status()).toBe(403);
   await page.goto("/onboarding?step=4");
-  await expect(page.getByRole("heading", { name: "Étape 1 sur 4 · Commerce" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Étape 1 sur 3 · Commerce" })).toBeVisible();
   await page.route("**/api/restaurant", route => route.abort());
   await page.getByRole("button", { name: "Enregistrer et continuer" }).click();
   await expect(page.locator(".notice[role=alert]")).toContainText("Connexion perdue");
@@ -131,14 +124,14 @@ test("onboarding : reprise, erreurs réseau, étapes interdites et isolation ten
   await page.getByLabel("Code hexadécimal de la couleur").fill("red");
   await expect(page.getByRole("button", { name: "Enregistrer et continuer" })).toBeDisabled();
   await page.getByLabel("Code hexadécimal de la couleur").fill("#123456");
-  await continueForm(page, "Étape 2 sur 4 · Programme");
+  await continueForm(page, "Étape 2 sur 3 · Programme");
   await page.getByRole("link", { name: "Reprendre plus tard" }).click();
   await page.getByRole("link", { name: "Reprendre la configuration" }).click();
-  await expect(page.getByRole("heading", { name: "Étape 2 sur 4 · Programme" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Étape 2 sur 3 · Programme" })).toBeVisible();
   await page.getByRole("link", { name: "✓ · Commerce" }).click();
   await expect(page.getByLabel("Code hexadécimal de la couleur")).toHaveValue("#123456");
-  await continueForm(page, "Étape 2 sur 4 · Programme");
-  // Server rejects invalid values and does not advance to the team step.
+  await continueForm(page, "Étape 2 sur 3 · Programme");
+  // Server rejects invalid values and does not advance to the QR step.
   expect((await page.request.patch("/api/program", { headers: { origin }, data: null })).status()).toBe(400);
   expect((await page.request.patch("/api/program", { headers: { origin }, data: {
     onboarding: true, mode: "STAMPS", pointsRule: "PER_PURCHASE", rewardThreshold: 0,
@@ -151,7 +144,8 @@ test("onboarding : reprise, erreurs réseau, étapes interdites et isolation ten
   await page.unroute("**/api/program");
   await page.reload();
   await expect(page.getByLabel("Seuil de récompense")).toHaveValue(String(original.reward_threshold));
-  await continueForm(page, "Étape 3 sur 4 · Équipe");
+  await continueForm(page, "Étape 3 sur 3 · QR d’inscription");
+  // Anciennes actions « équipe » : toujours validées côté serveur pour les onglets ouverts avant #151.
   expect((await advance("team-created")).status()).toBe(409);
   const otherContext = await browser.newContext({ baseURL: origin });
   const other = await otherContext.newPage();
@@ -159,7 +153,7 @@ test("onboarding : reprise, erreurs réseau, étapes interdites et isolation ten
   const otherRestaurant = await other.request.get(`${origin}/api/restaurant`).then(r => r.json());
   expect((await advance("team-skip", { establishmentId: otherRestaurant.id })).ok()).toBeTruthy();
   await other.reload();
-  await expect(other.getByRole("heading", { name: "Étape 1 sur 4 · Commerce" })).toBeVisible();
+  await expect(other.getByRole("heading", { name: "Étape 1 sur 3 · Commerce" })).toBeVisible();
   await otherContext.close();
   const finished = await Promise.all([advance("finish"), advance("finish")]);
   for (const response of finished) expect(await response.json()).toMatchObject({ ok: true, step: 5 });
@@ -205,5 +199,5 @@ test("onboarding : MANAGER et VIEWER ne peuvent pas avancer la configuration du 
     } finally { await staffContext.close(); }
   }
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Étape 1 sur 4 · Commerce" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Étape 1 sur 3 · Commerce" })).toBeVisible();
 });

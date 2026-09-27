@@ -8,7 +8,7 @@ import { rejectCrossOrigin } from "@/lib/security";
 import { safeErrorCode, sanitizeAuditText, withApiErrorHandling } from "@/lib/observability";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-const KNOWN_ADJUST_ERRORS = new Set(["CARD_NOT_FOUND", "NO_CHANGE"]);
+const KNOWN_ADJUST_ERRORS = new Set(["CARD_NOT_FOUND", "NO_CHANGE", "BALANCE_CHANGED"]);
 
 async function handlePost(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const originError = rejectCrossOrigin(req);
@@ -26,7 +26,10 @@ async function handlePost(req: Request, { params }: { params: Promise<{ id: stri
   const newBalance = boundedInt(body.newBalance, { min: 0, max: 1_000_000 });
   const reason = sanitizeAuditText(boundedText(body.reason, 240));
   const idempotencyKey = body.idempotencyKey;
-  if (newBalance === null || !reason || !isValidIdempotencyKey(idempotencyKey)) {
+  // Facultatif : solde vu par l'opérateur. Une saisie « variation » (+2) ne
+  // doit pas écraser un crédit arrivé entre l'affichage et la confirmation.
+  const expectedBalance = body.expectedBalance === undefined ? undefined : boundedInt(body.expectedBalance, { min: 0, max: 1_000_000 });
+  if (newBalance === null || expectedBalance === null || !reason || !isValidIdempotencyKey(idempotencyKey)) {
     return Response.json({ error: "INVALID_INPUT" }, { status: 400 });
   }
 
@@ -59,6 +62,9 @@ async function handlePost(req: Request, { params }: { params: Promise<{ id: stri
       if (existingAfterLock) return { cardId: String(existingAfterLock.card_id), balance: Number(existingAfterLock.balance_after), duplicate: true };
 
       const oldBalance = Number(card.balance);
+      if (expectedBalance !== undefined && expectedBalance !== oldBalance) {
+        return { cardId: String(card.id), balance: oldBalance, duplicate: false, stale: true };
+      }
       const delta = newBalance - oldBalance;
       if (delta === 0) throw new Error("NO_CHANGE");
       const unit = card.mode === "STAMPS" ? "STAMP" : "POINT";
@@ -76,6 +82,9 @@ async function handlePost(req: Request, { params }: { params: Promise<{ id: stri
     });
 
     const { cardId, ...payload } = result;
+    if ("stale" in result) {
+      return Response.json({ error: "BALANCE_CHANGED", balance: result.balance }, { status: 409, headers: { "cache-control": "no-store" } });
+    }
     after(() => syncWalletsForCard(cardId));
     return Response.json(payload, { headers: { "cache-control": "no-store" } });
   } catch (error) {
