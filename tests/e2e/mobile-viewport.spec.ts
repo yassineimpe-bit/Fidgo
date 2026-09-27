@@ -64,6 +64,44 @@ test("menu mobile : Échap et clic extérieur referment le menu", async ({ page 
   await expect(page.getByRole("link", { name: "Clients" })).toBeHidden();
 });
 
+for (const width of [320, 390, 430]) {
+  test(`menu mobile @${width}px : liens groupés par usage, cibles ≥ 44 px, focus rendu au bouton`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 640 });
+    await createMerchant(page, `navgroups${width}`);
+
+    // Scanner reste l'action primaire de l'en-tête, hors du menu.
+    const scanner = page.locator(".app-nav-mobile-primary");
+    await expect(scanner).toBeVisible();
+    expect((await scanner.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    const toggle = page.getByRole("button", { name: "Ouvrir le menu" });
+    await toggle.click();
+    const menu = page.locator("#mobile-nav-dropdown");
+    const expected: [string, string[]][] = [
+      ["Au quotidien", ["Dashboard", "Clients", "Transactions", "Analytics", "Campagnes"]],
+      ["Configuration", ["Programme", "Commerce", "Équipe"]],
+      ["Compte", ["Wallet", "Facturation", "Affiche QR", "Sécurité"]],
+    ];
+    for (const [title, labels] of expected) {
+      const group = menu.getByRole("group", { name: title });
+      await expect(group.getByRole("link")).toHaveText(labels);
+    }
+    await expect(menu.getByRole("link", { name: "Scanner" })).toHaveCount(0);
+
+    // Menu plus haut que l'écran : il défile au lieu de sortir de la vue.
+    const last = menu.getByRole("link", { name: "Sécurité" });
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport();
+    const box = await last.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(await horizontalOverflow(page)).toBe(0);
+
+    await page.keyboard.press("Escape");
+    await expect(menu.getByRole("link", { name: "Clients" })).toBeHidden();
+    await expect(toggle).toBeFocused();
+  });
+}
+
 test("desktop : la navigation complète reste visible sans menu hamburger", async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });
   await createMerchant(page, "navdesktop");
