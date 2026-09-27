@@ -24,10 +24,22 @@ Au premier clic sur `/api/wallet/google/[token]`, Retiko :
 
 Après un crédit, redeem ou reversal, `after()` patche l'objet Google hors du chemin critique caisse.
 
+Si l'API Google refuse une requête, Retiko journalise uniquement un diagnostic
+support borné : opération, statut HTTP, code/raison Google et message nettoyé.
+Le corps brut, les headers d'autorisation, tokens OAuth, JWT, credentials et
+token de carte ne sont jamais journalisés. La route publique conserve la
+réponse générique `GOOGLE_WALLET_UNAVAILABLE`.
+
+Le logo de classe reste disponible à l'URL stable `/wallet-logo.png`. Il est
+généré depuis le SVG Retiko en PNG carré 1024×1024, avec une marge suffisante
+pour le masque circulaire Google. Il dépasse ainsi le minimum documenté de
+660×660 pixels pour un logo Google Wallet.
+
 Documentation officielle :
 - https://developers.google.com/wallet/retail/loyalty-cards/use-cases/create
 - https://developers.google.com/wallet/retail/loyalty-cards/web
 - https://developers.google.com/wallet/retail/loyalty-cards/use-cases/updates
+- https://developers.google.com/wallet/generic/resources/brand-guidelines#logos
 
 ## Apple Wallet
 
@@ -129,12 +141,10 @@ Documentation officielle :
 
 ### Limite connue (cosmétique, pas fonctionnelle)
 
-`public/wallet-logo.png` est un carré 256×256 réutilisé à la fois comme icône
-(29×29pt, carré : correct) et comme logo (jusqu'à 160×50pt, rectangulaire).
-Le pass reste valide et s'installe normalement, mais le logo apparaîtra
-recadré en carré au lieu d'un logotype large. Un vrai logo rectangulaire
-(fond transparent, ~160×50pt @1x) améliorera le rendu sans toucher au code —
-seul le fichier `public/wallet-logo.png` serait à remplacer.
+`public/wallet-logo.png` reste un logo carré réutilisé par Apple Wallet. Le
+pass signé reste valide, mais Apple l'affiche comme un pictogramme plutôt que
+comme un logotype large. Un asset Apple rectangulaire dédié pourra améliorer
+ce rendu ultérieurement sans modifier l'intégration Google.
 
 ## Validation avant activation commerciale
 
