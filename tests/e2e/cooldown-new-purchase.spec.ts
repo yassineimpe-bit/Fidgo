@@ -49,6 +49,7 @@ test("nouveau programme : 10 min par défaut, préréglages et valeur personnali
     expect(await programCooldown()).toBe(600);
 
     await page.goto("/dashboard/program");
+    await page.getByText("Protection contre les abus").click();
     const preset = page.getByLabel("Délai entre deux crédits");
     await expect(preset).toHaveValue("600");
     await expect(page.getByText("Soit 10 min.")).toBeVisible();
@@ -66,6 +67,7 @@ test("nouveau programme : 10 min par défaut, préréglages et valeur personnali
 
     // Une valeur hors préréglage se rouvre telle quelle, sans arrondi silencieux.
     await page.reload();
+    await page.getByText("Protection contre les abus").click();
     await expect(page.getByLabel("Délai entre deux crédits")).toHaveValue("custom");
     await expect(page.getByLabel("Délai personnalisé (secondes)")).toHaveValue("90");
     await expect(page.getByText("Soit 1 min 30 s.")).toBeVisible();
