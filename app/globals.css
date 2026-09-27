@@ -140,6 +140,13 @@ h3 { letter-spacing: -.025em; }
 .notice { border: 1px solid var(--line); background: #faf9f6; padding: 14px 15px; border-radius: 10px; color: var(--muted); font-size: 14px; }
 .notice.error { border-color: #efd0cb; background: #fff6f4; color: var(--danger); }
 .notice.success { border-color: #cbe5d7; background: #f1faf5; color: var(--success); }
+.adjust-dialog { width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: #fff; color: var(--text); }
+.adjust-dialog::backdrop { background: rgba(23,23,23,.45); }
+.adjust-dialog .actions .btn { min-height: 44px; }
+.adjust-preview, .adjust-summary { display: grid; gap: 6px; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: #faf9f6; }
+.adjust-preview > span, .adjust-summary > div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.adjust-summary dt { color: var(--muted); }
+.adjust-summary dd { margin: 0; font-weight: 700; text-align: right; overflow-wrap: anywhere; }
 .auth-wrap { min-height: 100dvh; display: grid; place-items: center; padding: 28px; background: var(--bg); }
 .auth-card { width: min(460px, 100%); padding: 30px; }
 .onboarding-shell { max-width: 1000px; }
