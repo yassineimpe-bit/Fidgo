@@ -41,6 +41,25 @@ export function progressText(progress: Progress) {
   return `${done} / ${progress.recipientCount} traité(s) · ${progress.sentCount} envoyé(s)${progress.failedCount ? ` · ${progress.failedCount} échec(s)` : ""}${progress.skippedCount ? ` · ${progress.skippedCount} désabonné(s) entre-temps` : ""}`;
 }
 
+const SEGMENT_LABELS: Record<Segment, string> = {
+  all: "Tous les clients abonnés",
+  active: "Clients venus ces 30 derniers jours",
+  reward_available: "Clients avec une récompense disponible",
+};
+
+/** Ciblage lisible repris tel quel dans la confirmation d'envoi. */
+export function audienceLabel(kind: Kind, segment: Segment, inactiveDays: number) {
+  return kind === "inactive_reminder"
+    ? `Relance des clients inactifs · sans visite depuis ${inactiveDays} jours`
+    : `Campagne promotionnelle · ${SEGMENT_LABELS[segment]}`;
+}
+
+async function fetchRecipients(audienceKey: string): Promise<number | null> {
+  const response = await fetch("/api/campaigns/preview", { method: "POST", headers: { "content-type": "application/json" }, body: audienceKey });
+  const body = await response.json().catch(() => null);
+  return response.ok ? Number(body.recipients) : null;
+}
+
 export function CampaignComposer({ restaurantName }: { restaurantName: string }) {
   const router = useRouter();
   const [kind, setKind] = useState<Kind>("promotion");
@@ -54,6 +73,11 @@ export function CampaignComposer({ restaurantName }: { restaurantName: string })
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<Progress | null>(null);
   const idempotencyKey = useRef("");
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const confirmTitleRef = useRef<HTMLHeadingElement>(null);
+  const sendButtonRef = useRef<HTMLButtonElement>(null);
+  // Nombre recalculé à l'ouverture de la confirmation : undefined = calcul en cours.
+  const [confirming, setConfirming] = useState<{ recipients: number | null | undefined } | null>(null);
 
   const audience = kind === "inactive_reminder" ? { segment: "inactive", inactiveDays } : { segment };
   const audienceKey = JSON.stringify(audience);
@@ -61,19 +85,43 @@ export function CampaignComposer({ restaurantName }: { restaurantName: string })
   useEffect(() => {
     let cancelled = false;
     setRecipients(null);
-    fetch("/api/campaigns/preview", { method: "POST", headers: { "content-type": "application/json" }, body: audienceKey })
-      .then(async (response) => {
-        const body = await response.json().catch(() => null);
-        if (!cancelled) setRecipients(response.ok ? Number(body.recipients) : null);
-      })
+    fetchRecipients(audienceKey)
+      .then((count) => { if (!cancelled) setRecipients(count); })
       .catch(() => { if (!cancelled) setRecipients(null); });
     return () => { cancelled = true; };
   }, [audienceKey]);
 
-  async function submit(event: React.FormEvent) {
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (confirming && !dialog.open) { dialog.showModal(); confirmTitleRef.current?.focus(); }
+    if (!confirming && dialog.open) dialog.close();
+  }, [confirming]);
+
+  // Étape 1 : aucune campagne n'est créée, on recalcule l'audience et on récapitule.
+  async function review(event: React.FormEvent) {
     event.preventDefault();
-    if (!recipients) return;
-    if (!window.confirm(`Envoyer cet e-mail à ${recipients} client(s) ? Cette action est définitive.`)) return;
+    if (!recipients || busy) return;
+    setError("");
+    setConfirming({ recipients: undefined });
+    try {
+      const count = await fetchRecipients(audienceKey);
+      setRecipients(count);
+      setConfirming((current) => current ? { recipients: count } : current);
+    } catch {
+      setConfirming((current) => current ? { recipients: null } : current);
+    }
+  }
+
+  function closeConfirmation() {
+    setConfirming(null);
+    window.requestAnimationFrame(() => sendButtonRef.current?.focus());
+  }
+
+  // Étape 2 : flow d'envoi existant, inchangé (clé d'idempotence, lots, reprise).
+  async function send() {
+    if (!confirming?.recipients || busy) return;
+    setConfirming(null);
     setBusy(true);
     setError("");
     setNotice("");
@@ -101,7 +149,7 @@ export function CampaignComposer({ restaurantName }: { restaurantName: string })
     }
   }
 
-  return <form className="card form" onSubmit={submit} aria-label="Nouvelle campagne">
+  return <><form className="card form" onSubmit={review} aria-label="Nouvelle campagne">
     <h3>Nouvelle campagne e-mail</h3>
     <fieldset className="form" style={{border:0,padding:0,margin:0}}>
       <legend className="muted">Type</legend>
@@ -123,13 +171,31 @@ export function CampaignComposer({ restaurantName }: { restaurantName: string })
     <label>Objet<input className="input" value={subject} maxLength={120} required onChange={(event) => setSubject(event.target.value)} placeholder={`Une surprise vous attend chez ${restaurantName}`}/></label>
     <label>Message<textarea className="input" value={message} maxLength={2000} rows={6} required onChange={(event) => setMessage(event.target.value)}/></label>
     <p className="muted" style={{margin:0}}>Un lien de désabonnement et le nom du commerce sont ajoutés automatiquement en bas de l’e-mail.</p>
-    <button className="btn btn-primary" type="submit" disabled={busy || !recipients || !subject.trim() || !message.trim()}>
+    <button ref={sendButtonRef} className="btn btn-primary" type="submit" disabled={busy || !recipients || !subject.trim() || !message.trim()}>
       {busy ? "Envoi en cours…" : recipients ? `Envoyer à ${recipients} client(s)` : "Aucun destinataire"}
     </button>
     {progress && <p className="muted" role="status">{progressText(progress)}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {error && <p className="notice error" role="alert">{error}</p>}
-  </form>;
+  </form>
+  <dialog ref={dialogRef} className="confirm-dialog" aria-labelledby="campaign-confirm-title"
+    onCancel={(event) => { event.preventDefault(); closeConfirmation(); }}>
+    <h3 id="campaign-confirm-title" ref={confirmTitleRef} tabIndex={-1} style={{marginTop:0}}>Confirmer l’envoi de la campagne ?</h3>
+    <dl className="confirm-summary">
+      <div><dt>Ciblage</dt><dd>{audienceLabel(kind, segment, inactiveDays)}</dd></div>
+      <div><dt>Objet</dt><dd>{subject}</dd></div>
+      <div><dt>Destinataires</dt><dd>{confirming?.recipients === undefined ? "Calcul en cours…" : confirming?.recipients ? `${confirming.recipients} client${confirming.recipients > 1 ? "s" : ""}` : "Aucun"}</dd></div>
+    </dl>
+    {confirming?.recipients === 0 && <p className="notice error" role="alert">{ERRORS.NO_RECIPIENTS}</p>}
+    {confirming?.recipients === null && <p className="notice error" role="alert">Impossible de vérifier les destinataires. Réessaie dans un instant.</p>}
+    <p className="notice"><strong>Envoi définitif :</strong> un e-mail parti ne peut pas être rappelé.</p>
+    <div className="actions">
+      <button className="btn btn-primary" type="button" disabled={!confirming?.recipients} onClick={() => void send()}>
+        {confirming?.recipients ? `Confirmer l’envoi à ${confirming.recipients} client${confirming.recipients > 1 ? "s" : ""}` : "Confirmer l’envoi"}
+      </button>
+      <button className="btn" type="button" onClick={closeConfirmation}>Annuler</button>
+    </div>
+  </dialog></>;
 }
 
 export function CampaignResumeButton({ id }: { id: string }) {
