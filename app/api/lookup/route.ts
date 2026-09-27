@@ -23,10 +23,9 @@ async function handleGet(req: Request) {
   const [phone1, phone2, phone3] = phoneLookupVariants(q);
 
   const [row] = await sql`
-    select c.token, c.short_code, c.balance, u.first_name, u.email, p.mode, p.reward_threshold
+    select c.token
     from cards c
     join customers u on u.id = c.customer_id
-    join loyalty_programs p on p.establishment_id = c.establishment_id
     where c.establishment_id = ${session.establishmentId}
       and u.deleted_at is null
       and (

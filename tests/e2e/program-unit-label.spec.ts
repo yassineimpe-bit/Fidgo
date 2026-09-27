@@ -6,6 +6,7 @@ test("libellé d'unité : « café » sur le programme, le scanner, la carte et 
   await createMerchant(page, "unit-label");
 
   await page.goto("/dashboard/program");
+  await page.getByText("Personnalisation (facultatif)").click();
   await page.getByLabel("Nom de l’unité").fill("Café");
   await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(page.getByText("Programme enregistré.")).toBeVisible();
@@ -42,6 +43,7 @@ test("libellé d'unité : « café » sur le programme, le scanner, la carte et 
 
   // Retour au libellé par défaut : champ vidé.
   await page.goto("/dashboard/program");
+  await page.getByText("Personnalisation (facultatif)").click();
   await page.getByLabel("Nom de l’unité").fill("");
   await page.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await expect(page.getByText("Programme enregistré.")).toBeVisible();
