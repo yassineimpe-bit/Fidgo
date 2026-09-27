@@ -40,7 +40,7 @@ test("scanner rush : réseau lent annoncé, aucun succès avant la réponse", as
   await expect(pending).toContainText("Envoi du crédit…");
   await expect(pending).toContainText("Rien n’est validé tant que ce message est affiché");
   await expect(page.getByRole("button", { name: "+1 tampon" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Utiliser récompense" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Utiliser la récompense" })).toBeDisabled();
   await expect(page.getByText("+1 validé")).toHaveCount(0);
 
   await expect(page.getByText("+1 validé")).toBeVisible({ timeout: 15_000 });
@@ -102,7 +102,7 @@ for (const width of [320, 390, 430]) {
     expect(overflow).toBeLessThanOrEqual(0);
     for (const target of [
       page.getByRole("button", { name: "+1 tampon" }),
-      page.getByRole("button", { name: "Utiliser récompense" }),
+      page.getByRole("button", { name: "Utiliser la récompense" }),
       page.getByRole("button", { name: "Annuler" }),
       page.getByRole("button", { name: /^Son/ }),
       page.getByRole("link", { name: "Stats" }),

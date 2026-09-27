@@ -7,8 +7,8 @@ import { sql } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 /**
- * Fin de l'onboarding : le parcours recommandé pour vérifier soi-même, en
- * quelques minutes, que le QR, la carte et le scanner fonctionnent. Les
+ * Fin de l'onboarding : le parcours recommandé pour vérifier soi-même que
+ * le QR, la carte et le scanner fonctionnent. Les
  * étapes « carte test » et « premier crédit » se cochent d'après la base.
  */
 export default async function OnboardingReadyPage() {
@@ -30,7 +30,7 @@ export default async function OnboardingReadyPage() {
   return <main className="shell page onboarding-shell">
     <Link href="/" className="eyebrow">Retiko</Link>
     <h1>Tout est prêt</h1>
-    <p className="muted">Ton programme est en place. Fais ce test une fois toi-même avant ton premier client : il prend deux minutes.</p>
+    <p className="muted">Ton programme est en place. Fais ce test une fois toi-même avant ton premier client.</p>
     <ol className="card ready-path" aria-label="Parcours recommandé">
       <li>
         <strong>Ouvrir l’inscription client</strong>
@@ -42,5 +42,14 @@ export default async function OnboardingReadyPage() {
       <li><strong>Ajouter le premier tampon / crédit{done(progress?.has_credit)}</strong></li>
       <li><strong>Aller au dashboard</strong><Link className="btn btn-primary" href="/dashboard">Aller au dashboard</Link></li>
     </ol>
+    <section className="card" aria-labelledby="ready-later">
+      <h2 id="ready-later" style={{marginTop:0,fontSize:18}}>Ensuite, quand tu veux</h2>
+      <p className="muted">Rien de tout cela n’est nécessaire pour ton premier test.</p>
+      <ul className="ready-later">
+        <li><Link href="/dashboard/employees">Ajouter un employé</Link> : un accès scanner séparé, sans tes réglages.</li>
+        <li><Link href="/dashboard/settings">Compléter ton commerce</Link> : logo, coordonnées, fond de carte.</li>
+        <li><Link href="/dashboard/poster">Imprimer ton affiche QR</Link> pour le comptoir.</li>
+      </ul>
+    </section>
   </main>;
 }

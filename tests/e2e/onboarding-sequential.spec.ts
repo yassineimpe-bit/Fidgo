@@ -29,28 +29,28 @@ test("onboarding séquentiel : enchaînement, retour, double clic, deux onglets 
   await submitSignupAndVerify(page, `${marker}@example.com`, "Password-test-123!");
   const { slug } = await page.request.get("/api/restaurant").then((response) => response.json());
 
-  // L'écran final n'existe pas tant que l'étape 4 n'est pas enregistrée.
+  // L'écran final n'existe pas tant que l'étape QR n'est pas terminée.
   await page.goto("/onboarding/ready");
   await expect(page).toHaveURL(/\/onboarding$/);
 
   // Étape 1 → 2 automatiquement, seulement après la sauvegarde serveur.
-  await heading(page, "Étape 1 sur 4 · Commerce");
+  await heading(page, "Étape 1 sur 3 · Commerce");
   await expect(page.getByRole("link", { name: /Étape précédente/ })).toHaveCount(0);
   await page.getByLabel("Nom", { exact: true }).fill("Café des Halles");
   await page.getByRole("button", { name: "Enregistrer et continuer" }).click();
-  await heading(page, "Étape 2 sur 4 · Programme");
+  await heading(page, "Étape 2 sur 3 · Programme");
   expect(await savedStep(slug)).toBe(2);
 
   // Étape 2 : double clic sans double progression ni double écriture visible.
   await page.getByLabel("Récompense", { exact: true }).fill("Un café offert");
   const saveProgram = page.getByRole("button", { name: "Enregistrer et continuer" });
   await saveProgram.dblclick();
-  await heading(page, "Étape 3 sur 4 · Équipe");
+  await heading(page, "Étape 3 sur 3 · QR d’inscription");
   expect(await savedStep(slug)).toBe(3);
 
   // Retour arrière : les valeurs enregistrées sont intactes.
   await page.getByRole("link", { name: "← Étape précédente : Programme" }).click();
-  await heading(page, "Étape 2 sur 4 · Programme");
+  await heading(page, "Étape 2 sur 3 · Programme");
   await expect(page.getByLabel("Récompense", { exact: true })).toHaveValue("Un café offert");
   await page.getByRole("link", { name: "← Étape précédente : Commerce" }).click();
   await expect(page.getByLabel("Nom", { exact: true })).toHaveValue("Café des Halles");
@@ -58,22 +58,21 @@ test("onboarding séquentiel : enchaînement, retour, double clic, deux onglets 
 
   // Reprise au dernier step enregistré.
   await page.goto("/onboarding");
-  await heading(page, "Étape 3 sur 4 · Équipe");
+  await heading(page, "Étape 3 sur 3 · QR d’inscription");
+
+  // Aucun employé à créer avant le QR : l'équipe n'est plus dans le chemin critique.
+  await expect(page.getByLabel("Email de l’employé")).toHaveCount(0);
+  await expect(page.getByRole("img", { name: "QR d'inscription" })).toBeVisible();
 
   // Deux onglets : l'onglet en retard ne fait ni reculer ni échouer la progression.
   const second = await context.newPage();
   await second.goto("/onboarding");
-  await heading(second, "Étape 3 sur 4 · Équipe");
-  await page.getByRole("button", { name: "Je travaille seul pour le moment" }).click();
-  await heading(page, "Étape 4 sur 4 · QR d’inscription");
-  await second.getByRole("button", { name: "Je travaille seul pour le moment" }).click();
-  await heading(second, "Étape 4 sur 4 · QR d’inscription");
-  expect(await savedStep(slug)).toBe(4);
-  await second.close();
-
-  // Étape 4 → écran final.
+  await heading(second, "Étape 3 sur 3 · QR d’inscription");
   await page.getByRole("button", { name: "Terminer la configuration" }).click();
   await expect(page).toHaveURL(/\/onboarding\/ready$/, { timeout: 15_000 });
+  await second.getByRole("button", { name: "Terminer la configuration" }).click();
+  await expect(second).toHaveURL(/\/onboarding\/ready$/, { timeout: 15_000 });
+  await second.close();
   await heading(page, "Tout est prêt");
   expect(await savedStep(slug)).toBe(5);
   const path = page.getByRole("list", { name: "Parcours recommandé" }).getByRole("listitem");

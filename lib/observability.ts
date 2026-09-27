@@ -1,9 +1,35 @@
 const UUID_SEGMENT = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OPAQUE_SEGMENT = /^[A-Za-z0-9_-]{24,}$/;
+const CARD_CAPABILITY_SEGMENT = /^LOY1:[A-Za-z0-9_-]{20,64}$/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const CARD_TOKEN = /\bLOY1:[A-Za-z0-9_-]{20,64}\b/g;
 const SECRET = /\b(?:re_|Bearer\s+)[A-Za-z0-9._-]{12,}\b/gi;
 const SENSITIVE_LINK = /https?:\/\/[^\s]+\/(?:c|recover)\/[A-Za-z0-9_-]{20,}/gi;
+
+const SENSITIVE_ROUTE_PREFIXES = [
+  ["c"],
+  ["recover"],
+  ["unsubscribe"],
+  ["api", "unsubscribe"],
+  ["api", "card"],
+  ["api", "wallet", "apple"],
+  ["api", "wallet", "google"],
+] as const;
+
+function isSensitiveRouteSegment(segments: string[], index: number): boolean {
+  const segment = segments[index]?.toLowerCase();
+  if (!segment) return false;
+
+  return SENSITIVE_ROUTE_PREFIXES.some((prefix) => {
+    if (index !== prefix.length) return false;
+    if (!prefix.every((part, prefixIndex) => segments[prefixIndex]?.toLowerCase() === part)) return false;
+
+    // Ces routes statiques ne transportent pas de capability dans leur chemin.
+    if (prefix[0] === "api" && prefix[1] === "card" && segment === "status") return false;
+    if (prefix[0] === "api" && prefix[1] === "wallet" && prefix[2] === "apple" && segment === "web") return false;
+    return true;
+  });
+}
 
 function deploymentVersion(): string {
   return process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || "dev";
@@ -18,11 +44,14 @@ export function redactSensitivePath(input: unknown): string {
   const raw = typeof input === "string" && input.trim() ? input.trim() : "/";
   const pathname = raw.split(/[?#]/, 1)[0] || "/";
 
-  return pathname
-    .split("/")
-    .map((segment) => {
+  const segments = pathname.split("/");
+
+  return segments
+    .map((segment, index) => {
       if (!segment) return segment;
+      if (isSensitiveRouteSegment(segments.slice(1), index - 1)) return "[redacted]";
       if (UUID_SEGMENT.test(segment)) return "[id]";
+      if (CARD_CAPABILITY_SEGMENT.test(segment)) return "[redacted]";
       if (OPAQUE_SEGMENT.test(segment)) return "[redacted]";
       return segment;
     })

@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppNav } from "@/components/app-nav";
+import { BalanceAdjustment } from "@/components/balance-adjustment";
 import { CustomerContact } from "@/components/customer-contact";
 import { CustomerNote } from "@/components/customer-note";
 import { getSession } from "@/lib/auth";
 import { CUSTOMER_HISTORY_PAGE_SIZE, customerHistoryHref, parseCustomerHistoryPage } from "@/lib/customer-detail";
 import { sql } from "@/lib/db";
 import { canAccessBackoffice, canManageCustomers, canManageProgram } from "@/lib/loyalty";
+import { programUnits } from "@/lib/program-units";
 import { transactionTypeLabel } from "@/lib/transaction-history";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +28,13 @@ export default async function CustomerDetailPage({
   const requestedPage = parseCustomerHistoryPage((await searchParams).page);
 
   const [restaurant] = await sql`
-    select name from establishments where id=${session.establishmentId}
+    select e.name, p.mode,
+      to_jsonb(p)->>'unit_label' as unit_label, to_jsonb(p)->>'unit_label_plural' as unit_label_plural
+    from establishments e
+    left join loyalty_programs p on p.establishment_id=e.id
+    where e.id=${session.establishmentId}
   `;
+  const units = programUnits(String(restaurant?.mode || "STAMPS"), restaurant?.unit_label, restaurant?.unit_label_plural);
   const [customer] = await sql`
     select
       u.id,u.first_name,u.email,u.phone,u.internal_note,u.marketing_consent,u.created_at,
@@ -66,6 +73,7 @@ export default async function CustomerDetailPage({
   const transactions = await sql`
     select
       t.id,t.type,t.delta,t.balance_after,t.unit,t.created_at,
+      case when t.type='adjust' then t.metadata->>'reason' end as adjust_reason,
       st.email as staff_email,
       exists(select 1 from transactions r where r.reversed_transaction_id=t.id
         and r.establishment_id=t.establishment_id) as reversed
@@ -134,13 +142,20 @@ export default async function CustomerDetailPage({
 
       <section className="card" style={{marginTop:18}}>
         <div className="section-head"><div><h3>Historique des transactions</h3><p className="muted">{count} écriture{count > 1 ? "s" : ""} · page {currentPage}/{totalPages} · 50 par page.</p></div></div>
+        {canManageCustomers(session.role) && customer.card_id && customer.active && <BalanceAdjustment
+          customerId={id}
+          customerName={String(customer.first_name || "Sans prénom")}
+          balance={Number(customer.balance ?? 0)}
+          units={units}
+        />}
         {transactions.length === 0
           ? <div className="empty-state"><strong>Aucune transaction.</strong><p>Le premier passage apparaîtra ici.</p></div>
           : <div className="table-wrap"><table>
               <thead><tr><th>Date</th><th>Type</th><th>Variation</th><th>Solde après</th><th>Employé</th></tr></thead>
               <tbody>{transactions.map((row) => <tr key={String(row.id)}>
                 <td>{new Date(String(row.created_at)).toLocaleString("fr-FR")}</td>
-                <td>{transactionTypeLabel(String(row.type))}{row.reversed ? " · annulée" : ""}</td>
+                <td>{transactionTypeLabel(String(row.type))}{row.reversed ? " · annulée" : ""}
+                  {row.adjust_reason && <div className="muted" style={{fontSize:13}}>Motif : {String(row.adjust_reason)}</div>}</td>
                 <td>{Number(row.delta) > 0 ? "+" : ""}{Number(row.delta)}</td>
                 <td>{Number(row.balance_after)}</td>
                 <td>{row.staff_email ? String(row.staff_email) : "système"}</td>
