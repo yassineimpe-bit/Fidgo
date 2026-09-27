@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { cardToken } from "../lib/ids";
 import {
   logApiMetric,
   logHealthSnapshot,
@@ -9,6 +10,16 @@ import {
 } from "../lib/observability";
 
 describe("observability path redaction", () => {
+  it("redacts real card capabilities on public, API and Wallet routes", () => {
+    const token = cardToken();
+    expect(token).toHaveLength(22);
+    expect(redactSensitivePath(`/c/${token}`)).toBe("/c/[redacted]");
+    expect(redactSensitivePath(`/api/card/${token}/marketing`)).toBe("/api/card/[redacted]/marketing");
+    expect(redactSensitivePath(`/api/wallet/apple/${token}`)).toBe("/api/wallet/apple/[redacted]");
+    expect(redactSensitivePath(`/api/wallet/google/${token}`)).toBe("/api/wallet/google/[redacted]");
+    expect(redactSensitivePath(`/future/LOY1:${token}`)).toBe("/future/[redacted]");
+  });
+
   it("redacts long opaque card and recovery tokens", () => {
     expect(redactSensitivePath("/c/abcdefghijklmnopqrstuvwxyz0123456789"))
       .toBe("/c/[redacted]");
@@ -24,6 +35,8 @@ describe("observability path redaction", () => {
   it("keeps ordinary static routes readable", () => {
     expect(redactSensitivePath("/dashboard/poster"))
       .toBe("/dashboard/poster");
+    expect(redactSensitivePath("/api/card/status")).toBe("/api/card/status");
+    expect(redactSensitivePath("/api/wallet/apple/web")).toBe("/api/wallet/apple/web");
   });
 
   it("redacts emails, card links, provider keys and control characters from audit text", () => {
