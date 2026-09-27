@@ -44,8 +44,9 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
 
   await openCardInScanner(page, shortCode);
   await expect(page.getByText(/Récompense disponible/)).toBeVisible();
-  await page.getByRole("button", { name: "Utiliser récompense" }).click();
-  await expect(page.getByText(/utilisée/)).toBeVisible();
+  await page.getByRole("button", { name: "Utiliser la récompense" }).click();
+  await page.getByRole("button", { name: "Confirmer l’utilisation" }).click();
+  await expect(page.getByText("Récompense utilisée")).toBeVisible();
   await expect(cardPage.getByText("0 / 10")).toBeVisible({ timeout: 8_000 });
 
   // Instrumentation pilote : JOIN_PAGE_VIEW/SCAN_SUCCESS doivent avoir été
