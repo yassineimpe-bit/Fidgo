@@ -5,29 +5,6 @@ import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { PRIVATE_HEADERS, rejectCrossOrigin, requestIp } from "@/lib/security";
 
-/**
- * Detecte un client deja inscrit SANS jamais exposer son token de carte.
- *
- * L'ancienne version renvoyait token/short_code/balance de la carte existante
- * sur une route non authentifiee : quiconque connaissait le slug public du
- * commerce et l'email d'un client recuperait sa carte, pouvait l'ajouter a son
- * propre Wallet et consommer sa recompense en caisse. C'etait aussi un oracle
- * RGPD ("cette adresse est-elle cliente de ce commerce ?").
- */
-async function existingCustomerId(establishmentId: string, email: string | null, phone: string | null) {
-  if (!email && !phone) return null;
-  const [existing] = await sql`
-    select u.id
-    from customers u
-    where u.establishment_id = ${establishmentId}
-      and u.deleted_at is null
-      and ((${email}::text is not null and lower(u.email) = lower(${email}))
-        or (${phone}::text is not null and u.phone = ${phone}))
-    limit 1
-  `;
-  return existing ? String(existing.id) : null;
-}
-
 async function handlePost(req: Request) {
   const originError = rejectCrossOrigin(req);
   if (originError) return originError;
@@ -70,44 +47,78 @@ async function handlePost(req: Request) {
   const rate = await consumeRateLimit(`enroll:${requestIp(req)}:${establishment.id}`, 15, 60 * 60);
   if (!rate.allowed) return Response.json({ error: "RATE_LIMITED" }, { status: 429 });
 
-  if (await existingCustomerId(establishment.id, email, phone)) {
-    // Reponse volontairement muette : on confirme au visiteur legitime qu'il a
-    // deja une carte, sans livrer le moindre identifiant exploitable.
-    return Response.json({ error: "CARD_ALREADY_EXISTS" }, { status: 409, headers: PRIVATE_HEADERS });
-  }
-
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const token = cardToken();
     const code = shortCode();
     try {
-      const created = await sql.begin(async (tx) => {
+      const outcome = await sql.begin(async (tx) => {
+        // Ce verrou entre en conflit avec le FOR UPDATE des suspensions. Il
+        // linearise la creation avec le lifecycle du commerce : si la
+        // suspension gagne, cette lecture reprend sur l'etat courant et refuse
+        // l'inscription ; si l'inscription gagne, la suspension attend puis
+        // traite la carte nouvellement creee.
+        const [current] = await tx`
+          select e.id, p.expires_after_days
+          from establishments e
+          join loyalty_programs p on p.establishment_id = e.id
+          where e.id = ${establishment.id}
+            and e.status = 'active'
+            and p.active = true
+          limit 1
+          for share of e, p
+        `;
+        if (!current) return { kind: "unavailable" } as const;
+
+        // La detection de doublon appartient a la meme transaction que les
+        // INSERT. Les index uniques restent le dernier rempart lorsque deux
+        // transactions concurrentes observent simultanement l'absence.
+        const [existing] = await tx`
+          select u.id
+          from customers u
+          where u.establishment_id = ${current.id}
+            and u.deleted_at is null
+            and ((${email}::text is not null and lower(u.email) = lower(${email}))
+              or (${phone}::text is not null and u.phone = ${phone}))
+          limit 1
+        `;
+        if (existing) return { kind: "duplicate" } as const;
+
         const [customer] = await tx`
           insert into customers (establishment_id, email, phone, first_name, marketing_consent, marketing_consent_at)
-          values (${establishment.id}, ${email}, ${phone}, ${firstName}, ${marketingConsent}, ${marketingConsent ? new Date() : null})
+          values (${current.id}, ${email}, ${phone}, ${firstName}, ${marketingConsent}, ${marketingConsent ? new Date() : null})
           returning id
         `;
         const [card] = await tx`
           insert into cards (establishment_id, customer_id, token, short_code, expires_at)
           values (
-            ${establishment.id}, ${customer.id}, ${token}, ${code},
-            case when ${establishment.expires_after_days}::int is null then null
-                 else now() + (${establishment.expires_after_days}::int * interval '1 day') end
+            ${current.id}, ${customer.id}, ${token}, ${code},
+            case when ${current.expires_after_days}::int is null then null
+                 else now() + (${current.expires_after_days}::int * interval '1 day') end
           ) returning id, token, short_code, balance
         `;
         await tx`
           insert into product_events(establishment_id, card_id, event_type)
-          values(${establishment.id}, ${card.id}, 'JOIN_SUBMIT')
+          values(${current.id}, ${card.id}, 'JOIN_SUBMIT')
         `;
-        return card;
+        return { kind: "created", card } as const;
       });
-      return Response.json({ token: created.token, short_code: created.short_code, balance: created.balance }, { status: 201, headers: PRIVATE_HEADERS });
+      if (outcome.kind === "unavailable") {
+        return Response.json({ error: "ESTABLISHMENT_NOT_FOUND" }, { status: 404 });
+      }
+      if (outcome.kind === "duplicate") {
+        // Reponse volontairement muette : on confirme au visiteur legitime
+        // qu'il a deja une carte, sans livrer d'identifiant exploitable.
+        return Response.json({ error: "CARD_ALREADY_EXISTS" }, { status: 409, headers: PRIVATE_HEADERS });
+      }
+      return Response.json(
+        { token: outcome.card.token, short_code: outcome.card.short_code, balance: outcome.card.balance },
+        { status: 201, headers: PRIVATE_HEADERS },
+      );
     } catch (error) {
       const codeValue = typeof error === "object" && error && "code" in error ? String((error as { code?: unknown }).code) : "";
       if (codeValue !== "23505") throw error;
-      // Course entre deux inscriptions simultanees : on refuse, sans rien divulguer.
-      if (await existingCustomerId(establishment.id, email, phone)) {
-        return Response.json({ error: "CARD_ALREADY_EXISTS" }, { status: 409, headers: PRIVATE_HEADERS });
-      }
+      // Une nouvelle transaction distingue au tour suivant le doublon client
+      // d'une collision rarissime de token/code, sans lecture hors verrou.
     }
   }
 

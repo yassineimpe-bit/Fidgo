@@ -13,11 +13,12 @@ import {
   trackSupportsTorch,
   type CameraIssue,
 } from "@/lib/scanner-camera";
-import { scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
+import { scannerActionErrorInfo, scannerErrorInfo, type ScannerErrorInfo } from "@/lib/scanner-messages";
 import {
   SLOW_RESPONSE_MS,
   SUCCESS_RESET_MS,
   readScannerSound,
+  redeemPreview,
   scanErrorFeedback,
   writeScannerSound,
   type ScanFeedbackTone,
@@ -147,6 +148,10 @@ export function ScannerClient() {
   // pour le gate « QR détecté → action validée ».
   const detectedSourceRef = useRef<"qr" | "manual">("qr");
   const actionKeyRef = useRef<{ kind: "credit" | "redeem"; key: string } | null>(null);
+  // Garde synchrone : deux clics dans la même frame ne partent pas en double.
+  const actionInFlightRef = useRef(false);
+  const redeemTitleRef = useRef<HTMLElement | null>(null);
+  const redeemButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const [status, setStatus] = useState("Initialisation caméra…");
   const [card, setCard] = useState<CardView | null>(null);
@@ -167,7 +172,10 @@ export function ScannerClient() {
   const [pending, setPending] = useState<PendingState>(null);
   const pendingTimerRef = useRef<number | undefined>(undefined);
   // Succès confirmé par le serveur, affiché jusqu'au retour automatique à la caméra.
-  const [confirmed, setConfirmed] = useState<{ tone: ScanFeedbackTone; title: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ tone: ScanFeedbackTone; title: string; detail?: string } | null>(null);
+  // Étape de confirmation avant de consommer une récompense : rien n'est
+  // envoyé au serveur tant que l'opérateur n'a pas confirmé.
+  const [redeemConfirm, setRedeemConfirm] = useState(false);
   const resetTimerRef = useRef<number | undefined>(undefined);
   const soundRef = useRef(false);
   const [sound, setSound] = useState(false);
@@ -565,14 +573,15 @@ export function ScannerClient() {
   async function perform(kind: "credit" | "redeem", reason?: string) {
     // Une seule requête à la fois, et plus rien après une confirmation : le
     // prochain crédit passe par un nouveau scan.
-    if (!card || action || confirmed) return;
+    if (!card || action || confirmed || actionInFlightRef.current) return;
     if (!navigator.onLine) {
       setOnline(false);
       setStatus("Hors ligne — aucune action envoyée");
-      setError(scannerErrorInfo(new Error("OFFLINE")));
+      setError(scannerActionErrorInfo(new Error("OFFLINE"), kind));
       return;
     }
 
+    actionInFlightRef.current = true;
     setAction(kind);
     setError(null);
     if (!actionKeyRef.current || actionKeyRef.current.kind !== kind) {
@@ -619,32 +628,60 @@ export function ScannerClient() {
       setRewardJustReached(rewardReached);
       setCooldownEndsAt(null);
       feedback(kind === "redeem" || rewardReached ? "reward" : "success", soundRef.current);
-      setConfirmed({
-        tone: kind === "redeem" || rewardReached ? "reward" : "success",
-        title: kind === "credit" ? `+${data.delta || card.defaultEarn} validé` : `${card.rewardLabel} utilisée`,
-      });
+      const actionUnits = card.units || defaultUnits(card.mode);
+      setRedeemConfirm(false);
+      setConfirmed(kind === "credit"
+        ? { tone: rewardReached ? "reward" : "success", title: `+${data.delta || card.defaultEarn} validé` }
+        : {
+          tone: "reward",
+          title: "Récompense utilisée",
+          detail: `${card.rewardLabel} : −${formatUnits(card.threshold, actionUnits)}. Nouveau solde : ${formatUnits(newBalance, actionUnits)}.`,
+        });
       setStatus("Confirmé par Retiko");
       saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: true, at: new Date().toISOString() });
       window.clearTimeout(resetTimerRef.current);
       resetTimerRef.current = window.setTimeout(reset, SUCCESS_RESET_MS);
     } catch (caught) {
       endPending(setPending, pendingTimerRef);
-      const info = scannerErrorInfo(caught);
+      const info = scannerActionErrorInfo(caught, kind);
       const actionMs = Math.round(performance.now() - started);
+      if (kind === "redeem" && info.code === "INSUFFICIENT_BALANCE") {
+        // Le serveur fait foi : plus de récompense à proposer sur cette fiche.
+        setRedeemConfirm(false);
+        setCard({ ...card, rewardAvailable: false });
+      }
       setError(info);
       feedback("error", soundRef.current);
       setStatus(info.sessionExpired ? "Session expirée" : info.network ? "Connexion perdue — retry sûr" : "Action refusée");
       saveMetric({ phase: "action", action: kind, source: detectedSourceRef.current, networkMs: Math.max(0, actionMs - serverMs), serverMs, totalMs: Math.round(performance.now() - detectedAtRef.current), ok: false, at: new Date().toISOString(), errorCode: normalizeScanErrorCode(info.code) });
       if (!info.retryable) actionKeyRef.current = null;
     } finally {
+      actionInFlightRef.current = false;
       setAction("");
     }
   }
+
+  function openRedeemConfirm() {
+    if (!card?.rewardAvailable || action || confirmed) return;
+    setError((current) => current && current.code !== "COOLDOWN" && !current.retryable ? null : current);
+    setRedeemConfirm(true);
+  }
+
+  function closeRedeemConfirm() {
+    if (action) return;
+    setRedeemConfirm(false);
+    window.requestAnimationFrame(() => redeemButtonRef.current?.focus());
+  }
+
+  useEffect(() => {
+    if (redeemConfirm) redeemTitleRef.current?.focus();
+  }, [redeemConfirm]);
 
   function reset() {
     window.clearTimeout(resetTimerRef.current);
     resetTimerRef.current = undefined;
     setConfirmed(null);
+    setRedeemConfirm(false);
     setCard(null);
     setPurchase("");
     setManualQuery("");
@@ -683,6 +720,9 @@ export function ScannerClient() {
     </ScanFeedback>;
   };
   const actionsLocked = !online || Boolean(action) || Boolean(confirmed);
+  // Pas de crédit pendant qu'une utilisation de récompense attend sa confirmation.
+  const creditLocked = actionsLocked || redeemConfirm;
+  const preview = card ? redeemPreview(card.balance, card.threshold) : null;
 
   return <main className="scanner-page">
     <video ref={videoRef} className="scanner-video" playsInline muted autoPlay />
@@ -702,6 +742,7 @@ export function ScannerClient() {
         <div style={{fontSize:20}}>{card.balance} / {card.threshold} {units.plural}</div>
         {card.lastEarnAt && <div style={{color:"#aaa",fontSize:13}}>Dernier passage : {formatLastPassage(card.lastEarnAt)}</div>}
         {confirmed && <ScanFeedback tone={confirmed.tone} title={confirmed.title}>
+          {confirmed.detail && <div>{confirmed.detail}</div>}
           <div>Confirmé par le serveur. Retour à la caméra…</div>
         </ScanFeedback>}
         {rewardJustReached
@@ -715,12 +756,27 @@ export function ScannerClient() {
         {cooldownLeft > 0 ? <ScanFeedback tone="cooldown" title="Crédit récent détecté">
           <div role="alert">Temps restant : {formatRemaining(cooldownLeft)}</div>
           {card.canOverrideCooldown
-            ? <button className="btn btn-danger" style={{marginTop:8,width:"100%"}} disabled={actionsLocked} onClick={confirmNewPurchase}>Nouvel achat : autoriser un nouveau crédit</button>
+            ? <button className="btn btn-danger" style={{marginTop:8,width:"100%"}} disabled={creditLocked} onClick={confirmNewPurchase}>Nouvel achat : autoriser un nouveau crédit</button>
             : <div style={{marginTop:6,fontSize:13}}>Pour un nouvel achat pendant ce délai, appelle un responsable.</div>}
         </ScanFeedback> : error && error.code !== "COOLDOWN" && errorBanner(error)}
-        {!confirmed && <div className="scan-actions">
-          <button className="scan-main" disabled={actionsLocked} aria-busy={action === "credit"} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>
-          <button className="scan-redeem" disabled={actionsLocked || !card.rewardAvailable} aria-busy={action === "redeem"} onClick={() => perform("redeem")}>{retryingRedeem ? "Réessayer sans doublon" : "Utiliser récompense"}</button>
+        {!confirmed && redeemConfirm && preview ? <div className="redeem-confirm" role="group" aria-labelledby="redeem-confirm-title"
+          onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeRedeemConfirm(); } }}>
+          <strong id="redeem-confirm-title" className="redeem-confirm-title" ref={redeemTitleRef} tabIndex={-1}>Utiliser la récompense ?</strong>
+          <div className="redeem-confirm-reward">{card.rewardLabel}</div>
+          <div>Coût : {formatUnits(preview.cost, units)}</div>
+          <dl className="redeem-confirm-balance">
+            <div><dt>Solde actuel</dt><dd>{formatUnits(preview.before, units)}</dd></div>
+            <div><dt>Après utilisation</dt><dd>{formatUnits(preview.after, units)}</dd></div>
+          </dl>
+          <div className="scan-actions scan-actions--confirm">
+            <button className="scan-main" disabled={actionsLocked} aria-busy={action === "redeem"} onClick={() => void perform("redeem")}>
+              {action === "redeem" ? "Utilisation en cours…" : retryingRedeem ? "Réessayer sans doublon" : "Confirmer l’utilisation"}
+            </button>
+            <button type="button" className="scan-redeem" disabled={Boolean(action)} onClick={closeRedeemConfirm}>Annuler</button>
+          </div>
+        </div> : !confirmed && <div className="scan-actions">
+          <button className="scan-main" disabled={creditLocked} aria-busy={action === "credit"} onClick={() => perform("credit")}>{retryingCredit ? "Réessayer sans doublon" : normalCreditLabel}</button>
+          <button ref={redeemButtonRef} className="scan-redeem" disabled={actionsLocked || !card.rewardAvailable} onClick={openRedeemConfirm}>{retryingRedeem ? "Reprendre l’utilisation" : "Utiliser la récompense"}</button>
         </div>}
         <button className="btn" style={{marginTop:10,width:"100%",background:"transparent",color:"white",borderColor:"#444"}} disabled={Boolean(action)} onClick={reset}>{confirmed ? "Scanner le client suivant" : "Annuler"}</button>
       </div> : <div>

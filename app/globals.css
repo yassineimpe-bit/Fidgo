@@ -213,6 +213,14 @@ button.scanner-pill, a.scanner-pill { pointer-events:auto; cursor:pointer; }
 .scan-redeem { min-height:64px; border:1px solid rgba(255,255,255,.16); border-radius:14px; font-size:15px; font-weight:760; background:#27272a; color:white; transition: background-color .14s ease, border-color .14s ease; }
 .scan-redeem:hover:not(:disabled) { background:#303034; border-color:rgba(255,255,255,.26); }
 .scan-result { display:grid; gap:8px; }
+.redeem-confirm { display:grid; gap:6px; margin-top:6px; padding:14px; border:1px solid rgba(255,255,255,.22); border-radius:14px; background:#1f1f23; }
+.scan-result .redeem-confirm-title { font-size:20px; letter-spacing:-.01em; outline-offset:4px; }
+.redeem-confirm-reward { font-size:17px; font-weight:800; }
+.redeem-confirm-balance { display:grid; gap:4px; margin:4px 0 0; }
+.redeem-confirm-balance div { display:flex; justify-content:space-between; gap:12px; }
+.redeem-confirm-balance dt { color:#d4d4d8; }
+.redeem-confirm-balance dd { margin:0; font-weight:850; font-variant-numeric:tabular-nums; }
+.scan-actions--confirm { margin-top:10px; }
 .scan-result strong { font-size:28px; letter-spacing:-.035em; }
 .scan-error { color:#f7a79f; }
 .scan-success { color:#70d5a5; }
