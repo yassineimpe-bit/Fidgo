@@ -4,7 +4,7 @@ import { cardDesign, isCardBackground } from "@/lib/card-design";
 describe("apparence de la carte", () => {
   it("couleur unie : fond principal, texte contrasté, accent secondaire s'il reste lisible", () => {
     expect(cardDesign({ primaryColor: "#1D4ED8" })).toEqual({
-      background: "#1d4ed8", textColor: "#ffffff", accentColor: "#ffffff", primary: "#1d4ed8", secondary: null,
+      background: "#1d4ed8", textColor: "#ffffff", accentColor: "#ffffff", primary: "#1d4ed8", secondary: null, textShadow: null,
     });
     // Jaune clair sur fond bleu foncé : lisible, utilisé comme accent.
     expect(cardDesign({ primaryColor: "#1d4ed8", secondaryColor: "#FDE047" }).accentColor).toBe("#fde047");

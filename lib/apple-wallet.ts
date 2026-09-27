@@ -7,6 +7,7 @@ import { getAppUrl } from "@/lib/app-url";
 import { sql } from "@/lib/db";
 import { safeErrorCode } from "@/lib/observability";
 import type { WalletCard } from "@/lib/wallet-data";
+import { applePassColors } from "@/lib/wallet-colors";
 
 export function appleWalletEnabled() {
   return process.env.APPLE_WALLET_ENABLED === "true";
@@ -40,11 +41,6 @@ export function appleAuthenticationTokenHash(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function rgb(hex: string) {
-  const value = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.slice(1) : "111827";
-  return `rgb(${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)})`;
-}
-
 // Lu depuis le disque plutot que via un fetch HTTP vers l'app elle-meme :
 // un aller-retour reseau vers sa propre instance est un point de panne
 // inutile (auto-appel serverless, cold start, absence de NEXT_PUBLIC_APP_URL
@@ -74,9 +70,7 @@ async function renderApplePass(card: WalletCard, authToken: string, revoked: boo
       organizationName: card.restaurantName,
       description: `${card.programName} - Retiko`,
       logoText: card.restaurantName,
-      foregroundColor: "rgb(255, 255, 255)",
-      labelColor: "rgb(229, 231, 235)",
-      backgroundColor: rgb(card.primaryColor),
+      ...applePassColors(card.primaryColor),
       webServiceURL: `${appUrl}/api/wallet/apple/web`,
       authenticationToken: authToken,
       voided: revoked,
