@@ -47,9 +47,10 @@ export default async function CardPage({ params }: { params: Promise<{ token: st
       <div><strong>{card.reward_label}</strong>{card.card_message&&<p style={{margin:"8px 0 0",opacity:.8}}>{card.card_message}</p>}</div>
     </div>
     <CardMarketingPreference token={String(card.token)} restaurantName={String(card.name)} initialConsent={card.marketing_consent === true} hasEmail={card.has_email === true}/>
-    <div className="card wallet-actions-card"><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
-      {appleEnabled ? <a className="btn btn-primary" href={`/api/wallet/apple/${card.token}`}>Ajouter à Apple Wallet</a> : <button className="btn" disabled>Apple Wallet</button>}
-      {googleEnabled ? <div style={{padding:"8px 0",display:"grid",placeItems:"center"}}><a href={`/api/wallet/google/${card.token}`} aria-label="Ajouter à Google Wallet"><Image src="/add-to-google-wallet-fr.svg" alt="Ajouter à Google Wallet" width={199} height={55} style={{width:199,maxWidth:"100%",height:"auto"}}/></a></div> : <button className="btn" disabled>Google Wallet</button>}
-    </div>{(!appleEnabled||!googleEnabled)&&<p className="muted" style={{fontSize:13,marginTop:12}}>Les boutons s’activent uniquement quand HTTPS et les identifiants émetteur correspondants sont réellement prêts.</p>}</div>
+    {/* Seuls les portefeuilles réellement disponibles sont proposés : pas de bouton mort ni de jargon technique côté client. */}
+    <div className="card wallet-actions-card">{appleEnabled || googleEnabled ? <><h3>Ajouter au portefeuille</h3><p className="muted">La même carte et le même QR suivent ton solde dans le portefeuille du téléphone.</p><div className="grid grid-2">
+      {appleEnabled && <a className="btn btn-primary" href={`/api/wallet/apple/${card.token}`}>Ajouter à Apple Wallet</a>}
+      {googleEnabled && <div style={{padding:"8px 0",display:"grid",placeItems:"center"}}><a href={`/api/wallet/google/${card.token}`} aria-label="Ajouter à Google Wallet"><Image src="/add-to-google-wallet-fr.svg" alt="Ajouter à Google Wallet" width={199} height={55} style={{width:199,maxWidth:"100%",height:"auto"}}/></a></div>}
+    </div></> : <><h3>Garder ta carte</h3><p className="muted">Ta carte fonctionne depuis ce lien : ajoute-le à tes favoris ou à l’écran d’accueil pour la retrouver en caisse.</p></>}</div>
   </section></main>;
 }
