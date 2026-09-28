@@ -29,8 +29,8 @@ demande une reclassification humaine explicite.
 
 ## Déclencheurs, activation et labels
 
-Le workflow réagit à l'ajout d'un label, à la fermeture d'une PR, à un lancement
-manuel et toutes les heures comme filet de sécurité. La concurrence absorbe les
+Le workflow réagit à l'ajout d'un label, à un lancement manuel et toutes les
+heures comme filet de sécurité. La concurrence absorbe les
 événements rapprochés et les transitions idempotentes empêchent un second claim.
 L'option manuelle `bootstrap_labels` crée de façon idempotente, sans suppression :
 
@@ -51,3 +51,13 @@ sont limitées à `contents: write` (branche/commit Claude), `pull-requests: wri
 permission d'administration, de déploiement, de checks ou de secrets n'est
 accordée. La CI existante reste seule autorité et le dispatcher ne la reproduit
 ni ne la contourne.
+
+## Modèle de menace du dépôt public
+
+Le workflow n'écoute aucun événement `pull_request` ou `pull_request_target`.
+Une PR externe ne peut donc pas déclencher Claude avec les permissions d'écriture.
+Les seuls déclencheurs sont un label d'issue, le schedule et le lancement manuel;
+quel que soit le déclencheur, le script ignore son contenu et sélectionne une
+issue depuis l'API selon les labels d'autorisation explicites. Le numéro produit
+par ce claim est la seule mission transmise à Claude. Le checkout force `main` :
+aucun code issu d'une branche de PR n'est récupéré ou exécuté par le dispatcher.

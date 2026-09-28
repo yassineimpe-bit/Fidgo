@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- compact mocked GitHub REST payloads */
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { claimNext, isEligible, labelsAfterTransition, matchingPullRequest, reconcileIssue, selectIssue } from "../scripts/retiko-dispatcher.mjs";
 
 const issue = (number: number, labels: string[], extra = {}) => ({ number, state: "open", created_at: `2026-01-${String(number).padStart(2, "0")}T00:00:00Z`, labels: labels.map(name => ({ name })), ...extra });
@@ -29,4 +30,10 @@ describe("dispatcher Retiko", () => {
   it("est idempotent hors de state:running", async () => { const review = issue(1, ["state:review"]); const a = api([review]); expect((await reconcileIssue(a, review)).status).toBe("unchanged"); expect(a.addLabel).not.toHaveBeenCalled(); });
   it("ne confond pas les markers de deux issues", () => expect(matchingPullRequest([{ state: "open", body: "<!-- retiko-dispatch:issue=70 -->" }], 7)).toBeNull());
   it("ne dépend ni du reporter ni d'un credential Claude", async () => { const a = api([]); expect((await claimNext(a)).status).toBe("idle"); expect(JSON.stringify(a)).not.toContain("CLAUDE_CODE_OAUTH_TOKEN"); });
+  it("n'accepte aucun événement PR et checkout uniquement main", () => {
+    const workflow = readFileSync(".github/workflows/retiko-dispatcher.yml", "utf8");
+    expect(workflow).not.toMatch(/^\s*pull_request(?:_target)?:/m);
+    expect(workflow).toMatch(/^\s{10}ref: main$/m);
+    expect(workflow).toMatch(/^\s{2}issues:\n\s{4}types: \[labeled\]$/m);
+  });
 });

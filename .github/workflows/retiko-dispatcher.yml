@@ -3,8 +3,6 @@ name: retiko-dispatcher
 on:
   issues:
     types: [labeled]
-  pull_request_target:
-    types: [closed]
   schedule:
     - cron: "41 * * * *"
   workflow_dispatch:
