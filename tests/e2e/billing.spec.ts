@@ -113,9 +113,10 @@ test("Stripe v2 : pilote non bloquant, webhook idempotent, ordonné et isolé pa
     // Stripe est activé avec des fixtures locales, mais le signup et le
     // dashboard métier n'ont effectué aucun appel financier externe.
     await page.goto("/dashboard/billing");
-    await expect(page.getByText("24,99 € HT/mois")).toBeVisible();
-    await expect(page.getByText("19,99 € HT/mois")).toBeVisible();
-    await expect(page.getByText("210 € HT/an")).toBeVisible();
+    // Grille standard proposée par défaut ; les offres pilotes ne sont plus proposées.
+    await expect(page.getByText("25 € HT/mois")).toBeVisible();
+    await expect(page.getByText("250 € HT/an")).toBeVisible();
+    await expect(page.getByText("24,99 € HT/mois")).toHaveCount(0);
     expect((await page.request.get("/api/dashboard")).status()).toBe(200);
 
     const tenantBPage = await tenantBContext.newPage();

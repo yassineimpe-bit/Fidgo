@@ -21,7 +21,10 @@ vi.mock("stripe", () => ({
   },
 }));
 
+// Mécanique des routes testée sur la grille pilote, déclarée explicitement
+// (la grille standard est proposée par défaut).
 const env = {
+  BILLING_PRICE_GRID: "pilot",
   STRIPE_ENABLED: "true",
   STRIPE_SECRET_KEY: "sk_test_placeholder",
   STRIPE_WEBHOOK_SECRET: "whsec_placeholder",

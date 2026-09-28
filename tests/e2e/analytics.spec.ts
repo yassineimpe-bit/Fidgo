@@ -157,3 +157,58 @@ test("analytics avancées : horaire, rétention, récompenses, cohortes et RFM r
   await expect(page.getByRole("heading", { name: "Segmentation RFM" })).toBeVisible();
   await expect(page.getByText(/Champions|Fidèles|À réactiver|Nouveaux|À développer/).first()).toBeVisible();
 });
+
+test("analytics : un ajustement manuel seul ne fait pas un client actif", async ({ page }) => {
+  await createMerchant(page, "analytics-active-earn");
+  const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
+
+  async function enroll(firstName: string) {
+    const response = await page.request.post("/api/enroll", {
+      headers: { origin },
+      data: { slug: restaurant.slug, firstName, email: `${unique(firstName.toLowerCase())}@example.com`, marketingConsent: false },
+    });
+    expect(response.status()).toBe(201);
+    return String((await response.json()).token);
+  }
+  const adjustedToken = await enroll("Ajuste");
+  const creditedToken = await enroll("Credite");
+
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, prepare: false });
+  let adjustedCustomerId = "";
+  try {
+    const [card] = await sql`select customer_id from cards where token=${adjustedToken} limit 1`;
+    adjustedCustomerId = String(card.customer_id);
+  } finally {
+    await sql.end({ timeout: 5 });
+  }
+
+  // Client A : uniquement un ajustement manuel (régularisation côté commerce).
+  const adjusted = await page.request.post(`/api/customers/${adjustedCustomerId}/adjust`, {
+    headers: { origin },
+    data: { newBalance: 2, reason: "Régularisation sans passage", idempotencyKey: crypto.randomUUID() },
+  });
+  expect(adjusted.ok()).toBeTruthy();
+
+  // Client B : un vrai passage crédité en caisse.
+  const credited = await page.request.post("/api/credit", {
+    headers: { origin },
+    data: { token: creditedToken, idempotencyKey: crypto.randomUUID() },
+  });
+  expect(credited.ok()).toBeTruthy();
+
+  await page.goto("/dashboard/analytics?period=7");
+  await expect(page.locator(".metric", { hasText: "clients actifs" }).first().locator("strong")).toHaveText("1");
+  await expect(page.locator(".metric", { hasText: /^\s*\d+\s*transactions\s*$/ }).locator("strong")).toHaveText("2");
+  await expect(page.locator(".metric", { hasText: "passages crédités / client actif" }).locator("strong")).toHaveText("1.0");
+  await expect(page.getByText("Un ajustement manuel ou une annulation ne rend pas un client actif.")).toBeVisible();
+
+  // Activité quotidienne : même définition, et une vraie date (pas « Invalid Date »).
+  const daily = page.getByRole("heading", { name: "Activité quotidienne" }).locator("xpath=ancestor::section[1]");
+  const today = daily.locator("tbody tr").first();
+  await expect(today.locator("td").first()).toHaveText(new Date().toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }));
+  await expect(today.locator("td").nth(1)).toHaveText("2");
+  await expect(today.locator("td").nth(2)).toHaveText("1");
+
+  await page.goto("/dashboard");
+  await expect(page.getByText("1 clients actifs sur 7 jours")).toBeVisible();
+});

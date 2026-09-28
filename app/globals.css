@@ -393,7 +393,7 @@ button.scanner-pill, a.scanner-pill { pointer-events:auto; cursor:pointer; }
 .landing-list strong { color: var(--text); }
 .landing-qr { display: grid; justify-items: center; gap: 8px; text-align: center; }
 .landing-qr img { background: #fff; padding: 8px; border-radius: 12px; }
-.landing-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 24px 0 12px; }
+.landing-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin: 24px 0 12px; }
 .landing-plan { display: grid; gap: 6px; align-content: start; }
 .landing-plan h3 { margin: 0; }
 .landing-plan.is-featured { border-color: var(--retiko-coral); box-shadow: 0 0 0 1px var(--retiko-coral); }

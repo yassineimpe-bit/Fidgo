@@ -18,7 +18,7 @@ export default async function DashboardPage() {
       (select count(*)::int from cards where establishment_id=${session.establishmentId} and active=true) active_cards,
       (select coalesce(sum(case when delta>0 then delta else 0 end),0)::int from transactions where establishment_id=${session.establishmentId}) units_issued,
       (select count(*)::int from transactions where establishment_id=${session.establishmentId} and type='redeem') rewards_redeemed,
-      (select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and created_at >= now()-interval '7 days') active_week,
+      (select count(distinct card_id)::int from transactions where establishment_id=${session.establishmentId} and type='earn' and created_at >= now()-interval '7 days') active_week,
       (select count(*)::int from transactions where establishment_id=${session.establishmentId}) transactions,
       (select count(*)::int from staff_users where establishment_id=${session.establishmentId} and role<>'OWNER' and active=true) team_members,
       (select count(*)::int from product_events where establishment_id=${session.establishmentId} and event_type='JOIN_PAGE_VIEW') join_views,

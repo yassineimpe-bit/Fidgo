@@ -12,7 +12,7 @@ export const TO_COMPLETE = "[À COMPLÉTER]";
  * de ces deux documents impose une nouvelle version : l'acceptation enregistrée
  * désigne exactement la version affichée au moment de l'inscription.
  */
-export const LEGAL_VERSION = "2026-09-25";
+export const LEGAL_VERSION = "2026-09-27";
 
 export const LEGAL_LINKS = {
   cgu: "/legal/cgu",

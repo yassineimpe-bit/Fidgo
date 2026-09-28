@@ -19,12 +19,13 @@ test("site commercial : parcours, fidélité, QR, Wallet, prix et appel à l'ess
 
   // Les prix affichés sont ceux facturés (source unique lib/billing-plans).
   const plans = page.locator(".landing-plan");
-  await expect(plans).toHaveCount(3);
-  // Serveur de test sans BILLING_PRICE_GRID : grille pilote.
+  // Serveur de test sans BILLING_PRICE_GRID : grille standard 25 € / 250 € HT.
+  await expect(plans).toHaveCount(2);
   for (const plan of offeredPlans({}).map((key) => BILLING_PLANS[key])) {
     await expect(plans.filter({ hasText: plan.label })).toContainText(plan.priceLabel);
   }
   await expect(page.getByText(`${BILLING_TRIAL_DAYS} jours d’essai gratuit`)).toBeVisible();
+  await expect(page.getByText(/Installation incluse/)).toBeVisible();
 
   const cta = page.getByRole("link", { name: `Essayer gratuitement ${BILLING_TRIAL_DAYS} jours` });
   await expect(cta).toHaveCount(2);
@@ -40,7 +41,8 @@ test("site commercial : SEO de base et aucune page privée indexable", async ({ 
   await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /Retiko/);
   const jsonLd = JSON.parse((await page.locator('script[type="application/ld+json"]').textContent())!);
   expect(jsonLd).toMatchObject({ "@type": "SoftwareApplication", name: "Retiko" });
-  expect(jsonLd.offers).toHaveLength(3);
+  expect(jsonLd.offers).toHaveLength(offeredPlans({}).length);
+  expect(jsonLd.offers.map((offer: { description: string }) => offer.description).join(" ")).toContain("25 € HT/mois");
 
   const robots = await (await request.get("/robots.txt")).text();
   expect(robots).toContain("Allow: /");
