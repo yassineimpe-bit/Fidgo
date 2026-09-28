@@ -1,0 +1,78 @@
+name: retiko-status
+
+# Tient à jour l'issue « RETIKO — ÉTAT COURANT » : un seul body, remplacé à
+# chaque génération par scripts/retiko-status.mjs. Vue en lecture seule de #88,
+# des issues, des PR et des checks. Aucun secret autre que GITHUB_TOKEN, aucune
+# dépendance npm, aucun accès à la production ni à la base.
+#
+# Pas de boucle récursive :
+# - une modification faite avec GITHUB_TOKEN ne déclenche aucun workflow
+#   (règle GitHub) : mettre à jour l'issue d'état ne relance donc rien ;
+# - la condition du job ignore en plus tout événement portant sur l'issue d'état ;
+# - workflow_run n'écoute que `ci`, jamais ce workflow ;
+# - le job `retiko-status` est exclu des checks rapportés par le script.
+
+on:
+  push:
+    branches: [main]
+  issues:
+    types: [opened, edited, closed, reopened, deleted, transferred, labeled, unlabeled]
+  # pull_request_target et non pull_request : le workflow et le code exécutés
+  # sont ceux de main, jamais ceux de la PR, et issues: write reste disponible
+  # pour une PR de fork. Aucune étape ne récupère ni n'exécute le code de la PR.
+  pull_request_target:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft, labeled, unlabeled]
+  # Résultats de CI (PR et main) : le rapport les reflète une fois connus.
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  # Resynchronisation périodique : rattrape ce qu'aucun événement ne couvre
+  # (mergeabilité recalculée, événements Dependabot, exécution annulée).
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  checks: read
+  statuses: read
+
+# Une seule exécution à la fois : la plus récente annule la précédente, ce qui
+# évite aussi deux créations concurrentes de l'issue d'état.
+concurrency:
+  group: retiko-status
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: retiko-status
+    # Dependabot reçoit un GITHUB_TOKEN en lecture seule : ses événements sont
+    # rattrapés par l'exécution suivante.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      !(github.event_name == 'issues' &&
+        (github.event.issue.title == 'RETIKO — ÉTAT COURANT' ||
+         contains(github.event.issue.body, '<!-- retiko-status:managed -->')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Un merge déclenche push, pull_request_target, workflow_run et parfois
+      # issues en quelques secondes. Avec cancel-in-progress, seule la dernière
+      # exécution dépasse cette attente et consomme le quota API de GITHUB_TOKEN.
+      - name: Regrouper les événements rapprochés
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        run: sleep 45
+      # Ref par défaut : main (ou la ref choisie en workflow_dispatch), jamais la
+      # tête d'une PR.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Publier l'état courant
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/retiko-status.mjs
