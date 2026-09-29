@@ -110,8 +110,8 @@ test("super-admin : recherche, suspension réversible, audit append-only et rév
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "Vue d’ensemble" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "État des services" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Volume de scans · 14 jours" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Erreurs" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Passages crédités · 30 jours" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Erreurs par commerce · 7 j" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Activité récente" })).toBeVisible();
 
     await page.goto(`/admin/establishments?q=${encodeURIComponent(target.slug)}`);

@@ -5,14 +5,9 @@ import { getSession } from "@/lib/auth";
 import { canAccessBackoffice, canManageProgram } from "@/lib/loyalty";
 import { sql } from "@/lib/db";
 import { ANALYTICS_PERIODS, parseAnalyticsPeriod } from "@/lib/analytics-period";
+import { formatCalendarDate, ratePercent, rewardUsageRate as computeRewardUsageRate, scanErrorRate as computeScanErrorRate } from "@/lib/platform-metrics";
 
 export const dynamic = "force-dynamic";
-
-/** Colonne SQL `date` : postgres.js la renvoie en Date à minuit UTC (ou en chaîne AAAA-MM-JJ). */
-function formatCalendarDate(value: unknown, options: Intl.DateTimeFormatOptions = {}) {
-  const date = value instanceof Date ? value : new Date(`${String(value)}T00:00:00Z`);
-  return date.toLocaleDateString("fr-FR", { ...options, timeZone: "UTC" });
-}
 
 export default async function AnalyticsPage({
   searchParams,
@@ -253,15 +248,14 @@ export default async function AnalyticsPage({
   const joinSubmits = Number(stats.join_submits || 0);
   const scanSuccess = Number(stats.scan_success || 0);
   const scanFailed = Number(stats.scan_failed || 0);
-  const scans = scanSuccess + scanFailed;
   const rewardsRedeemed = Number(stats.rewards_redeemed || 0);
   const rewardsAvailable = Number(stats.rewards_available || 0);
-  const rewardOpportunities = rewardsRedeemed + rewardsAvailable;
-  const returningRate = activeCustomers > 0 ? Math.round((returningCustomers / activeCustomers) * 100) : 0;
-  const joinConversion = joinViews > 0 ? Math.round((joinSubmits / joinViews) * 100) : 0;
-  const scanErrorRate = scans > 0 ? Math.round((scanFailed / scans) * 100) : 0;
+  // Mêmes formules que le cockpit super-admin (lib/platform-metrics).
+  const returningRate = ratePercent(returningCustomers, activeCustomers) ?? 0;
+  const joinConversion = ratePercent(joinSubmits, joinViews) ?? 0;
+  const scanErrorRate = computeScanErrorRate(scanSuccess, scanFailed) ?? 0;
   const visitsPerCustomer = activeCustomers > 0 ? (earnTransactions / activeCustomers).toFixed(1) : "0,0";
-  const rewardUsageRate = rewardOpportunities > 0 ? Math.round((rewardsRedeemed / rewardOpportunities) * 100) : 0;
+  const rewardUsageRate = computeRewardUsageRate(rewardsRedeemed, rewardsAvailable) ?? 0;
 
   return <><AppNav restaurantName={String(restaurant?.name || "Retiko")}/><main className="shell page">
     <div className="section-head">
