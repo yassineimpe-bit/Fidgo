@@ -21,22 +21,28 @@ async function ownerOf(page: Page) {
 /**
  * Commerces synthétiques : le ledger est append-only, donc on insère des
  * écritures datées dans le passé plutôt que d'attendre. Aucune n'est modifiée
- * ni supprimée ensuite ; chaque exécution utilise un préfixe unique.
+ * ni supprimée ensuite ; chaque exécution utilise un préfixe unique. Les
+ * fixtures restent cohérentes pour `db:verify` (lancé après la suite E2E) :
+ * chaque commerce a un état de facturation, chaque solde égale son ledger.
  */
-async function syntheticEstablishment(sql: Sql, prefix: string, label: string, createdDaysAgo: number) {
+async function syntheticEstablishment(sql: Sql, prefix: string, label: string, createdDaysAgo: number, subscription: { status: "active" | "trial"; trialEndsInDays?: number } = { status: "active" }) {
   const [row] = await sql`
     insert into establishments(slug, name, created_at)
     values(${`${prefix}-${label}`}, ${`Cockpit ${label} ${prefix}`}, now() - ${createdDaysAgo}::int * interval '1 day')
     returning id
   `;
   await sql`insert into loyalty_programs(establishment_id) values(${row.id})`;
+  await sql`
+    insert into subscriptions(establishment_id, status, trial_ends_at)
+    values(${row.id}, ${subscription.status}, ${subscription.trialEndsInDays === undefined ? null : sql`now() + ${subscription.trialEndsInDays}::int * interval '1 day'`})
+  `;
   return { id: String(row.id), name: `Cockpit ${label} ${prefix}`, slug: `${prefix}-${label}` };
 }
 
 const privateValues: string[] = [];
 const privateShortCodes: string[] = [];
 
-async function syntheticCard(sql: Sql, establishmentId: string, balance = 0) {
+async function syntheticCard(sql: Sql, establishmentId: string) {
   const email = `${unique("cockpit-client")}@example.com`;
   const token = `cockpit${crypto.randomUUID().replaceAll("-", "")}`;
   const shortCode = `QZ${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -46,8 +52,8 @@ async function syntheticCard(sql: Sql, establishmentId: string, balance = 0) {
     returning id, phone
   `;
   const [card] = await sql`
-    insert into cards(establishment_id, customer_id, token, short_code, balance)
-    values(${establishmentId}, ${customer.id}, ${token}, ${shortCode}, ${balance})
+    insert into cards(establishment_id, customer_id, token, short_code)
+    values(${establishmentId}, ${customer.id}, ${token}, ${shortCode})
     returning id
   `;
   privateValues.push(email, token, String(customer.phone));
@@ -55,11 +61,12 @@ async function syntheticCard(sql: Sql, establishmentId: string, balance = 0) {
   return String(card.id);
 }
 
-async function ledger(sql: Sql, establishmentId: string, cardId: string, hoursAgo: number, type: "earn" | "redeem" | "adjust" = "earn") {
-  const delta = type === "redeem" ? -10 : 1;
+/** Écriture datée dans le passé ; le solde en cache de la carte suit le ledger. */
+async function ledger(sql: Sql, establishmentId: string, cardId: string, hoursAgo: number, type: "earn" | "redeem" | "adjust" = "earn", delta = type === "redeem" ? -10 : 1) {
+  const [card] = await sql`update cards set balance = balance + ${delta} where id=${cardId} returning balance`;
   await sql`
     insert into transactions(establishment_id, card_id, type, delta, balance_after, unit, idempotency_key, created_at)
-    values(${establishmentId}, ${cardId}, ${type}, ${delta}, ${type === "redeem" ? 0 : 1}, 'STAMP', ${crypto.randomUUID()}, now() - ${hoursAgo}::int * interval '1 hour')
+    values(${establishmentId}, ${cardId}, ${type}, ${delta}, ${card.balance}, 'STAMP', ${crypto.randomUUID()}, now() - ${hoursAgo}::int * interval '1 hour')
   `;
 }
 
@@ -155,12 +162,15 @@ test("cockpit super-admin : activation, usage, fidélisation, santé et règles 
     const busy = await syntheticEstablishment(sql, prefix, "busy", 10);
     const busyCard1 = await syntheticCard(sql, busy.id);
     const busyCard2 = await syntheticCard(sql, busy.id);
-    await syntheticCard(sql, busy.id, 10);
-    await ledger(sql, busy.id, busyCard1, 1);
+    const busyCard3 = await syntheticCard(sql, busy.id);
     await ledger(sql, busy.id, busyCard1, 48);
+    await ledger(sql, busy.id, busyCard1, 1);
     await ledger(sql, busy.id, busyCard2, 5);
+    await ledger(sql, busy.id, busyCard2, 4, "adjust", 10);
     await ledger(sql, busy.id, busyCard2, 3, "redeem");
     await ledger(sql, busy.id, busyCard2, 2, "adjust");
+    // Récompense disponible sans passage crédité : ajustement seul.
+    await ledger(sql, busy.id, busyCard3, 6, "adjust", 10);
     await sql`insert into wallet_passes(establishment_id, card_id, provider, external_id, status) values(${busy.id}, ${busyCard1}, 'APPLE', 'wallet-ext-cockpit-a', 'active')`;
     await sql`insert into wallet_passes(establishment_id, card_id, provider, external_id, status) values(${busy.id}, ${busyCard1}, 'GOOGLE', 'wallet-ext-cockpit-g', 'active')`;
     await sql`insert into wallet_passes(establishment_id, card_id, provider, external_id, status, last_error) values(${busy.id}, ${busyCard2}, 'GOOGLE', 'wallet-ext-cockpit-e', 'error', 'wallet-ext-cockpit détail')`;
@@ -171,8 +181,7 @@ test("cockpit super-admin : activation, usage, fidélisation, santé et règles 
     await ledger(sql, quiet.id, quietCard, 2);
     await scanEvents(sql, quiet.id, [300, 400], 3);
     // Essai qui se termine dans 3 j sans activité récente.
-    const trial = await syntheticEstablishment(sql, prefix, "trial", 27);
-    await sql`insert into subscriptions(establishment_id, status, trial_ends_at) values(${trial.id}, 'trial', now() + interval '3 days')`;
+    const trial = await syntheticEstablishment(sql, prefix, "trial", 27, { status: "trial", trialEndsInDays: 3 });
 
     // ——— Vue d'ensemble ———
     await page.goto("/admin");
@@ -210,7 +219,8 @@ test("cockpit super-admin : activation, usage, fidélisation, santé et règles 
     expect(await listNames("&activity=inactive7")).toEqual(names(dropped));
     expect(await listNames("&watch=1")).toEqual(names(never, dropped, busy, trial));
     expect(await listNames("&subscription=trial")).toEqual(names(trial));
-    expect(await listNames("&subscription=none")).toEqual(names(never, fresh, dropped, busy, quiet));
+    expect(await listNames("&subscription=active")).toEqual(names(never, fresh, dropped, busy, quiet));
+    expect(await listNames("&subscription=none")).toEqual([]);
     expect(await listNames("&activity=%27%20or%201%3D1--&sort=nope")).toEqual(names(never, fresh, dropped, busy, quiet, trial));
     await page.goto(`/admin/establishments?q=${encodeURIComponent(prefix)}&sort=scans_30d`);
     await expect(page.locator("tbody tr").first()).toContainText(busy.name);
