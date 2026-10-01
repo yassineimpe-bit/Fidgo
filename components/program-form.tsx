@@ -75,7 +75,9 @@ export function ProgramForm({ program, preview, onboarding = false }: { program:
           ? "Le libellé personnalisé n’est pas encore disponible sur ce serveur."
           : error === "REWARD_EMAIL_UNAVAILABLE"
             ? "La notification par e-mail n’est pas encore disponible sur ce serveur."
-            : "Impossible d’enregistrer. Vérifie les valeurs du programme.");
+            : error === "PROGRAM_MODE_LOCKED"
+              ? "Le mode tampons / points ne peut plus être changé : des clients ont déjà un solde ou un historique dans le mode actuel. Les autres réglages restent modifiables."
+              : "Impossible d’enregistrer. Vérifie les valeurs du programme.");
       if (r.ok && onboarding) { router.push("/onboarding?step=3"); router.refresh(); }
     } catch {
       // Sans ce filet, une coupure réseau pendant l'envoi laissait le bouton

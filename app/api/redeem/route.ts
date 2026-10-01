@@ -30,7 +30,7 @@ async function handlePost(req: Request) {
       const [card] = await tx`
         select c.id,c.balance,c.active,c.expires_at,p.reward_threshold,p.mode,p.reward_label,p.active as program_active
         from cards c join loyalty_programs p on p.establishment_id=c.establishment_id
-        where c.token=${token} and c.establishment_id=${session.establishmentId} for update of c
+        where c.token=${token} and c.establishment_id=${session.establishmentId} for update of c for share of p
       `;
       if (!card) throw new Error("CARD_NOT_FOUND");
 
