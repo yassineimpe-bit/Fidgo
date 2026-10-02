@@ -13,16 +13,33 @@ Le workflow `.github/workflows/database-backup.yml` s'exécute chaque jour à **
 Il effectue dans cet ordre :
 
 1. GitHub Actions demande un jeton OIDC signé pour le workflow de backup sur `main` ;\n2. Retiko vérifie cryptographiquement le dépôt, le workflow, la branche, l'environnement et le type d'événement avant de remettre la connexion PostgreSQL au runner ;
-2. `pg_dump` PostgreSQL 17 au format custom ;
+2. empreinte agrégée de la source (`scripts/db-fingerprint.mjs`), `pg_dump` PostgreSQL 17 au format custom, puis seconde empreinte de la source ;
 3. validation de l'archive avec `pg_restore --list` ;
 4. restauration intégrale dans une PostgreSQL 17 jetable du runner ;
 5. exécution de `npm run db:verify` sur la base restaurée ;
-6. chiffrement de l'archive avec le certificat public Retiko ;
-7. suppression du dump en clair ;
-8. upload du backup chiffré comme artifact GitHub ;
-9. conservation pendant **14 jours**.
+6. comparaison de l'empreinte de la base restaurée avec celle de la source ;
+7. chiffrement de l'archive avec le certificat public Retiko ;
+8. suppression du dump en clair ;
+9. upload du backup chiffré comme artifact GitHub ;
+10. échec explicite du job si l'étape 4, 5 ou 6 a échoué ;
+11. conservation pendant **14 jours**.
 
-Un backup n'est donc conservé que si le dump est lisible, restaurable et si les contrôles d'intégrité Retiko passent.
+Un backup est conservé dès que le dump est lisible (`pg_restore --list`).
+Le résultat du restore drill est inscrit dans `manifest.txt` (`restore_test`,
+`db_verify`, `fingerprint` : `success` ou `failure`) et un échec rend le job
+rouge. Jusqu'au 2026-10-02, un échec de `db:verify` empêchait toute
+conservation : un écart de schéma de production (migration 032 non appliquée)
+a ainsi supprimé toute nouvelle sauvegarde à partir du 2026-09-27, alors que
+les dumps étaient lisibles et restaurables. Avant de restaurer une archive,
+lire son manifeste.
+
+L'empreinte ne contient que des agrégats : nombre de lignes de chaque table du
+schéma `public`, somme des soldes, cartes actives, transactions par type et
+unité avec la somme des deltas, date de la dernière transaction, écarts
+ledger/solde, programmes par mode, commerces par statut. Elle est lue dans une
+transaction `repeatable read, read only`. Si la source change entre les deux
+lectures (écriture pendant le dump), la comparaison stricte est impossible : le
+job l'indique par un avertissement sans échouer.
 
 ## Authentification GitHub → Retiko
 

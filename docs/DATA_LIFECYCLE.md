@@ -42,6 +42,18 @@ exécutée en production. Tant que ce point n'est pas corrigé et que
 `DATA_LIFECYCLE_EXECUTE` n'est pas activé, les durées « prévues » ne doivent
 pas être présentées comme appliquées.
 
+**Mise à jour au 02/10/2026 :** inchangé, les 13 exécutions planifiées depuis
+la création du workflow ont échoué pour la même raison. Le workflow échoue
+désormais dès l'étape « Require production database credential », avec un
+message qui nomme l'action à faire. Le comportement du script est couvert par
+`tests/e2e/data-lifecycle-purge.spec.ts`, dans une base temporaire dédiée :
+- sélection des seules lignes au-delà de leur rétention ;
+- dry-run sans suppression ;
+- refus quand une autre purge détient le verrou ;
+- seconde exécution sans effet ;
+- ledger, cartes, soldes et clients intacts ;
+- sortie limitée à des compteurs.
+
 ## Cartographie
 
 | Table | Données concernées | Sensibilité / rôle | Cycle de vie technique |

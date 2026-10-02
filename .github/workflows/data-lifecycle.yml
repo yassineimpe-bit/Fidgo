@@ -35,6 +35,18 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
 
+      # Échec explicite, sans contournement : sans ce secret, aucune purge
+      # (même en dry-run) ne s'exécute et les durées de rétention ne sont pas
+      # appliquées. Voir docs/DATA_LIFECYCLE.md.
+      - name: Require production database credential
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error title=Secret DATABASE_URL absent::Le secret DATABASE_URL n'est pas configuré dans l'environnement GitHub « production ». La rétention n'est pas exécutée. Action humaine : Settings → Environments → production → Environment secrets → DATABASE_URL (voir docs/DATA_LIFECYCLE.md)."
+            exit 1
+          fi
+
       - name: Dry-run retention report
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
