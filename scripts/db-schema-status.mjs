@@ -240,7 +240,18 @@ async function main() {
         return;
       }
 
-      console.log(`Base : ${meta.db} · PostgreSQL ${meta.version} · transaction read-only=${meta.ro}\n`);
+      console.log(`Base : ${meta.db} · PostgreSQL ${meta.version} · transaction read-only=${meta.ro}`);
+      // Empreinte agrégée (aucune donnée personnelle) : prouve qu'un clone
+      // correspond bien à la base source en comparant les deux sorties.
+      const [print] = await tx`
+        select
+          (select count(*)::int from establishments) as establishments,
+          (select count(*)::int from cards) as cards,
+          (select count(*)::int from transactions) as transactions,
+          (select max(created_at) from transactions) as last_transaction_at
+      `;
+      const last = print.last_transaction_at ? new Date(print.last_transaction_at).toISOString() : "—";
+      console.log(`Empreinte : ${print.establishments} commerce(s), ${print.cards} carte(s), ${print.transactions} transaction(s), dernière transaction ${last}\n`);
       const pending = new Set();
       for (const source of list) {
         const found = source.objects.filter((object) => present(cat, object));

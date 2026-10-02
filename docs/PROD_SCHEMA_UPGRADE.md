@@ -177,18 +177,30 @@ le rôle de la branche Neon en phase 2.
 
 ### Phase 1 — Mesurer l'état exact (aucune écriture)
 
-1. Console Neon : créer une branche **depuis la production, à l'instant
-   présent**, nommée `pre-schema-024-033-2026-10-XX`. Elle sert à la fois de
-   point de restauration et de terrain de répétition.
-2. Sur la **branche** :
+1. Identifier la source, sans copier aucun secret :
+   - Vercel → projet Retiko → Settings → Environment Variables →
+     `DATABASE_URL` (Production) : relever **uniquement** l'identifiant
+     d'endpoint `ep-…` contenu dans l'hôte ;
+   - Neon → projet → Branches : la branche dont l'endpoint de calcul porte ce
+     même `ep-…` est la branche de production. Relever le project ID, la
+     région, le nom et l'ID de branche, ainsi que « Last active ».
+2. Console Neon : créer une branche **depuis cette branche de production, à
+   l'instant présent** (option *Head*), nommée
+   `pre-pilot-schema-audit-2026-10-XX`. Elle sert à la fois de point de
+   restauration et de terrain de répétition. Relever l'ID de branche, le
+   parent, la date de création et le LSN parent si la console l'affiche.
+3. Sur la **branche** :
    ```bash
    export BRANCH_URL='<url de la branche>'
    DATABASE_URL="$BRANCH_URL" node scripts/db-schema-status.mjs | tee status-before.txt
    DATABASE_URL="$BRANCH_URL" node scripts/db-schema-status.mjs --snapshot prod-before.json
    ```
+   La ligne `Empreinte` (nombre de commerces, de cartes et de transactions,
+   date de la dernière transaction : aucune donnée personnelle) doit
+   correspondre à la production au moment de la création de la branche.
    Option : exécuter la même commande directement sur la production. Elle est
    en lecture seule, verrouillée par `read only`.
-3. Arrêt obligatoire si :
+4. Arrêt obligatoire si :
    - une migration ≤ 023 n'est pas `APPLIQUÉE` ;
    - une migration est `PARTIELLE` ;
    - un pré-contrôle n'est pas à 0.
