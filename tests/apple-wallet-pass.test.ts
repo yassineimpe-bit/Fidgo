@@ -100,6 +100,7 @@ describe("buildApplePass", () => {
     expect(passJson.webServiceURL).toBe("https://retiko.fr/api/wallet/apple/web");
     expect(typeof passJson.authenticationToken).toBe("string");
     expect(passJson.authenticationToken).not.toContain(fixtureCard.token);
+    expect(passJson.expirationDate).toBeUndefined();
     expect(passJson.storeCard.primaryFields[0]).toMatchObject({ key: "balance", value: 4 });
     expect(passJson.storeCard.secondaryFields[0]).toMatchObject({ key: "reward", value: "4 restant(s)" });
     expect(passJson.storeCard.auxiliaryFields[0]).toMatchObject({ key: "code", value: fixtureCard.shortCode });
@@ -111,5 +112,17 @@ describe("buildApplePass", () => {
     expect(revokedJson.voided).toBe(true);
     expect(revokedJson.storeCard.primaryFields[0]).toMatchObject({ key: "status", value: "Désactivée" });
     expect(revokedJson.barcodes).toBeUndefined();
+  });
+
+  it("reprend exactement l'expiration métier sur le pass actif", async () => {
+    const { buildApplePass } = await import("../lib/apple-wallet");
+    const expiresAt = "2030-01-02T03:04:05.000Z";
+    const buffer = await buildApplePass({ ...fixtureCard, expiresAt });
+    const files = readStoredZip(buffer);
+    const passJson = JSON.parse(files["pass.json"].toString("utf8"));
+
+    expect(passJson.expirationDate).toBe(expiresAt);
+    expect(passJson.storeCard.primaryFields[0]).toMatchObject({ key: "balance", value: 4 });
+    expect(passJson.barcodes[0]).toMatchObject({ message: `LOY1:${fixtureCard.token}` });
   });
 });
