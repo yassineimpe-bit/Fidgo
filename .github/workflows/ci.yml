@@ -25,7 +25,7 @@ jobs:
       # exposait a une version compromise publiee en amont entre deux deploys.
       - run: npm ci --no-audit --no-fund
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: npm run security:audit
       - name: Validate production env contract
         env:
           NODE_ENV: production
