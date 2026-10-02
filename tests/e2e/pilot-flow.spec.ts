@@ -60,7 +60,7 @@ test("boucle pilote : inscription, crédit, override, auto-refresh et récompens
 });
 
 
-test("programme : une carte existante survit aux réglages et le mode points crédite réellement", async ({ page }) => {
+test("programme : une carte existante survit aux réglages, le mode reste figé, et le mode points crédite réellement", async ({ page }) => {
   await createMerchant(page, "program-change");
   const first = await enrollCustomer(page, "Carte existante", `${unique("existing-card")}@example.com`);
   const firstToken = first.cardUrl.split("/c/")[1];
@@ -104,9 +104,7 @@ test("programme : une carte existante survit aux réglages et le mode points cr�
     rewardLabel: "Cookie offert",
   });
 
-  const pointsUpdate = await page.request.patch("/api/program", {
-    headers: { origin },
-    data: {
+  const pointsProgram = {
       programName: "Carte points",
       mode: "POINTS",
       pointsRule: "PER_PURCHASE",
@@ -119,9 +117,18 @@ test("programme : une carte existante survit aux réglages et le mode points cr�
       dailyEarnLimit: 0,
       cooldownSeconds: 120,
       expiresAfterDays: null,
-    },
-  });
-  expect(pointsUpdate.ok()).toBeTruthy();
+  };
+  const pointsUpdate = await page.request.patch("/api/program", { headers: { origin }, data: pointsProgram });
+  // #196 : une carte a déjà un solde en tampons, le passage en points est refusé.
+  expect(pointsUpdate.status()).toBe(409);
+  await expect(pointsUpdate.json()).resolves.toMatchObject({ error: "PROGRAM_MODE_LOCKED" });
+  const stillStamps = await page.request.post("/api/scan", { headers: { origin }, data: { token: firstToken } });
+  await expect(stillStamps.json()).resolves.toMatchObject({ balance: 1, mode: "STAMPS" });
+
+  // Le mode points crédite réellement sur un programme encore vierge.
+  await createMerchant(page, "program-points-fresh");
+  const freshPoints = await page.request.patch("/api/program", { headers: { origin }, data: pointsProgram });
+  expect(freshPoints.ok()).toBeTruthy();
 
   const restaurant = await page.request.get("/api/restaurant").then((response) => response.json());
   const enrollment = await page.request.post("/api/enroll", {

@@ -8,6 +8,7 @@ type Row={id:string;type:string;delta:number;balance_after:number;unit:string;cr
 const REVERSE_ERRORS: Record<string, string> = {
   ALREADY_REVERSED: "Cette transaction a déjà été annulée.",
   NEGATIVE_BALANCE: "Annulation impossible : le solde du client deviendrait négatif.",
+  UNIT_MISMATCH: "Annulation impossible : cette opération est en tampons/points alors que le programme utilise désormais l’autre unité.",
   TRANSACTION_NOT_FOUND: "Transaction introuvable pour ce commerce.",
   CANNOT_REVERSE_REVERSAL: "Une annulation ne peut pas être annulée.",
   FORBIDDEN: "Ce compte ne peut pas annuler de transaction.",
