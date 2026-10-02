@@ -11,7 +11,7 @@ const PAGES = [
   ["/legal/cookies", "Cookies et traceurs"],
 ] as const;
 
-test("pages légales : publiques, reliées entre elles et sans identité inventée", async ({ page }) => {
+test("pages légales : publiques, reliées entre elles et identité officielle affichée", async ({ page }) => {
   for (const [path, title] of PAGES) {
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(200);
@@ -22,8 +22,13 @@ test("pages légales : publiques, reliées entre elles et sans identité invent�
   }
 
   await page.goto("/legal/mentions-legales");
-  await expect(page.getByText("[À COMPLÉTER]").first()).toBeVisible();
-  expect(await page.locator("body").innerText()).not.toMatch(/\b\d{9}\b|\bRCS [A-Z]/);
+  await expect(page.getByText("Yassine Roussiere", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("RETIKO", { exact: true })).toBeVisible();
+  await expect(page.getByText("130 906 787", { exact: true })).toBeVisible();
+  await expect(page.getByText("130 906 787 00010", { exact: true })).toBeVisible();
+  await expect(page.getByText("6201Z", { exact: true })).toBeVisible();
+  await expect(page.getByText(/TVA non applicable, article 293 B du CGI/)).toBeVisible();
+  await expect(page.getByText("[À COMPLÉTER]")).toHaveCount(0);
 
   // Prix et durée d'essai lus depuis le code de facturation, pas recopiés.
   await page.goto("/legal/cgv");
