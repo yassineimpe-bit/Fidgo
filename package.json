@@ -28,7 +28,7 @@
     "bcryptjs": "2.4.3",
     "google-auth-library": "11.0.2",
     "jose": "5.9.6",
-    "next": "15.5.24",
+    "next": "15.5.27",
     "passkit-generator": "3.6.0",
     "postgres": "3.4.5",
     "qr-scanner": "1.4.2",
@@ -47,7 +47,7 @@
     "@types/react": "19.0.6",
     "@types/react-dom": "19.0.3",
     "eslint": "9.39.5",
-    "eslint-config-next": "15.5.24",
+    "eslint-config-next": "15.5.27",
     "typescript": "5.7.2",
     "vitest": "3.2.7"
   },
