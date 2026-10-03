@@ -99,10 +99,19 @@ describe("codes de secours", () => {
 describe("jeton « second facteur attendu »", () => {
   it("n'est jamais accepté comme session et expire", async () => {
     const token = await signMfaPending("11111111-1111-4111-8111-111111111111", 3);
-    expect(await verifyMfaPending(token)).toEqual({ staffId: "11111111-1111-4111-8111-111111111111", tokenVersion: 3 });
+    expect(await verifyMfaPending(token)).toEqual({ staffId: "11111111-1111-4111-8111-111111111111", tokenVersion: 3, admin: false });
     // La clé des sessions (AUTH_SECRET brut) ne valide pas ce jeton.
     await expect(jwtVerify(token, new TextEncoder().encode(process.env.AUTH_SECRET))).rejects.toThrow();
     expect(await verifyMfaPending(undefined)).toBeNull();
     expect(await verifyMfaPending(`${token}x`)).toBeNull();
+  });
+
+  it("conserve le contexte de connexion super-admin jusqu'au second facteur", async () => {
+    const token = await signMfaPending("11111111-1111-4111-8111-111111111111", 3, { admin: true });
+    expect(await verifyMfaPending(token)).toEqual({ staffId: "11111111-1111-4111-8111-111111111111", tokenVersion: 3, admin: true });
+    // Le contexte est signé : il ne peut pas être ajouté à un jeton commerçant.
+    const [header, , signature] = (await signMfaPending("11111111-1111-4111-8111-111111111111", 3)).split(".");
+    const forgedPayload = Buffer.from(JSON.stringify({ tv: 3, adm: true, sub: "11111111-1111-4111-8111-111111111111", aud: "retiko-mfa-pending", exp: 9999999999 })).toString("base64url");
+    expect(await verifyMfaPending(`${header}.${forgedPayload}.${signature}`)).toBeNull();
   });
 });
