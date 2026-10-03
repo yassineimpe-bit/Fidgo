@@ -25,6 +25,23 @@ jamais été modifiée par quelqu'un d'autre que son auteur — et refuse la tâ
 que de faire confiance à un corps non vérifié. **Si le résultat est
 refusé/échoué**, ouvre une nouvelle issue plutôt que d'éditer l'ancienne.
 
+**Concurrence.** Ajouter un label "en cours" puis continuer n'est pas
+atomique entre deux workers : les deux peuvent lister la même issue comme
+non prise avant qu'aucun des deux n'ait posé le label. Avant de traiter une
+issue, le worker poste un commentaire marqueur portant un jeton unique, puis
+relit tous les commentaires-marqueurs de l'issue et vérifie que le sien a
+l'id le plus bas — les ids de commentaires GitHub sont attribués côté
+serveur dans une séquence strictement croissante, même sous écriture
+concurrente, ce qui donne un ordre total fiable là où l'API labels n'offre
+aucune opération atomique de type compare-and-swap. Le perdant abandonne
+sans jamais lancer l'agent. Échec fermé si la vérification elle-même échoue
+ou renvoie une forme inattendue. En complément, un verrou local
+(`flock`, service systemd un seul exemplaire à la fois par configuration
+dépôt+routeur) empêche deux instances de tourner sur la même machine avant
+même d'atteindre cette vérification côté GitHub ; il est automatiquement
+libéré par le système à la sortie du processus, y compris en cas de crash —
+aucun nettoyage manuel, aucun blocage permanent possible.
+
 ## Format d'une tâche
 
 Titre :
@@ -52,7 +69,10 @@ Avec `auto`, le routeur local choisit lui-même l'agent et applique son fallback
 Tests unitaires avec mocks (aucun appel `gh` réel, aucun réseau, aucun vrai
 secret dans les fixtures) — couvrent la vérification d'intégrité du corps
 (`editor`/`lastEditedAt`, y compris les réponses GraphQL incomplètes ou
-inattendues), l'anti-boucle sur échec, la redaction et les timeouts :
+inattendues), l'anti-boucle sur échec, la redaction, les timeouts, ainsi que
+la concurrence (deux workers forcés dans la vraie fenêtre de course via un
+`threading.Barrier`, un seul gagne ; verrou local acquis/refusé/libéré à la
+fermeture) :
 
 ```bash
 python3 -m unittest discover -s tools/agent-hub-remote/tests -v
