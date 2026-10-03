@@ -12,3 +12,11 @@ playwright-report
 test-results
 
 tsconfig.tsbuildinfo
+
+# Android / Google Play
+android-app/.gradle/
+android-app/**/build/
+android-app/local.properties
+android-app/*.jks
+android-app/*.keystore
+android-app/keystore.properties
