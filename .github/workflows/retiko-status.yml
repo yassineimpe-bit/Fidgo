@@ -66,7 +66,7 @@ jobs:
         run: sleep 45
       # Ref par défaut : main (ou la ref choisie en workflow_dispatch), jamais la
       # tête d'une PR.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v5
