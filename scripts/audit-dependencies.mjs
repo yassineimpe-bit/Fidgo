@@ -13,6 +13,17 @@ const ALLOWED_ADVISORIES = new Map([
       removeWhen: "A corrected node-forge version is published and validated through passkit-generator.",
     },
   ],
+  [
+    "GHSA-vfj7-8cjw-p6xm",
+    {
+      packageName: "braces",
+      severity: "high",
+      cve: "CVE-2026-93687",
+      introducedOn: "2026-10-03",
+      reviewThrough: "2026-10-16",
+      removeWhen: "A corrected braces version is published and validated through the lint tooling.",
+    },
+  ],
 ]);
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
@@ -131,7 +142,7 @@ export function runAudit({ now = new Date() } = {}) {
     return 1;
   }
 
-  console.log(result.allowed.length ? "Dependency audit passed with one targeted temporary exception." : "Dependency audit passed with no HIGH/CRITICAL advisories.");
+  console.log(result.allowed.length ? `Dependency audit passed with ${result.allowed.length} targeted temporary exception(s).` : "Dependency audit passed with no HIGH/CRITICAL advisories.");
   return 0;
 }
 
