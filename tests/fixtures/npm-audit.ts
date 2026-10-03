@@ -15,3 +15,4 @@ export function auditReport(entries: Record<string, { severity: Advisory["severi
 }
 
 export const allowedNodeForge = advisory("GHSA-86w9-cpqp-85rv", "high");
+export const allowedBraces = advisory("GHSA-vfj7-8cjw-p6xm", "high", "braces");
