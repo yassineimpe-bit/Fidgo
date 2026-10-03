@@ -27,18 +27,21 @@ export type AcceptedDocument = (typeof ACCEPTED_DOCUMENTS)[number];
 
 type LegalField = { label: string; value: string | null };
 
-/** Identité de l'éditeur de Retiko. À renseigner avant toute facturation. */
+/** Identité de l'éditeur de Retiko. */
 export const LEGAL_ENTITY = {
-  companyName: { label: "Raison sociale ou nom de l'exploitant", value: null },
-  legalForm: { label: "Forme juridique", value: null },
-  shareCapital: { label: "Capital social (si société)", value: null },
-  siren: { label: "SIREN / SIRET", value: null },
-  registration: { label: "Immatriculation (RCS / RNE selon le statut)", value: null },
-  vatNumber: { label: "Numéro de TVA intracommunautaire (si applicable)", value: null },
-  headOffice: { label: "Adresse du siège", value: null },
-  publicationDirector: { label: "Directeur de la publication", value: null },
-  legalRepresentative: { label: "Représentant légal", value: null },
-  phone: { label: "Téléphone de contact", value: null },
+  companyName: { label: "Nom de l'exploitant", value: "Yassine Roussiere" },
+  tradingName: { label: "Nom commercial", value: "RETIKO" },
+  legalForm: { label: "Forme juridique", value: "Entrepreneur individuel (micro-entreprise)" },
+  shareCapital: { label: "Capital social (si société)", value: "Sans objet (entreprise individuelle)" },
+  siren: { label: "SIREN", value: "130 906 787" },
+  siret: { label: "SIRET", value: "130 906 787 00010" },
+  apeCode: { label: "Code APE", value: "6201Z" },
+  registration: { label: "Immatriculation", value: "Registre national des entreprises (RNE) — 01/10/2026" },
+  vatNumber: { label: "TVA", value: "TVA non applicable, article 293 B du CGI (franchise en base)" },
+  headOffice: { label: "Adresse de l'entreprise", value: "27 rue du Mas Rouge, 19200 Ussel, France" },
+  publicationDirector: { label: "Directeur de la publication", value: "Yassine Roussiere" },
+  legalRepresentative: { label: "Exploitant", value: "Yassine Roussiere" },
+  phone: { label: "Téléphone de contact", value: "07 80 42 62 67" },
   // Adresse de réponse des e-mails transactionnels (EMAIL_REPLY_TO en production).
   contactEmail: { label: "E-mail de contact", value: "contact@retiko.fr" },
   privacyContact: { label: "Contact pour les demandes relatives aux données personnelles", value: null },
@@ -48,14 +51,17 @@ export const LEGAL_ENTITY = {
 } satisfies Record<string, LegalField>;
 
 /**
- * Hébergeur à mentionner (LCEN). Le nom est vérifiable dans la configuration
- * (vercel.json) ; ses coordonnées légales doivent être recopiées depuis ses
- * propres mentions, pas reconstituées de mémoire.
+ * Hébergeur à mentionner (LCEN). Coordonnées issues des mentions officielles
+ * de Vercel ; la région d'exécution est conservée séparément car elle décrit
+ * l'infrastructure technique, pas l'adresse légale de l'hébergeur.
  */
 export const HOSTING_PROVIDER = {
   name: "Vercel Inc.",
   region: "Fonctions exécutées dans la région fra1 (Francfort), selon vercel.json",
-  address: { label: "Adresse et téléphone de l'hébergeur", value: null } as LegalField,
+  address: {
+    label: "Adresse et téléphone de l'hébergeur",
+    value: "440 N Barranca Ave #4133, Covina, CA 91723, États-Unis — +1 559 288 7060",
+  } as LegalField,
 };
 
 export function legalValue(field: LegalField) {
