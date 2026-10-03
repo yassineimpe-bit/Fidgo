@@ -3,7 +3,8 @@ import { AdminBar, AdminMetric, AdminWatchList } from "@/components/admin-metric
 import { AdminNav, formatDate } from "@/components/admin-nav";
 import { activityActionLabel } from "@/lib/activity-log";
 import { sql } from "@/lib/db";
-import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { getPlatformAdmin, requirePlatformAdmin } from "@/lib/platform-admin";
+import { AdminLogin } from "@/components/admin-login";
 import {
   WATCH_RULES, establishmentUsage, formatCalendarDate, formatDuration, formatMs, formatPercent, formatRatio,
   ratePercent, rewardUsageRate, scanErrorRate,
@@ -22,6 +23,9 @@ const STATE_BADGE: Record<ServiceState, { label: string; className: string }> = 
 const WATCH_LIMIT = 30;
 
 export default async function AdminOverviewPage() {
+  // Entrée de la zone : connexion dédiée plutôt qu'une 404. Les sous-pages
+  // gardent leur 404 (requirePlatformAdmin), aucune donnée sans droit.
+  if (!(await getPlatformAdmin())) return <AdminLogin />;
   const admin = await requirePlatformAdmin("overview");
   const now = new Date();
 

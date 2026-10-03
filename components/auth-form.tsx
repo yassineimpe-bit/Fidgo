@@ -27,7 +27,8 @@ function describeError(code: string | undefined) {
   return `${ERROR_MESSAGES[code] || "Une erreur inattendue est survenue."} (${code})`;
 }
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+/** `admin` : connexion /admin, mêmes routes avec scope admin, retour sur /admin. */
+export function AuthForm({ mode }: { mode: "login" | "signup" | "admin" }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [useRecoveryCode, setUseRecoveryCode] = useState(false);
 
   function enter(data: { onboardingPending?: boolean }) {
-    router.replace(data.onboardingPending ? "/onboarding" : "/dashboard");
+    router.replace(mode === "admin" ? "/admin" : data.onboardingPending ? "/onboarding" : "/dashboard");
     router.refresh();
   }
 
@@ -55,7 +56,8 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        if (data.error === "TWO_FACTOR_EXPIRED") setTwoFactor(false);
+        // Jeton expiré, ou accès super-admin retiré pendant la seconde étape.
+        if (data.error === "TWO_FACTOR_EXPIRED" || data.error === "INVALID_CREDENTIALS") setTwoFactor(false);
         setError(describeError(data.error));
         return;
       }
@@ -83,7 +85,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           legalVersion: LEGAL_VERSION,
           marketingOptIn: form.get("marketingOptIn") === "on",
         }
-      : { email, password: form.get("password") };
+      : { email, password: form.get("password"), ...(mode === "admin" ? { scope: "admin" } : {}) };
 
     try {
       const res = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", {
@@ -99,7 +101,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           setVerificationPending("failed");
           return;
         }
-        if (mode === "login" && data.error === "EMAIL_NOT_VERIFIED") {
+        if (mode !== "signup" && data.error === "EMAIL_NOT_VERIFIED") {
           setLoginNeedsVerification(true);
         }
         setError(describeError(data.error));
@@ -112,7 +114,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         return;
       }
 
-      if (mode === "login" && data.twoFactorRequired) {
+      if (mode !== "signup" && data.twoFactorRequired) {
         setTwoFactor(true);
         setUseRecoveryCode(false);
         return;
@@ -139,7 +141,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     </div>;
   }
 
-  if (mode === "login" && twoFactor) {
+  if (mode !== "signup" && twoFactor) {
     return <form className="form" onSubmit={submitSecondFactor}>
       <p className="muted">{useRecoveryCode
         ? "Saisis un de tes codes de secours. Chaque code ne fonctionne qu’une fois."

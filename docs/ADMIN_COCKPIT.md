@@ -2,9 +2,11 @@
 
 Vue interne Retiko pour piloter les premiers commerçants : `/admin`, `/admin/establishments`, `/admin/establishments/[id]`.
 
-## Accès (inchangé)
+## Accès
 
-- Compte staff Retiko normal + ligne dans `platform_admins` ; 404 pour tout autre compte.
+- Compte staff Retiko normal + ligne dans `platform_admins`, revérifiée à chaque chargement.
+- `/admin` sans session super-admin (aucune session, ou session commerçant ordinaire) affiche la connexion « Retiko · Super-admin » (#256) ; les sous-pages restent en 404.
+- Connexion : mêmes identifiants et même 2FA que l'espace commerçant (`POST /api/auth/login` avec `scope: "admin"`). Un compte hors `platform_admins` reçoit `INVALID_CREDENTIALS`, comme un mauvais mot de passe, et compte dans les mêmes limites de débit (IP et compte) que `/login`. Avec la 2FA, le contexte admin est signé dans le jeton d'attente et `platform_admins` est revérifié après le code. Succès journalisé `ADMIN_LOGIN` (méthode seulement).
 - `requirePlatformAdmin()` dans chaque page, consultation journalisée (`ADMIN_VIEW`, filtres compris) dans `platform_admin_audit` (append-only).
 - Attribution hors application uniquement, avec accès direct à la base :
 
