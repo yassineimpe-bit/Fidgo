@@ -13,7 +13,7 @@ on:
       execute:
         description: "Appliquer les suppressions (sinon dry-run)"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      LIFECYCLE_CREDENTIAL_URL: https://retiko.fr/api/internal/lifecycle-credentials
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -35,27 +40,53 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
 
-      # Échec explicite, sans contournement : sans ce secret, aucune purge
-      # (même en dry-run) ne s'exécute et les durées de rétention ne sont pas
-      # appliquées. Voir docs/DATA_LIFECYCLE.md.
-      - name: Require production database credential
+      # Accès base sans secret durable (#251) : jeton OIDC GitHub (audience
+      # retiko-lifecycle, ce workflow sur main uniquement) échangé auprès du
+      # broker Retiko, comme database-backup. Échec explicite sinon : aucune
+      # purge, même en dry-run, ne s'exécute sans accès vérifié.
+      - name: Request GitHub OIDC identity
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken("retiko-lifecycle");
+            core.setSecret(token);
+            core.setOutput("token", token);
+
+      - name: Exchange OIDC identity for database access
+        shell: bash
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RETIKO_LIFECYCLE_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
-          if [ -z "${DATABASE_URL:-}" ]; then
-            echo "::error title=Secret DATABASE_URL absent::Le secret DATABASE_URL n'est pas configuré dans l'environnement GitHub « production ». La rétention n'est pas exécutée. Action humaine : Settings → Environments → production → Environment secrets → DATABASE_URL (voir docs/DATA_LIFECYCLE.md)."
+          set -euo pipefail
+          response_file=$(mktemp)
+          trap 'rm -f "$response_file"' EXIT
+
+          code=""
+          for attempt in $(seq 1 6); do
+            code=$(curl --silent --show-error --max-time 15 \
+              --output "$response_file" --write-out '%{http_code}' \
+              --request POST --header "Authorization: Bearer $RETIKO_LIFECYCLE_OIDC_TOKEN" \
+              "$LIFECYCLE_CREDENTIAL_URL" || true)
+            [ "$code" = "200" ] && break
+            echo "Lifecycle credential broker not ready (HTTP $code), attempt $attempt/6."
+            sleep 10
+          done
+
+          if [ "$code" != "200" ]; then
+            echo "::error title=Accès base refusé::Le broker /api/internal/lifecycle-credentials a répondu HTTP $code. La rétention n'est pas exécutée (voir docs/DATA_LIFECYCLE.md)."
             exit 1
           fi
 
+          database_url=$(jq -er '.databaseUrl | select(type == "string" and length > 0)' "$response_file")
+          echo "::add-mask::$database_url"
+          printf 'DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
+
       - name: Dry-run retention report
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run data:purge
 
       - name: Apply retention
         if: >-
           (github.event_name == 'schedule' && vars.DATA_LIFECYCLE_EXECUTE == 'true') ||
           (github.event_name == 'workflow_dispatch' && inputs.execute)
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run data:purge -- --execute

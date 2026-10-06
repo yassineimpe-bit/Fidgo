@@ -2,7 +2,7 @@ import { getBillingRuntimeStatus } from "@/lib/billing";
 import { databaseConfigured } from "@/lib/db";
 import { recoveryEmailConfigured } from "@/lib/email";
 import { healthSchemaIsReady } from "@/lib/health-schema";
-import { logHealthSnapshot } from "@/lib/observability";
+import { logHealthSnapshot, safeErrorCode } from "@/lib/observability";
 import { readHealthSchemaFlags } from "@/lib/service-status";
 import { getWalletRuntimeStatus } from "@/lib/wallet-status";
 
@@ -83,7 +83,10 @@ export async function GET() {
       email: emailState,
       serverMs: Date.now() - started,
     }, ready ? 200 : 503);
-  } catch {
+  } catch (error) {
+    // Code seul (CONNECT_TIMEOUT, ENOTFOUND, SQLSTATE…), jamais le message :
+    // distingue un réveil de base trop lent d'une vraie panne.
+    console.error("HEALTH_DATABASE_DOWN", { code: safeErrorCode(error, "HEALTH_DATABASE") });
     return healthResponse({
       ok: false,
       service: "retiko",

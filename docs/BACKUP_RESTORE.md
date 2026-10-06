@@ -58,6 +58,8 @@ Retiko vérifie notamment :
 - runner GitHub-hosted ;
 - événements autorisés : `push`, `schedule`, `workflow_dispatch`.
 
+Le workflow `data-lifecycle.yml` (rétention des données) utilise le même mécanisme avec une audience distincte, `retiko-lifecycle`, et son propre point d'échange `POST /api/internal/lifecycle-credentials` (#251) : un jeton émis pour l'un est refusé par l'autre.
+
 Le sujet OIDC accepte le format historique GitHub et le format immuable introduit pour les dépôts récents, mais les IDs sont dans tous les cas revérifiés séparément. Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner et n'est jamais enregistré comme secret GitHub.
 
 ## Chiffrement

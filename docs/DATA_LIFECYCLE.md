@@ -54,6 +54,16 @@ message qui nomme l'action à faire. Le comportement du script est couvert par
 - ledger, cartes, soldes et clients intacts ;
 - sortie limitée à des compteurs.
 
+**Mise à jour au 06/10/2026 (#251) :** le workflow n'attend plus de secret
+`DATABASE_URL` durable. Comme `database-backup`, il obtient l'accès base par
+GitHub OIDC (audience `retiko-lifecycle`) auprès du broker
+`POST /api/internal/lifecycle-credentials`, qui n'accepte que
+`data-lifecycle.yml` sur `main` (événements `schedule` et `workflow_dispatch`,
+runner GitHub, environnement `production`). Un jeton du backup n'y est pas
+accepté, ni l'inverse. Le run planifié reste un **dry-run** tant que
+`DATA_LIFECYCLE_EXECUTE` n'est pas `true`, et un déclenchement manuel est
+désormais en dry-run par défaut (`execute=false`).
+
 ## Cartographie
 
 | Table | Données concernées | Sensibilité / rôle | Cycle de vie technique |
@@ -148,11 +158,11 @@ au maximum 5 000 lignes par table et par exécution, avec verrou consultatif :
 Aucune transaction, carte ledger, client actif, staff, établissement,
 configuration de programme ou donnée de facturation n'est supprimé par ce
 script. Le workflow `.github/workflows/data-lifecycle.yml` exécute chaque jour
-un dry-run sur l'environnement GitHub `production`, à condition que son secret
-`DATABASE_URL` soit configuré — ce qui n'est pas le cas au 25/09/2026 (voir
-« État réel des durées »). La suppression planifiée ne s'exécute que si la
-variable GitHub d'environnement `DATA_LIFECYCLE_EXECUTE=true` est explicitement
-activée ; un déclenchement manuel peut également demander l'exécution. Les
+un dry-run sur l'environnement GitHub `production`, avec un accès base obtenu
+par OIDC (voir « État réel des durées », mise à jour du 06/10/2026). La
+suppression planifiée ne s'exécute que si la variable GitHub d'environnement
+`DATA_LIFECYCLE_EXECUTE=true` est explicitement activée ; un déclenchement
+manuel peut également la demander (`execute=true`, dry-run par défaut). Les
 durées restent à valider juridiquement avant activation automatique et doivent
 être réévaluées si la politique de conservation évolue.
 
