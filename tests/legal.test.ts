@@ -32,18 +32,29 @@ describe("acceptation CGU/CGV", () => {
 });
 
 describe("identité juridique", () => {
-  it("n'invente aucune donnée d'identification", () => {
-    for (const key of ["companyName", "legalForm", "siren", "registration", "vatNumber", "headOffice", "publicationDirector", "privacyContact", "dpo"] as const) {
-      expect(LEGAL_ENTITY[key].value).toBeNull();
-      expect(legalValue(LEGAL_ENTITY[key])).toBe(TO_COMPLETE);
-    }
+  it("utilise l'identité officielle de l'entreprise", () => {
+    expect(LEGAL_ENTITY.companyName.value).toBe("Yassine Roussiere");
+    expect(LEGAL_ENTITY.tradingName.value).toBe("RETIKO");
+    expect(LEGAL_ENTITY.legalForm.value).toBe("Entrepreneur individuel (micro-entreprise)");
+    expect(LEGAL_ENTITY.siren.value).toBe("130 906 787");
+    expect(LEGAL_ENTITY.siret.value).toBe("130 906 787 00010");
+    expect(LEGAL_ENTITY.apeCode.value).toBe("6201Z");
+    expect(LEGAL_ENTITY.registration.value).toContain("RNE");
+    expect(LEGAL_ENTITY.vatNumber.value).toContain("article 293 B du CGI");
+    expect(LEGAL_ENTITY.headOffice.value).toContain("19200 Ussel");
+    expect(LEGAL_ENTITY.publicationDirector.value).toBe("Yassine Roussiere");
+    expect(LEGAL_ENTITY.phone.value).toBe("07 80 42 62 67");
   });
 
-  it("liste en un seul endroit les informations manquantes", () => {
+  it("ne laisse à compléter que les informations encore ouvertes", () => {
     const missing = missingLegalFields();
-    expect(missing).toContain(LEGAL_ENTITY.siren.label);
+    expect(missing).not.toContain(LEGAL_ENTITY.siren.label);
+    expect(missing).not.toContain(LEGAL_ENTITY.vatNumber.label);
     expect(missing).toContain(LEGAL_ENTITY.privacyContact.label);
-    expect(missing).not.toContain(LEGAL_ENTITY.contactEmail.label);
+    expect(missing).toContain(LEGAL_ENTITY.dpo.label);
+    expect(missing).toContain(LEGAL_ENTITY.latePaymentRate.label);
+    expect(missing).toContain(LEGAL_ENTITY.jurisdiction.label);
+    expect(legalValue(LEGAL_ENTITY.privacyContact)).toBe(TO_COMPLETE);
   });
 });
 

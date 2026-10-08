@@ -41,9 +41,10 @@ export default function CgvPage() {
         <td>{plan.label}</td><td>{plan.priceLabel}</td><td>{plan.commitment}</td>
       </tr>)}</tbody>
     </table></div>
-    <p>Les prix sont exprimés hors taxes ; les taxes applicables s’ajoutent selon la réglementation en vigueur
-      (<strong>régime de TVA de l’éditeur à compléter</strong>). Une proposition commerciale écrite et acceptée
-      prévaut sur cette grille pour le client concerné.</p>
+    <p>Retiko bénéficie actuellement de la franchise en base de TVA : la TVA n’est pas applicable,
+      conformément à l’article 293 B du CGI. Les montants facturés correspondent donc aux prix indiqués tant
+      que ce régime reste applicable. Une proposition commerciale écrite et acceptée prévaut sur cette grille
+      pour le client concerné.</p>
 
     <h2>5. Période pilote</h2>
     <p>Chaque commerce inscrit bénéficie d’une période pilote gratuite d’environ {BILLING_TRIAL_DAYS} jours.
