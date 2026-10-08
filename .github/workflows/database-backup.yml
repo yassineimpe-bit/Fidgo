@@ -35,7 +35,7 @@ jobs:
   config-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Validate recovery certificate
         run: |
           openssl x509 -in ops/backup/retiko-backup-public.crt -noout -checkend 2592000
@@ -74,7 +74,7 @@ jobs:
       BACKUP_CREDENTIAL_URL: https://retiko.fr/api/internal/backup-credentials
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v5
         with:
