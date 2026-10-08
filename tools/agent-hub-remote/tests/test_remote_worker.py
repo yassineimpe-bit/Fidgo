@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import subprocess
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -261,11 +262,15 @@ class ProcessIssueIntegrationTests(unittest.TestCase):
     @patch.object(rw, "run_router")
     @patch.object(rw, "comment")
     @patch.object(rw, "set_status")
+    @patch.object(rw, "claim_issue")
     @patch.object(rw, "body_is_untampered")
     @patch.object(rw, "gh")
-    def test_untampered_success_closes_the_issue(self, mock_gh, mock_untampered, mock_set_status, mock_comment, mock_run_router):
+    def test_untampered_success_closes_the_issue(
+        self, mock_gh, mock_untampered, mock_claim, mock_set_status, mock_comment, mock_run_router
+    ):
         mock_gh.return_value = fake_completed()
         mock_untampered.return_value = True
+        mock_claim.return_value = True
         mock_run_router.return_value = (0, "great success, no secrets here")
         rw.process_issue(make_issue(1, body="task:\ndo the thing"))
         mock_run_router.assert_called_once()
@@ -276,9 +281,13 @@ class ProcessIssueIntegrationTests(unittest.TestCase):
     @patch.object(rw, "run_router")
     @patch.object(rw, "comment")
     @patch.object(rw, "set_status")
+    @patch.object(rw, "claim_issue")
     @patch.object(rw, "body_is_untampered")
-    def test_untampered_agent_failure_marks_failed_not_done(self, mock_untampered, mock_set_status, mock_comment, mock_run_router):
+    def test_untampered_agent_failure_marks_failed_not_done(
+        self, mock_untampered, mock_claim, mock_set_status, mock_comment, mock_run_router
+    ):
         mock_untampered.return_value = True
+        mock_claim.return_value = True
         mock_run_router.return_value = (1, "something went wrong")
         rw.process_issue(make_issue(1, body="task:\ndo the thing"))
         mock_set_status.assert_any_call(1, "failed")
@@ -287,9 +296,13 @@ class ProcessIssueIntegrationTests(unittest.TestCase):
     @patch.object(rw, "run_router")
     @patch.object(rw, "comment")
     @patch.object(rw, "set_status")
+    @patch.object(rw, "claim_issue")
     @patch.object(rw, "body_is_untampered")
-    def test_empty_task_is_rejected_before_running(self, mock_untampered, mock_set_status, mock_comment, mock_run_router):
+    def test_empty_task_is_rejected_before_running(
+        self, mock_untampered, mock_claim, mock_set_status, mock_comment, mock_run_router
+    ):
         mock_untampered.return_value = True
+        mock_claim.return_value = True
         # Title has nothing after the prefix and body is blank -> parse_request raises.
         rw.process_issue(make_issue(1, title="[retiko-agent]", body=""))
         mock_run_router.assert_not_called()
@@ -299,17 +312,218 @@ class ProcessIssueIntegrationTests(unittest.TestCase):
     @patch.object(rw, "run_router")
     @patch.object(rw, "comment")
     @patch.object(rw, "set_status")
+    @patch.object(rw, "claim_issue")
     @patch.object(rw, "body_is_untampered")
     def test_agent_output_is_redacted_before_posting(
-        self, mock_untampered, mock_set_status, mock_comment, mock_run_router, mock_gh
+        self, mock_untampered, mock_claim, mock_set_status, mock_comment, mock_run_router, mock_gh
     ):
         mock_gh.return_value = fake_completed()
         mock_untampered.return_value = True
+        mock_claim.return_value = True
         mock_run_router.return_value = (0, "here is a leaked token ghp_ABCDEFGHIJ0123456789abcd")
         rw.process_issue(make_issue(1, body="task:\ndo the thing"))
         posted_bodies = [c.args[1] for c in mock_comment.call_args_list]
         self.assertFalse(any("ghp_ABCDEFGHIJ0123456789abcd" in body for body in posted_bodies))
         self.assertTrue(any("[REDACTED]" in body for body in posted_bodies))
+
+    @patch.object(rw, "run_router")
+    @patch.object(rw, "comment")
+    @patch.object(rw, "set_status")
+    @patch.object(rw, "claim_issue")
+    @patch.object(rw, "body_is_untampered")
+    def test_lost_claim_never_reaches_the_agent(
+        self, mock_untampered, mock_claim, mock_set_status, mock_comment, mock_run_router
+    ):
+        mock_untampered.return_value = True
+        mock_claim.return_value = False
+        rw.process_issue(make_issue(1, body="task:\ndo the thing"))
+        mock_run_router.assert_not_called()
+        mock_set_status.assert_not_called()
+
+
+def _fake_gh_comment_backend(initial_comments=None, start_id=100):
+    """A stateful fake for `gh` that behaves like a tiny GitHub comments API:
+    `issue comment` appends and assigns the next id, `api .../comments`
+    returns the current list. Shared across calls/threads via closure state,
+    exactly like real GitHub state is shared across real worker processes."""
+    state = {"comments": list(initial_comments or []), "next_id": start_id}
+    lock = threading.Lock()
+
+    def side_effect(*args, **kwargs):
+        if args[0] == "issue" and args[1] == "comment":
+            body = args[args.index("--body") + 1]
+            with lock:
+                comment_id = state["next_id"]
+                state["next_id"] += 1
+                state["comments"].append({"id": comment_id, "body": body})
+            return fake_completed()
+        if args[0] == "api":
+            with lock:
+                snapshot = list(state["comments"])
+            return fake_completed(stdout=json.dumps(snapshot))
+        raise AssertionError(f"unexpected gh call in fake backend: {args}")
+
+    return state, side_effect
+
+
+def _fake_gh_comment_backend_with_barrier(parties, initial_comments=None, start_id=100):
+    """Same as _fake_gh_comment_backend, but every poster waits at a barrier
+    right after posting, so two threads are forced into the actual race
+    window (both have posted, neither has re-fetched yet) instead of one
+    thread finishing claim_issue() before the other even starts."""
+    state = {"comments": list(initial_comments or []), "next_id": start_id}
+    lock = threading.Lock()
+    barrier = threading.Barrier(parties, timeout=5)
+
+    def side_effect(*args, **kwargs):
+        if args[0] == "issue" and args[1] == "comment":
+            body = args[args.index("--body") + 1]
+            with lock:
+                comment_id = state["next_id"]
+                state["next_id"] += 1
+                state["comments"].append({"id": comment_id, "body": body})
+            barrier.wait()
+            return fake_completed()
+        if args[0] == "api":
+            with lock:
+                snapshot = list(state["comments"])
+            return fake_completed(stdout=json.dumps(snapshot))
+        raise AssertionError(f"unexpected gh call in fake backend: {args}")
+
+    return state, side_effect
+
+
+class ClaimIssueConcurrencyTests(unittest.TestCase):
+    """Two workers can both list the same issue as unclaimed before either
+    sets a status label -- a label add/remove alone is not a compare-and-
+    swap. claim_issue() resolves this using GitHub comment ids, which are
+    assigned server-side in a single strictly increasing sequence even
+    under concurrent writers."""
+
+    def test_two_truly_concurrent_claims_resolve_to_exactly_one_winner(self):
+        # Barrier forces BOTH threads to post their claim comment before
+        # EITHER is allowed to re-fetch and decide a winner -- this is the
+        # actual race, not two sequential calls that happen not to overlap.
+        _, side_effect = _fake_gh_comment_backend_with_barrier(parties=2)
+        results = {}
+
+        def worker(name):
+            with patch.object(rw, "gh", side_effect=side_effect):
+                results[name] = rw.claim_issue(make_issue(1))
+
+        t1 = threading.Thread(target=worker, args=("a",))
+        t2 = threading.Thread(target=worker, args=("b",))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+        self.assertEqual(sorted(results.values()), [False, True])
+
+    def test_second_sequential_claim_loses_to_the_first(self):
+        _, side_effect = _fake_gh_comment_backend()
+        with patch.object(rw, "gh", side_effect=side_effect):
+            first = rw.claim_issue(make_issue(1))
+            second = rw.claim_issue(make_issue(1))
+        self.assertTrue(first)
+        self.assertFalse(second)
+
+    def test_claim_loses_to_a_rival_workers_earlier_comment(self):
+        # Models "claim belongs to another worker": a rival's claim comment
+        # already exists with a lower id by the time we re-fetch.
+        rival = {"id": 1, "body": f"{rw.CLAIM_MARKER_PREFIX}rival-worker -->"}
+        _, side_effect = _fake_gh_comment_backend(initial_comments=[rival], start_id=2)
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_claim_with_no_rivals_wins(self):
+        _, side_effect = _fake_gh_comment_backend()
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertTrue(rw.claim_issue(make_issue(1)))
+
+    def test_unrelated_comments_do_not_affect_the_outcome(self):
+        human_comment = {"id": 1, "body": "looks good to me"}
+        _, side_effect = _fake_gh_comment_backend(initial_comments=[human_comment], start_id=2)
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertTrue(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_if_posting_the_claim_comment_fails(self):
+        with patch.object(rw, "gh", side_effect=subprocess.CalledProcessError(1, ["gh"])):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_if_refetch_after_claim_fails(self):
+        def side_effect(*args, **kwargs):
+            if args[0] == "issue" and args[1] == "comment":
+                return fake_completed()
+            raise subprocess.CalledProcessError(1, ["gh"])
+
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_if_our_own_comment_is_missing_from_the_refetch(self):
+        # Inconsistent GitHub response (e.g. read-after-write lag): posting
+        # reported success but the immediate re-fetch shows no claims at
+        # all, including not our own.
+        def side_effect(*args, **kwargs):
+            if args[0] == "issue" and args[1] == "comment":
+                return fake_completed()
+            return fake_completed(stdout="[]")
+
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_on_malformed_json(self):
+        def side_effect(*args, **kwargs):
+            if args[0] == "issue" and args[1] == "comment":
+                return fake_completed()
+            return fake_completed(stdout="not json at all")
+
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_if_response_is_not_a_list(self):
+        def side_effect(*args, **kwargs):
+            if args[0] == "issue" and args[1] == "comment":
+                return fake_completed()
+            return fake_completed(stdout=json.dumps({"unexpected": "shape"}))
+
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+    def test_fails_closed_if_a_comment_id_is_not_an_integer(self):
+        def side_effect(*args, **kwargs):
+            if args[0] == "issue" and args[1] == "comment":
+                return fake_completed()
+            bad = {"id": "not-an-int", "body": f"{rw.CLAIM_MARKER_PREFIX}x -->"}
+            return fake_completed(stdout=json.dumps([bad]))
+
+        with patch.object(rw, "gh", side_effect=side_effect):
+            self.assertFalse(rw.claim_issue(make_issue(1)))
+
+
+class LocalLockTests(unittest.TestCase):
+    """Complementary to the GitHub-level claim: stops two instances of the
+    same worker configuration from starting on the same machine at all."""
+
+    def setUp(self):
+        rw._local_lock_path().unlink(missing_ok=True)
+
+    def tearDown(self):
+        rw._local_lock_path().unlink(missing_ok=True)
+
+    def test_second_instance_on_the_same_machine_is_refused(self):
+        first = rw.acquire_local_lock()
+        try:
+            with self.assertRaises(SystemExit):
+                rw.acquire_local_lock()
+        finally:
+            first.close()
+
+    def test_lock_is_released_on_process_exit_no_manual_cleanup_needed(self):
+        first = rw.acquire_local_lock()
+        first.close()  # What the OS does automatically when a process dies.
+        second = rw.acquire_local_lock()  # Must succeed: no stale lock left behind.
+        second.close()
 
 
 if __name__ == "__main__":
