@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   backupOidcClaimsAreTrusted,
+  lifecycleOidcClaimsAreTrusted,
+  RETIKO_LIFECYCLE_WORKFLOW_REF,
   RETIKO_BACKUP_IMMUTABLE_SUBJECT,
   RETIKO_BACKUP_LEGACY_SUBJECT,
   RETIKO_BACKUP_REPOSITORY,
@@ -55,5 +57,32 @@ describe("backup GitHub OIDC trust policy", () => {
         backupOidcClaimsAreTrusted({ ...validClaims(), event_name: eventName }),
       ).toBe(true);
     }
+  });
+});
+
+describe("lifecycle GitHub OIDC trust policy (#251)", () => {
+  const lifecycleClaims = () => ({ ...validClaims(), workflow_ref: RETIKO_LIFECYCLE_WORKFLOW_REF });
+
+  it("accepts data-lifecycle.yml on main for scheduled and manual runs", () => {
+    for (const eventName of ["schedule", "workflow_dispatch"]) {
+      expect(lifecycleOidcClaimsAreTrusted({ ...lifecycleClaims(), event_name: eventName })).toBe(true);
+    }
+  });
+
+  it("keeps backup and lifecycle tokens mutually unusable", () => {
+    expect(lifecycleOidcClaimsAreTrusted(validClaims())).toBe(false);
+    expect(backupOidcClaimsAreTrusted(lifecycleClaims())).toBe(false);
+  });
+
+  it.each([
+    ["ref", "refs/heads/feature"],
+    ["workflow_ref", "yassineimpe-bit/Fidgo/.github/workflows/data-lifecycle.yml@refs/heads/feature"],
+    ["sub", "repo:yassineimpe-bit/Fidgo:pull_request"],
+    ["runner_environment", "self-hosted"],
+    ["event_name", "push"],
+    ["event_name", "pull_request"],
+    ["repository_id", "1"],
+  ])("rejects an unexpected %s claim", (claim, value) => {
+    expect(lifecycleOidcClaimsAreTrusted({ ...lifecycleClaims(), [claim]: value })).toBe(false);
   });
 });

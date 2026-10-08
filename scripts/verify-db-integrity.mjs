@@ -321,6 +321,17 @@ try {
   console.log(`Visuels de carte incohérents : ${cardImageTable.present ? `${cardImageData.cross_tenant_card_images} cross-tenant, ${cardImageData.orphan_card_images} orphelin(s)` : "table absente (migration 031)"}`);
   console.log(`Logos importés incohérents : ${logoTable.present ? `${logoData.broken_logo_refs} référence(s) cassée(s), ${logoData.orphan_logos} orphelin(s)` : "table absente (migration 024)"}`);
 
+  // Dans GitHub Actions, le détail doit être lisible sans télécharger les
+  // logs (restore drill de database-backup) : noms de structures seulement.
+  if (process.env.GITHUB_ACTIONS === "true") {
+    const absent = [
+      [legalTable.present, "022"], [logoTable.present, "024"], [campaignSchema.present, "027"],
+      [rewardTable.present, "028"], [cardImageTable.present, "031"],
+    ].filter(([present]) => !present).map(([, migration]) => migration);
+    if (absent.length > 0) console.log(`::warning title=db:verify — schéma::Objets absents des migrations ${absent.join(", ")}`);
+    if (failures.length > 0) console.log(`::error title=db:verify::${failures.join(" ; ")}`);
+  }
+
   if (failures.length > 0) {
     console.error(`Intégrité DB invalide : ${failures.join(" ; ")}`);
     process.exitCode = 1;

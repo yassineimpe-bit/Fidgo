@@ -20,7 +20,12 @@ function createSqlClient() {
   return postgres(connectionUrl, {
     max: 5,
     prepare: false,
-    connect_timeout: 2,
+    // Neon suspend la base inactive (scale-to-zero) : la première connexion
+    // après une pause doit la réveiller, parfois en quelques secondes. 2 s ne
+    // laissaient aucune marge (cause probable des « database unavailable »
+    // #245, #246, #252, #258) ; Neon recommande au moins 10 s. Une option
+    // explicite l'emporte sur un ?connect_timeout de DATABASE_URL.
+    connect_timeout: 10,
   });
 }
 
