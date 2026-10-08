@@ -33,4 +33,13 @@ describe("transaction CSV export", () => {
     expect(csv).toContain('"\'=HYPERLINK(""https://evil.invalid"";""Jean"")"');
     expect(csv).toContain(";système;oui");
   });
+
+  it("neutralise aussi les formules précédées d'espaces", () => {
+    const csv = transactionExportCsv([{
+      created_at: "2026-09-19T20:00:00.000Z", first_name: "  =1+1",
+      short_code: "ABC123", type: "earn", delta: 1, balance_after: 1,
+      unit: "STAMP", staff_email: null, reversed: false,
+    }]);
+    expect(csv).toContain("'  =1+1");
+  });
 });

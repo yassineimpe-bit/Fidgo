@@ -10,11 +10,11 @@ export type TransactionExportRow = {
   reversed: boolean;
 };
 
-function csvCell(value: unknown) {
+export function csvCell(value: unknown) {
   let text = value == null ? "" : String(value);
   // Les tableurs interprètent =, +, - et @ en début de cellule comme des
   // formules. Les prénoms proviennent du client : neutraliser l'injection CSV.
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  if (/^\s*[=+\-@]/u.test(text)) text = `'${text}`;
   if (!/[;"\r\n]/.test(text)) return text;
   return `"${text.replaceAll('"', '""')}"`;
 }
