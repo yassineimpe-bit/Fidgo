@@ -33,10 +33,8 @@ export async function issueDatabaseCredential(
     });
 
     if (!policy.trusted(payload)) {
-      console.warn(`${policy.label}_OIDC_REJECTED`, {
-        repository: typeof payload.repository === "string" ? payload.repository : "unknown",
-        event: typeof payload.event_name === "string" ? payload.event_name : "unknown",
-      });
+      // Claims refusés : ne jamais recopier leurs valeurs dans les journaux.
+      console.warn(`${policy.label}_OIDC_REJECTED`);
       return Response.json({ error: "FORBIDDEN" }, { status: 403, headers: PRIVATE });
     }
 
@@ -47,7 +45,7 @@ export async function issueDatabaseCredential(
     }
 
     console.info(`${policy.label}_CREDENTIAL_ISSUED`, {
-      runId: typeof payload.run_id === "string" ? payload.run_id : "unknown",
+      runId: typeof payload.run_id === "string" && /^\d+$/.test(payload.run_id) ? payload.run_id : "unknown",
       sha: typeof payload.sha === "string" ? payload.sha.slice(0, 7) : "unknown",
     });
     return Response.json({ databaseUrl }, { headers: PRIVATE });

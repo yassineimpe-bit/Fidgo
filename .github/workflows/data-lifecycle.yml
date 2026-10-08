@@ -88,5 +88,5 @@ jobs:
       - name: Apply retention
         if: >-
           (github.event_name == 'schedule' && vars.DATA_LIFECYCLE_EXECUTE == 'true') ||
-          (github.event_name == 'workflow_dispatch' && inputs.execute)
+          (github.event_name == 'workflow_dispatch' && inputs.execute == true)
         run: npm run data:purge -- --execute
