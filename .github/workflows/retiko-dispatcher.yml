@@ -30,7 +30,7 @@ jobs:
       status: ${{ steps.claim.outputs.status }}
       issue: ${{ steps.claim.outputs.issue }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
@@ -59,7 +59,7 @@ jobs:
       issues: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
@@ -117,7 +117,7 @@ jobs:
       pull-requests: read
     steps:
       # Nouveau runner et scripts main fiables : aucun fichier du job agent.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
