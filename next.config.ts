@@ -11,6 +11,13 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async rewrites() {
+    return [
+      // Android Trusted Web Activity: Android/Chrome exige ce chemin exact
+      // pour vérifier que retiko.fr et l'application appartiennent au même éditeur.
+      { source: "/.well-known/assetlinks.json", destination: "/api/android/assetlinks" },
+    ];
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: securityHeaders },
