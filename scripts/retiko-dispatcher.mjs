@@ -63,10 +63,50 @@ export async function claimNext(api) {
   return { status: "claimed", issue: fresh };
 }
 
+export function forbiddenDispatcherPath(path) {
+  const value = String(path ?? "").replaceAll("\\", "/").toLowerCase();
+  return !value || value.split("/").includes("..") ||
+    /(^|\/)(?:\.github|secrets?|backups?)(?:\/|$)/.test(value) ||
+    /(^|\/)\.env(?:[./]|$)/.test(value) ||
+    /\.(?:pem|key|p12|pfx|dump|backup)(?:\.|$)/.test(value) ||
+    /\.(?:sql|tar)(?:\.gz|\.zip)$/.test(value);
+}
+
+export async function verifyMainProtection(api) {
+  const rulesets = await api.listRulesets();
+  const active = await Promise.all(rulesets.filter(r => r.enforcement === "active").map(r => api.getRuleset(r.id)));
+  const ci = active.find(r => r.name === "retiko-main-ci");
+  const writers = active.find(r => r.name === "retiko-main-writers");
+  const targetsMainOnly = r => r?.conditions?.ref_name?.include?.length === 1 &&
+    r.conditions.ref_name.include[0] === "refs/heads/main" && !r.conditions.ref_name.exclude?.length;
+  const rules = ci?.rules ?? [];
+  const pr = rules.find(r => r.type === "pull_request")?.parameters;
+  const checks = rules.find(r => r.type === "required_status_checks")?.parameters;
+  const bypass = writers?.bypass_actors ?? [];
+  if (!targetsMainOnly(ci) || !targetsMainOnly(writers) || ci.bypass_actors?.length ||
+      !rules.some(r => r.type === "deletion") || !rules.some(r => r.type === "non_fast_forward") ||
+      !pr?.required_review_thread_resolution || !checks?.strict_required_status_checks_policy ||
+      !["quality", "e2e"].every(context => checks.required_status_checks?.some(c => c.context === context && c.integration_id === 15368)) ||
+      !writers.rules?.some(r => r.type === "update") || bypass.length !== 1 ||
+      bypass[0].actor_type !== "RepositoryRole" || bypass[0].actor_id !== 5 || bypass[0].bypass_mode !== "pull_request") {
+    throw new Error("MAIN_PROTECTION_REQUIRED: agent execution refused");
+  }
+  return true;
+}
+
 export async function reconcileIssue(api, issue, { failed = false, reason = "Claude n’a produit aucune PR correspondante." } = {}) {
   if (!names(issue).includes("state:running")) return { status: "unchanged" };
   const pull = matchingPullRequest(await api.listPulls(), issue.number);
   if (pull) {
+    const files = await api.listPullFiles(pull.number);
+    const safeSource = pull.base?.ref === "main" && pull.head?.ref === `retiko/issue-${issue.number}-claude` &&
+      pull.head?.repo?.full_name === pull.base?.repo?.full_name && !pull.draft;
+    if (!safeSource || !files.length || files.some(file => forbiddenDispatcherPath(file.filename) ||
+        (file.previous_filename && forbiddenDispatcherPath(file.previous_filename)))) {
+      await transition(api, issue, "state:running", "state:blocked");
+      await api.comment(issue.number, "<!-- retiko-dispatch:blocked -->\nDispatcher Retiko : provenance PR invalide ou chemin sensible/interdit ; revue humaine requise.");
+      return { status: "blocked" };
+    }
     await transition(api, issue, "state:running", "state:review");
     return { status: "review", pull };
   }
@@ -89,6 +129,17 @@ export function createApi({ token, repository, fetchImpl = fetch }) {
     return response.status === 204 ? null : response.json();
   }
   return {
+    async listRulesets() { return request("/rulesets?per_page=100"); },
+    async getRuleset(id) { return request(`/rulesets/${id}`); },
+    async listPullFiles(number) {
+      const files = [];
+      for (let page = 1; page <= 30; page++) {
+        const batch = await request(`/pulls/${number}/files?per_page=100&page=${page}`);
+        files.push(...batch);
+        if (batch.length < 100) return files;
+      }
+      throw new Error("PR_FILE_LIMIT: review refused");
+    },
     async listIssues() { return request("/issues?state=open&per_page=100&sort=created&direction=asc"); },
     async getIssue(number) { return request(`/issues/${number}`); },
     async listPulls() { return request("/pulls?state=open&per_page=100"); },
@@ -111,6 +162,11 @@ async function main() {
   if (!token || !repository) throw new Error("GITHUB_TOKEN and GITHUB_REPOSITORY are required");
   const api = createApi({ token, repository });
   const mode = process.argv[2] ?? "claim";
+  if (mode === "verify-protection") {
+    await verifyMainProtection(api);
+    console.log("Main protections verified: no direct agent push or App bypass.");
+    return;
+  }
   if (mode === "bootstrap") {
     for (const [label, color] of Object.entries(LABELS)) await api.ensureLabel(label, color);
     return;
