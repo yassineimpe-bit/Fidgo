@@ -62,4 +62,28 @@ describe("data lifecycle database contract", () => {
     expect(purge).not.toMatch(/delete\s+from\s+cards/i);
     expect(purge).not.toMatch(/delete\s+from\s+customers/i);
   });
+
+  it("dry-run and execute share the same tables, windows, and single session lock", () => {
+    const tables = [
+      "product_events",
+      "audit_logs",
+      "card_recovery_tokens",
+      "password_reset_tokens",
+      "email_verification_tokens",
+      "apple_wallet_registrations",
+      "rate_limits",
+    ];
+    for (const table of tables) {
+      expect(purge).toContain(`from ${table}`);
+      expect(purge).toContain(`delete from ${table}`);
+    }
+    expect(purge).toContain("productEventsDays: 180");
+    expect(purge).toContain("auditLogsDays: 730");
+    expect(purge).toContain("recoveryTokensDays: 30");
+    expect(purge).toContain("rateLimitsDays: 2");
+    expect(purge).toContain("max: 1");
+    expect(purge).toContain("sql.end");
+    expect(purge).toContain("hashtext('retiko-data-lifecycle')");
+    expect(purge).not.toMatch(/delete\s+from\s+wallet_passes/i);
+  });
 });
