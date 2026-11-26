@@ -1,7 +1,7 @@
 # État du socle légal et RGPD de Retiko
 
 Point d'entrée unique : où se trouvent les documents, ce qui manque, ce qui
-reste à décider. Mis à jour le 25/09/2026 (issue #131).
+reste à décider. Mis à jour le 02/10/2026.
 
 ## Documents publics (source : le code)
 
@@ -40,41 +40,49 @@ Migration : `db/migrations/022_legal_acceptance.sql` (additive, idempotente,
 à appliquer en production **avant** le déploiement du code, sinon l'inscription
 échoue et `/api/health` passe en 503).
 
-## Informations à fournir par l'exploitant
+## Identité juridique de l'exploitant
 
-Source unique : `LEGAL_ENTITY` et `HOSTING_PROVIDER` dans `lib/legal.ts`. Tout
-champ `null` s'affiche « [À COMPLÉTER] » et figure dans `missingLegalFields()`.
+Source unique : `LEGAL_ENTITY` et `HOSTING_PROVIDER` dans `lib/legal.ts`.
 
-- raison sociale ou nom de l'exploitant ;
-- forme juridique ;
-- capital social (si société) ;
-- SIREN / SIRET ;
-- immatriculation (RCS / RNE selon le statut) ;
-- numéro de TVA intracommunautaire (si applicable) et régime de TVA ;
-- adresse du siège ;
-- directeur de la publication ;
-- représentant légal ;
-- téléphone de contact ;
-- contact pour les demandes relatives aux données personnelles ;
+Les informations officielles issues de la formalité de création validée le
+01/10/2026 sont désormais renseignées :
+
+- exploitant : Yassine Roussiere ;
+- nom commercial : RETIKO ;
+- forme juridique : entrepreneur individuel, micro-entreprise ;
+- SIREN : 130 906 787 ;
+- SIRET : 130 906 787 00010 ;
+- code APE : 6201Z ;
+- immatriculation au RNE : 01/10/2026 ;
+- adresse : 27 rue du Mas Rouge, 19200 Ussel, France ;
+- régime de TVA : franchise en base, TVA non applicable — article 293 B du CGI ;
+- téléphone : 07 80 42 62 67 ;
+- e-mail public : `contact@retiko.fr`.
+
+Les coordonnées publiques de l'hébergeur Vercel ont également été renseignées
+depuis ses mentions officielles.
+
+Restent volontairement à compléter ou à décider :
+
+- contact dédié aux demandes relatives aux données personnelles ;
 - DPO désigné ou non ;
 - taux des pénalités de retard (CGV) ;
-- tribunal compétent entre professionnels (CGV) ;
-- adresse et téléphone de l'hébergeur Vercel (à recopier depuis ses mentions).
+- tribunal compétent entre professionnels (CGV).
 
-`contact@retiko.fr` est utilisé comme e-mail de contact (adresse de réponse des
-e-mails transactionnels) : **à confirmer** comme contact public.
+Tout champ encore `null` s'affiche « [À COMPLÉTER] » lorsqu'il est utilisé
+dans une page publique et figure dans `missingLegalFields()`.
 
 ## Décisions juridiques ou métier encore ouvertes
 
 1. **Petits professionnels** (≤ 5 salariés, contrat hors de l'activité
-   principale, conclu à distance ou hors établissement) : application du droit
+   principale, conclu hors établissement) : application du droit
    de la consommation (rétractation, information précontractuelle, résiliation).
    Voir `PROSPECTION_HORS_ETABLISSEMENT.md`. **À valider juridiquement.**
 2. Taux des pénalités de retard et clause de juridiction.
 3. Limitation de responsabilité (aucune n'est rédigée ; pas d'exclusion générale).
 4. Grille affichée dans les CGV : grille publique `standard` (25 € HT/mois
    sans engagement, 250 € HT/an payé d'avance) depuis la version 2026-09-27.
-   Régime de TVA de l'éditeur toujours « à compléter » dans les CGV (§ 4) ;
+   Le régime de TVA est désormais précisé dans les CGV (§ 4) : franchise en base, TVA non applicable (article 293 B du CGI) ;
    l'offre Fondateurs (19 € HT/mois pendant 24 mois) n'y figure pas et passe
    par proposition commerciale écrite (voir `BILLING.md`). L'ancienne offre
    « Retiko 12 » (grille `pilot`) n'est plus proposée : ses conditions de
@@ -101,3 +109,36 @@ e-mails transactionnels) : **à confirmer** comme contact public.
 - `RGPD_PROCEDURES.md` — droits, violations, fin de relation ;
 - `DPA_TEMPLATE.md` — annexe de sous-traitance ;
 - `retiko_references_officielles_legal_rgpd.md` — sources officielles utilisées.
+
+
+## Reprise du 26 novembre 2026
+
+- PR #243 actualisée sur `main` 6904b3c, sans changement propre aux backups,
+  aux brokers OIDC ou aux purges. Cause quality initiale : node-forge HIGH
+  GHSA-86w9-cpqp-85rv ; les exceptions temporaires de main avaient expiré.
+- Identité recoupée le 26/11/2026 avec la synthèse INPI définitive de création
+  validée du 01/10/2026, fournie par l’exploitant (pages 1, 4 et 5) : EI Yassine
+  Roussiere, RETIKO, SIREN 130906787, SIRET 13090678700010, APE 6201Z, adresse
+  et téléphone conformes à la PR. Aucun justificatif privé n’est ajouté au dépôt.
+- Page 7 : option « Franchise en base TVA », bénéfices « Micro BIC » et
+  versement libératoire demandé. La page 5 indique « Libérale non réglementée » :
+  faire confirmer au SIE la catégorie fiscale effective et l’option retenue,
+  sans déduire le régime du seul APE. La synthèse confirme une formalité et
+  ses options, pas l’absence d’option/dépassement ultérieur au 26/11/2026.
+- Restent à fournir : mémento fiscal ou réponse du SIE, confirmation des
+  contacts publics, du contact RGPD et de la désignation éventuelle d’un DPO.
+- Coordonnées Vercel recoupées avec sa page officielle
+  https://vercel.com/legal/dmca-policy le 26/11/2026. Région `fra1` :
+  configuration du dépôt, sans garantie de localisation de tous les traitements.
+- CGV : franchise présentée comme déclarée, à confirmer ; L.221-3 limité aux
+  contrats hors établissement, sans l’étendre à toute vente en ligne.
+  Version d’acceptation passée au 2026-11-26. Aucun parcours de réacceptation
+  des comptes existants : information et décision juridique requises avant diffusion.
+- Le besoin d’un secret GitHub DATABASE_URL ci-dessus est **historique et
+  obsolète** depuis #251 : le broker OIDC est déjà implémenté. Aucun secret
+  durable ajouté. Exécution effective de la purge à faire confirmer par la
+  mission exploitation ; aucune activation ou modification ici.
+- Vercel : CRON_SECRET et variables Wallet présents (valeurs non lues) ;
+  aucune variable Stripe. `/api/health` : billing désactivé ; Wallet Apple et
+  Google configurés. Cela ne prouve ni publication Issuer ni test physique.
+- Audit fiscal et checklist de validation : `FISCALITE_FACTURATION.md`.

@@ -9,13 +9,14 @@ export default function LegalNoticePage() {
   const e = LEGAL_ENTITY;
   const rows: [string, string][] = [
     ["Éditeur", legalValue(e.companyName)],
+    ["Nom commercial", legalValue(e.tradingName)],
     ["Forme juridique", legalValue(e.legalForm)],
-    ["Capital social", legalValue(e.shareCapital)],
-    ["SIREN / SIRET", legalValue(e.siren)],
+    ["SIREN", legalValue(e.siren)],
+    ["SIRET", legalValue(e.siret)],
+    ["Code APE", legalValue(e.apeCode)],
     ["Immatriculation", legalValue(e.registration)],
-    ["TVA intracommunautaire", legalValue(e.vatNumber)],
-    ["Siège", legalValue(e.headOffice)],
-    ["Représentant légal", legalValue(e.legalRepresentative)],
+    ["TVA", legalValue(e.vatNumber)],
+    ["Adresse", legalValue(e.headOffice)],
     ["Directeur de la publication", legalValue(e.publicationDirector)],
     ["Téléphone", legalValue(e.phone)],
     ["E-mail", legalValue(e.contactEmail)],
@@ -27,7 +28,8 @@ export default function LegalNoticePage() {
     </tbody></table></div>
 
     <h2>Hébergement</h2>
-    <p>{HOSTING_PROVIDER.name} — {HOSTING_PROVIDER.region}. Coordonnées : {legalValue(HOSTING_PROVIDER.address)}.</p>
+    <p>{HOSTING_PROVIDER.name} — {legalValue(HOSTING_PROVIDER.address)}.</p>
+    <p className="muted">{HOSTING_PROVIDER.region}.</p>
 
     <h2>Propriété intellectuelle</h2>
     <p>Les éléments propres à Retiko (marque, interface, textes, logiciel) sont protégés. Les marques, logos

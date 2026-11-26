@@ -22,10 +22,11 @@ export default function CgvPage() {
     <p>Retiko est proposé exclusivement à des professionnels (commerces, restaurants, points de vente) pour
       les besoins de leur activité.</p>
     <p><strong>À valider juridiquement avant commercialisation :</strong> un professionnel employant au plus
-      cinq salariés, qui conclut à distance ou hors établissement un contrat n’entrant pas dans le champ de son
+      cinq salariés, qui conclut hors établissement un contrat n’entrant pas dans le champ de son
       activité principale, peut bénéficier de certaines règles du droit de la consommation (information
       précontractuelle, droit de rétractation, modalités de résiliation). L’application de ce régime aux
-      clients de Retiko n’est pas encore tranchée ; lorsqu’il s’applique, les règles légales prévalent sur les
+      clients de Retiko n’est pas encore tranchée. Une souscription à distance seule ne suffit pas à déclencher
+      l’extension de l’article L. 221-3 du Code de la consommation ; lorsqu’il s’applique, les règles légales prévalent sur les
       présentes CGV.</p>
 
     <h2>3. Service fourni</h2>
@@ -41,9 +42,10 @@ export default function CgvPage() {
         <td>{plan.label}</td><td>{plan.priceLabel}</td><td>{plan.commitment}</td>
       </tr>)}</tbody>
     </table></div>
-    <p>Les prix sont exprimés hors taxes ; les taxes applicables s’ajoutent selon la réglementation en vigueur
-      (<strong>régime de TVA de l’éditeur à compléter</strong>). Une proposition commerciale écrite et acceptée
-      prévaut sur cette grille pour le client concerné.</p>
+    <p>L’exploitant déclare relever de la franchise en base de TVA ; sa situation fiscale effective
+      reste à confirmer avant l’ouverture de la facturation. Si ce régime est applicable, aucune TVA ne sera
+      ajoutée aux prix indiqués et la facture portera la mention « TVA non applicable, article 293 B du CGI ». Une proposition commerciale écrite et acceptée prévaut sur cette grille
+      pour le client concerné.</p>
 
     <h2>5. Période pilote</h2>
     <p>Chaque commerce inscrit bénéficie d’une période pilote gratuite d’environ {BILLING_TRIAL_DAYS} jours.
