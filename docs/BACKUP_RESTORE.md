@@ -53,7 +53,7 @@ Sur une PR, le job `restore-drill-selftest` répète la chaîne sans aucun accè
 
 ## Appliquer les migrations en production
 
-Action humaine, jamais automatique. Même procédure que pour la `023` (#134) :
+Action humaine, jamais automatique. Analyse détaillée de 024 à 033, constat en lecture seule (`ops/migrations/check-024-033.sql`) et plan complet : [`docs/MIGRATIONS_024_033.md`](MIGRATIONS_024_033.md). Même procédure que pour la `023` (#134) :
 
 1. vérifier sur le dernier run `database-backup` de `main` que `backup-restore` est vert et que le manifeste indique `migration_rehearsal=success` et `db_verify_after_migrations=success` : les migrations en attente ont été répétées sur une copie des données de production de la veille ;
 2. créer une branche Neon temporaire depuis la production, y lancer `npm run db:setup` puis `npm run db:verify` ;
