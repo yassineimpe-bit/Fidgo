@@ -1,30 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const ALLOWED_ADVISORIES = new Map([
-  [
-    "GHSA-86w9-cpqp-85rv",
-    {
-      packageName: "node-forge",
-      severity: "high",
-      cve: "CVE-2026-85393",
-      introducedOn: "2026-10-02",
-      reviewThrough: "2026-10-16",
-      removeWhen: "A corrected node-forge version is published and validated through passkit-generator.",
-    },
-  ],
-  [
-    "GHSA-vfj7-8cjw-p6xm",
-    {
-      packageName: "braces",
-      severity: "high",
-      cve: "CVE-2026-93687",
-      introducedOn: "2026-10-03",
-      reviewThrough: "2026-10-16",
-      removeWhen: "A corrected braces version is published and validated through the lint tooling.",
-    },
-  ],
-]);
+// Aucune exception active. Les deux exceptions de 2026-10 ont été retirées le
+// 2026-11-26 : node-forge corrigé en 1.4.4 (GHSA-86w9-cpqp-85rv) et advisory
+// braces GHSA-vfj7-8cjw-p6xm retirée par GitHub le 2026-10-23. Toute nouvelle
+// exception exige une entrée ici et dans docs/NPM_AUDIT_EXCEPTIONS.md, avec
+// identifiant exact, paquet, sévérité et date de revue (expiration automatique).
+export const ALLOWED_ADVISORIES = new Map();
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
@@ -61,12 +43,12 @@ function collectAdvisories(packageName, vulnerabilities, visiting = new Set()) {
   return { advisories, unresolved };
 }
 
-export function evaluateAuditReport(report, { now = new Date() } = {}) {
+export function evaluateAuditReport(report, { now = new Date(), exceptions = ALLOWED_ADVISORIES } = {}) {
   const failures = [];
   const allowed = [];
   const today = utcDay(now);
 
-  for (const [id, exception] of ALLOWED_ADVISORIES) {
+  for (const [id, exception] of exceptions) {
     if (today > exception.reviewThrough) failures.push(`${id} exception expired after ${exception.reviewThrough}`);
   }
 
@@ -97,7 +79,7 @@ export function evaluateAuditReport(report, { now = new Date() } = {}) {
     for (const advisory of blockingAdvisories) {
       const severity = String(advisory.severity || "").toLowerCase();
       const id = advisoryId(advisory.url);
-      const exception = id ? ALLOWED_ADVISORIES.get(id) : null;
+      const exception = id ? exceptions.get(id) : null;
       const exactMatch = exception
         && severity === exception.severity
         && advisory.name === exception.packageName
@@ -111,7 +93,7 @@ export function evaluateAuditReport(report, { now = new Date() } = {}) {
   }
 
   for (const id of seenAllowed) {
-    const exception = ALLOWED_ADVISORIES.get(id);
+    const exception = exceptions.get(id);
     allowed.push({ id, cve: exception.cve, reviewThrough: exception.reviewThrough });
   }
 
