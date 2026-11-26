@@ -1,26 +1,24 @@
 # Exceptions temporaires de l’audit npm
 
-## GHSA-86w9-cpqp-85rv — CVE-2026-85393
+**Aucune exception active depuis le 2026-11-26.** `npm run security:audit` rejette toute advisory HIGH ou CRITICAL, directe ou transitive. Le niveau d’audit, le traitement des erreurs et l’expiration automatique des exceptions sont inchangés.
 
-- Dépendance : `node-forge`, introduite transitivement par `passkit-generator`.
-- Sévérité : HIGH.
-- Introduction de l’exception : 2026-10-02.
-- Revue obligatoire au plus tard : 2026-10-16 inclus.
-- Justification : Retiko utilise ce chemin pour signer les PKPass. Le défaut touche la vérification RSA PKCS#1 v1.5 et aucun chemin Retiko actuel ne vérifie une signature fournie par un attaquant avec `node-forge`.
-- Portée de cette exception : seul l’identifiant exact `GHSA-86w9-cpqp-85rv`, déclaré HIGH sur le paquet `node-forge`, est accepté.
-- Suppression : retirer l’exception dès qu’une version corrigée de `node-forge` est publiée et validée via `passkit-generator`.
+Une nouvelle exception exige :
 
-## GHSA-vfj7-8cjw-p6xm — CVE-2026-93687 (#254)
+- une entrée dans `ALLOWED_ADVISORIES` (`scripts/audit-dependencies.mjs`) avec l’identifiant GHSA exact, le paquet, la sévérité, la CVE, la date d’introduction et une date de revue courte ;
+- une section ici : chaîne de dépendances réelle, atteignabilité vérifiée, absence de version corrigée, condition de retrait ;
+- une validation humaine.
 
-- Sévérité : HIGH, épuisement de pile sur des motifs d’accolades profondément imbriqués.
-- Introduction : 2026-10-03 ; revue/expiration : 2026-10-16 inclus.
-- Classification : **DEV-ONLY NON REACHABLE**, pour le main `1dba4213069b4978cce29b292bf26fdcb3f90fcd`.
-- Chaîne réelle : `eslint-config-next@15.5.24` → `@next/eslint-plugin-next@15.5.24` → `fast-glob@3.3.1` → `micromatch@4.0.8` → `braces@3.0.3`. Chaque maillon est `dev: true` ; `npm ls braces micromatch fast-glob --omit=dev --all` est vide.
-- Atteignabilité vérifiée au-delà du lockfile : aucun import de ces trois paquets ni lancement de lint depuis `app`, `lib`, `components`, le middleware ou les scripts applicatifs. Le plugin appelle `fast-glob.globSync` dans `dist/utils/get-root-dirs.js` avec le répertoire de travail ou `context.settings.next.rootDir` provenant de la configuration ESLint du dépôt. Il ne reçoit pas de requête HTTP, de donnée client/commerçant/staff ni de fichier uploadé comme motif.
-- Artefact production : les **106** traces `.next/**/*.nft.json` du build de main ne contiennent aucun des quatre paquets de cette chaîne. La recherche dans le runtime Next installé ne trouve aucun import de `braces`, `micromatch` ou `fast-glob` ; son `compiled/picomatch` est un parseur distinct, pas cette dépendance. Aucun chemin d’entrée utilisateur vers le paquet vulnérable n’est démontré en production.
-- Upstream revérifié le 2026-10-03 : [advisory GitHub](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), [rapport upstream #70](https://github.com/micromatch/braces/issues/70) et [registre npm braces](https://registry.npmjs.org/braces). Versions affectées ≤ 3.0.3, aucune version corrigée publiée ; latest = 3.0.3.
-- Mises à jour de parents vérifiées dans le registre npm : `micromatch@4.0.8` (latest) garde `braces:^3.0.3` ; `fast-glob@3.3.3` garde `micromatch:^4.0.8` ; `@next/eslint-plugin-next@15.5.27` et latest `16.3.8` gardent `fast-glob:3.3.1`. Ces mises à jour n’éliminent pas la chaîne. La suggestion automatique de npm de rétrograder `eslint-config-next` vers 14.2.35 est un changement majeur, pas une correction compatible validée pour Next 15. Aucun override ou changement de dépendance appliqué.
-- Portée : uniquement `GHSA-vfj7-8cjw-p6xm`, avec URL canonique exacte, paquet `braces` et sévérité HIGH. Cette décision concerne le déploiement actuel, pas tous les usages possibles de braces ; revalider si une dépendance ou un chemin runtime change.
-- Suppression : retirer l’exception dès qu’une version corrigée est publiée et validée via l’outillage de lint.
+Une exception n’est jamais prolongée automatiquement. À expiration, la CI échoue, même si aucun nouvel avis n’est apparu.
 
-Seuls ces **deux** identifiants exacts sont acceptés temporairement. Tout autre HIGH et tout CRITICAL font échouer la CI, y compris sur ces mêmes paquets. Le gate expire automatiquement après le 2026-10-16 et échoue alors même si aucun nouvel avis n’est apparu. Le niveau d’audit et le traitement des erreurs restent inchangés.
+## Historique
+
+### GHSA-86w9-cpqp-85rv — CVE-2026-85393 (`node-forge`) — retirée le 2026-11-26
+
+- Introduite le 2026-10-02, expirée le 2026-10-16.
+- Chemin : `passkit-generator` → `node-forge` (signature des PKPass).
+- Retrait : `node-forge` 1.4.4 (publiée le 2026-11-23) corrige cette advisory et les sept autres HIGH apparues depuis : GHSA-5x38-2vff-x55p, GHSA-6qrw-m8cv-hcxf, GHSA-7wch-p9px-956x, GHSA-8hrf-8g6f-7xwp, GHSA-hqq3-7jhf-c5jx, GHSA-jc66-7q78-782g, GHSA-rhr8-3pm8-cq29. La version est compatible avec la plage `^1.4.0` de `passkit-generator` 3.6.0.
+
+### GHSA-vfj7-8cjw-p6xm — CVE-2026-93687 (`braces`, #254) — retirée le 2026-11-26
+
+- Introduite le 2026-10-03, expirée le 2026-10-16, classée DEV-ONLY NON REACHABLE (chaîne `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`).
+- Retrait : **l’advisory a été retirée par GitHub le 2026-10-23** (« not a practically exploitable vulnerability »). `npm audit` ne la signale plus pour `braces@3.0.3` ; aucune version corrigée n’existe et aucune n’est nécessaire.
