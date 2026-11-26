@@ -145,6 +145,46 @@ describe("Google Wallet loyalty object", () => {
 });
 
 describe("Google Wallet loyalty class", () => {
+  it("reuses concurrently created class and object after HTTP 409", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 409 }))
+      .mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 409 }))
+      .mockResolvedValueOnce(ok());
+    vi.stubGlobal("fetch", fetchMock);
+    const { ensureGoogleWalletObject } = await import("../lib/google-wallet");
+    await expect(ensureGoogleWalletObject(fixtureCard)).resolves.toEqual({
+      classId: "1234567890123456789.fidgo_le-retiko-test",
+      objectId: `1234567890123456789.card_${fixtureCard.cardId}`,
+    });
+    expect(fetchMock.mock.calls[2][0]).toContain("/loyaltyClass/1234567890123456789.fidgo_le-retiko-test");
+    expect(fetchMock.mock.calls[5][1].method).toBe("PATCH");
+    expect(JSON.parse(fetchMock.mock.calls[5][1].body).barcode.value).toBe(`LOY1:${fixtureCard.token}`);
+  });
+
+  it("does not treat a class conflict as success when the exact class cannot be retrieved", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 409 }))
+      .mockResolvedValueOnce(new Response(null, { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { ensureGoogleWalletObject } = await import("../lib/google-wallet");
+    await expect(ensureGoogleWalletObject(fixtureCard)).rejects.toMatchObject({code:"GOOGLE_CLASS_GET_403"});
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps a failed patch after an object conflict visible and retryable", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(ok())
+      .mockResolvedValueOnce(new Response(null, { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 409 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { ensureGoogleWalletObject } = await import("../lib/google-wallet");
+    await expect(ensureGoogleWalletObject(fixtureCard)).rejects.toMatchObject({code:"GOOGLE_OBJECT_PATCH_503"});
+  });
+
   it("creates one compliant merchant class with stable identifiers and branding", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 404 }))
