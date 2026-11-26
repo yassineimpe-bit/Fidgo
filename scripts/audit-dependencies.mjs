@@ -1,30 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const ALLOWED_ADVISORIES = new Map([
-  [
-    "GHSA-86w9-cpqp-85rv",
-    {
-      packageName: "node-forge",
-      severity: "high",
-      cve: "CVE-2026-85393",
-      introducedOn: "2026-10-02",
-      reviewThrough: "2026-10-16",
-      removeWhen: "A corrected node-forge version is published and validated through passkit-generator.",
-    },
-  ],
-  [
-    "GHSA-vfj7-8cjw-p6xm",
-    {
-      packageName: "braces",
-      severity: "high",
-      cve: "CVE-2026-93687",
-      introducedOn: "2026-10-03",
-      reviewThrough: "2026-10-16",
-      removeWhen: "A corrected braces version is published and validated through the lint tooling.",
-    },
-  ],
-]);
+// Les deux exceptions historiques ont été retirées après mise à jour des dépendances.
+// Aucun avis HIGH/CRITICAL, même précédemment accepté, ne peut passer ce gate.
+const ALLOWED_ADVISORIES = new Map();
 
 const BLOCKING_SEVERITIES = new Set(["high", "critical"]);
 
