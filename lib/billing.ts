@@ -270,16 +270,12 @@ function stripeId(value: string | { id: string } | Stripe.DeletedCustomer | null
   return typeof value === "string" ? value : value.id;
 }
 
-function eventIsNewer(event: Stripe.Event, lastCreated: unknown, lastId: unknown) {
-  if (lastCreated === null || lastCreated === undefined) return true;
-  const previousCreated = Number(lastCreated);
-  if (event.created !== previousCreated) return event.created > previousCreated;
-  return event.id > String(lastId || "");
-}
-
 export type StripeEventApplyResult = "applied" | "duplicate" | "ignored";
 
-export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEventApplyResult> {
+export async function applyStripeEvent(
+  event: Stripe.Event,
+  reconciliationClient?: Pick<Stripe, "subscriptions">,
+): Promise<StripeEventApplyResult> {
   return sql.begin(async (tx) => {
     const inserted = await tx`
       insert into stripe_webhook_events (event_id, event_type, event_created)
@@ -344,11 +340,11 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
       && event.type !== "customer.subscription.deleted"
     ) return "ignored" as const;
 
-    const subscription = event.data.object as Stripe.Subscription;
+    let subscription = event.data.object as Stripe.Subscription;
     const metadataId = subscription.metadata?.establishmentId || null;
     const customerId = stripeId(subscription.customer);
-    const firstItem = subscription.items.data[0];
-    const plan = planFromStripePriceId(firstItem?.price?.id);
+    let firstItem = subscription.items.data[0];
+    let plan = planFromStripePriceId(firstItem?.price?.id);
     if (!customerId || !plan) throw new Error("STRIPE_PRICE_OR_CUSTOMER_UNKNOWN");
 
     const byExternal = await tx`
@@ -370,13 +366,30 @@ export async function applyStripeEvent(event: Stripe.Event): Promise<StripeEvent
     }
 
     const establishmentId = String(target.establishment_id);
-    if (!eventIsNewer(event, target.stripe_last_event_created, target.stripe_last_event_id)) {
+    const lastCreated = target.stripe_last_event_created;
+    if (lastCreated != null && event.created < Number(lastCreated)) {
       await tx`
         update stripe_webhook_events
         set establishment_id = ${establishmentId}, external_subscription_id = ${subscription.id}
         where event_id = ${event.id}
       `;
       return "ignored" as const;
+    }
+
+    // Stripe timestamps have second precision; event IDs carry no ordering.
+    // Keep the row lock while reconciling an ambiguous pair against Stripe.
+    // A failed GET rolls back the event receipt as well, allowing a retry.
+    if (lastCreated != null && event.created === Number(lastCreated)) {
+      const current = await (reconciliationClient ?? stripeClient()).subscriptions.retrieve(subscription.id);
+      if (current.id !== subscription.id
+        || stripeId(current.customer) !== customerId
+        || (current.metadata?.establishmentId && current.metadata.establishmentId !== establishmentId)) {
+        throw new Error("STRIPE_TENANT_MISMATCH");
+      }
+      subscription = current;
+      firstItem = subscription.items.data[0];
+      plan = planFromStripePriceId(firstItem?.price?.id);
+      if (!plan) throw new Error("STRIPE_PRICE_OR_CUSTOMER_UNKNOWN");
     }
 
     const currentPeriodEnd = firstItem?.current_period_end
