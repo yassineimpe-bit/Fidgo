@@ -96,8 +96,41 @@ export function restoreVerdict(before, after, restored) {
   return { status: differences.length ? "mismatch" : "match", differences };
 }
 
+/**
+ * Verdict de la répétition des migrations sur la copie restaurée. Les
+ * migrations du dépôt peuvent ajouter des tables (vides), jamais retirer une
+ * table ni changer le nombre de lignes d'une table existante, les soldes ou le
+ * ledger agrégé.
+ */
+export function upgradeVerdict(before, after) {
+  const differences = [];
+  for (const table of Object.keys(before.rows).sort()) {
+    const a = before.rows[table];
+    const b = after.rows[table];
+    if (a !== b) differences.push(`table ${table} : ${a} ligne(s) avant migration, ${b ?? "absente"} après`);
+  }
+  const left = JSON.stringify(before.aggregates);
+  const right = JSON.stringify(after.aggregates);
+  if (left !== right) differences.push(`agrégats modifiés par les migrations : avant ${left}, après ${right}`);
+  const addedTables = Object.keys(after.rows).filter((table) => before.rows[table] === undefined).sort();
+  return { status: differences.length ? "mismatch" : "match", differences, addedTables };
+}
+
 async function main() {
   const args = process.argv.slice(2);
+  if (args[0] === "--compare-upgrade") {
+    const [before, after] = await Promise.all(args.slice(1, 3).map(async (file) => JSON.parse(await fs.readFile(file, "utf8"))));
+    const verdict = upgradeVerdict(before, after);
+    if (verdict.status === "match") {
+      const added = verdict.addedTables.length ? verdict.addedTables.join(", ") : "aucune";
+      console.log(`Migrations répétées sans perte : ${Object.keys(before.rows).length} tables inchangées, soldes et ledger identiques ; tables ajoutées : ${added}.`);
+      return;
+    }
+    console.log("::error::Les migrations du dépôt modifient les données de la copie restaurée.");
+    for (const line of verdict.differences) console.log(`  - ${line}`);
+    process.exitCode = 1;
+    return;
+  }
   if (args[0] === "--compare") {
     const [before, after, restored] = await Promise.all(args.slice(1, 4).map(async (file) => JSON.parse(await fs.readFile(file, "utf8"))));
     const verdict = restoreVerdict(before, after, restored);
@@ -123,6 +156,13 @@ async function main() {
   const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false, onnotice: () => {} });
   try {
     console.log(JSON.stringify(await readFingerprint(sql), null, 2));
+  } catch (error) {
+    // Code seul (ECONNREFUSED, ENOTFOUND, 28P01, CONNECT_TIMEOUT…) : le message
+    // et la pile peuvent contenir l'hôte de la base, que le masque GitHub de
+    // l'URL complète ne couvre pas.
+    const code = typeof error === "object" && error && "code" in error ? String(error.code) : "UNKNOWN";
+    console.error(`::error::Lecture de l'empreinte impossible (code ${code}).`);
+    process.exitCode = 1;
   } finally {
     await sql.end({ timeout: 5 });
   }

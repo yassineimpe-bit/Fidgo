@@ -10,7 +10,12 @@ on:
       - ".github/workflows/database-backup.yml"
       - "app/api/internal/backup-credentials/**"
       - "lib/backup-oidc.ts"
+      - "lib/oidc-credential-broker.ts"
       - "ops/backup/**"
+      - "db/**"
+      - "scripts/db-setup.mjs"
+      - "scripts/db-fingerprint.mjs"
+      - "scripts/verify-db-integrity.mjs"
       - "scripts/restore-backup.sh"
       - "docs/BACKUP_RESTORE.md"
   pull_request:
@@ -19,17 +24,30 @@ on:
       - ".github/workflows/database-backup.yml"
       - "app/api/internal/backup-credentials/**"
       - "lib/backup-oidc.ts"
+      - "lib/oidc-credential-broker.ts"
       - "ops/backup/**"
+      - "db/**"
+      - "scripts/db-setup.mjs"
+      - "scripts/db-fingerprint.mjs"
+      - "scripts/verify-db-integrity.mjs"
       - "scripts/restore-backup.sh"
       - "docs/BACKUP_RESTORE.md"
       - "tests/backup-oidc.test.ts"
+      - "tests/db-fingerprint.test.ts"
+      - "tests/oidc-workflow-boundary.test.ts"
 
 permissions:
   contents: read
 
 concurrency:
-  group: retiko-database-backup
+  group: retiko-database-backup-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
   cancel-in-progress: false
+
+env:
+  # Image des clients pg_dump / pg_restore, épinglée par digest (#206) : c'est
+  # elle qui reçoit le credential de production. postgres:17.12, index
+  # multi-architecture vérifié sur Docker Hub le 2026-11-26.
+  PG_IMAGE: postgres:17.12@sha256:87c8b42f423b45d5247e6aa8fdb2e7762fec164c68a50fe3eb07e7bfcaf4dbcf
 
 jobs:
   config-check:
@@ -53,6 +71,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      # Résultat de db:verify sur la copie restaurée telle quelle, c'est-à-dire
+      # sur le schéma de production au moment du dump (lu par production-schema).
+      source_db_verify: ${{ steps.verify.outcome }}
 
     services:
       postgres:
@@ -93,7 +115,11 @@ jobs:
             core.setSecret(token);
             core.setOutput("token", token);
 
-      - name: Exchange OIDC identity for short-lived backup access
+      # Échange OIDC, empreintes de la source et pg_dump dans un seul step
+      # (#206) : le credential de production reste une variable locale de ce
+      # shell, n'est jamais écrit dans GITHUB_ENV ni GITHUB_OUTPUT et n'existe
+      # plus dans aucun step suivant (restauration, migrations, upload).
+      - name: Exchange OIDC identity and create PostgreSQL 17 logical backup
         shell: bash
         env:
           RETIKO_BACKUP_OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
@@ -104,7 +130,12 @@ jobs:
 
           success=false
           for attempt in $(seq 1 24); do
-            code=$(curl --silent --show-error --max-time 15               --output "$response_file"               --write-out '%{http_code}'               --request POST               --header "Authorization: Bearer $RETIKO_BACKUP_OIDC_TOKEN"               "$BACKUP_CREDENTIAL_URL" || true)
+            code=$(curl --silent --show-error --max-time 15 \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer $RETIKO_BACKUP_OIDC_TOKEN" \
+              "$BACKUP_CREDENTIAL_URL" || true)
 
             if [ "$code" = "200" ]; then
               success=true
@@ -116,26 +147,43 @@ jobs:
           done
 
           if [ "$success" != "true" ]; then
-            echo "::error::Retiko backup credential broker did not become ready."
+            # Les tentatives couvrent aussi 401/403 : sur un push, l'ancien
+            # déploiement peut refuser le temps que le nouveau broker soit en ligne.
+            case "$code" in
+              401) reason="jeton OIDC refusé (signature, issuer ou audience retiko-backup)" ;;
+              403) reason="claims OIDC refusés (dépôt, branche main, workflow, environnement production ou événement)" ;;
+              503) reason="DATABASE_URL absent côté Retiko (BACKUP_CREDENTIAL_UNAVAILABLE)" ;;
+              *) reason="broker injoignable ou pas encore déployé" ;;
+            esac
+            echo "::error::Retiko backup credential broker did not become ready (dernier HTTP $code : $reason)."
             exit 1
           fi
 
           database_url=$(jq -er '.databaseUrl | select(type == "string" and length > 0)' "$response_file")
           echo "::add-mask::$database_url"
-          printf 'SOURCE_DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
+          rm -f "$response_file"
 
-      - name: Create PostgreSQL 17 logical backup
-        shell: bash
-        run: |
-          set -euo pipefail
           mkdir -p backup-output
 
           # Empreinte agrégée de la source (aucune donnée personnelle), avant
           # et après le dump : si elle n'a pas bougé, la base restaurée doit
           # lui être identique.
-          DATABASE_URL="$SOURCE_DATABASE_URL" node scripts/db-fingerprint.mjs > backup-output/fingerprint-before.json
+          DATABASE_URL="$database_url" node scripts/db-fingerprint.mjs > backup-output/fingerprint-before.json
 
-          docker run --rm --network host             -v "$PWD/backup-output:/backup"             -e SOURCE_DATABASE_URL             postgres:17             sh -ceu 'pg_dump "$SOURCE_DATABASE_URL"               --format=custom               --compress=9               --exclude-extension=pg_session_jwt               --no-owner               --no-privileges               --file=/backup/retiko.dump'
+          SOURCE_DATABASE_URL="$database_url" docker run --rm --network host \
+            -v "$PWD/backup-output:/backup" \
+            -e SOURCE_DATABASE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'pg_dump "$SOURCE_DATABASE_URL" \
+              --format=custom \
+              --compress=9 \
+              --exclude-extension=pg_session_jwt \
+              --no-owner \
+              --no-privileges \
+              --file=/backup/retiko.dump'
+
+          DATABASE_URL="$database_url" node scripts/db-fingerprint.mjs > backup-output/fingerprint-after.json
+          unset database_url
 
           test -s backup-output/retiko.dump
           size=$(stat -c%s backup-output/retiko.dump)
@@ -144,25 +192,41 @@ jobs:
             exit 1
           }
 
-          docker run --rm             -v "$PWD/backup-output:/backup:ro"             postgres:17             pg_restore --list /backup/retiko.dump >/dev/null
-
-          DATABASE_URL="$SOURCE_DATABASE_URL" node scripts/db-fingerprint.mjs > backup-output/fingerprint-after.json
+          docker run --rm \
+            -v "$PWD/backup-output:/backup:ro" \
+            "$PG_IMAGE" \
+            pg_restore --list /backup/retiko.dump >/dev/null
 
           echo "Backup archive is readable ($size bytes)."
 
-      # Le restore drill ne conditionne plus la conservation du backup : un
-      # échec de restauration, d'intégrité ou d'empreinte rend le job rouge
-      # (dernière étape) mais l'archive chiffrée est quand même conservée.
+      # Le restore drill ne conditionne pas la conservation du backup : un
+      # échec de restauration, d'empreinte, de migration ou d'intégrité rend le
+      # job rouge (dernière étape) mais l'archive chiffrée est quand même
+      # conservée.
       - name: Restore backup into isolated PostgreSQL 17
         id: restore
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
 
-          docker run --rm --network host             -v "$PWD/backup-output:/backup:ro"             -e RESTORE_DATABASE_URL             postgres:17             sh -ceu 'pg_restore               --exit-on-error               --no-owner               --no-privileges               --dbname "$RESTORE_DATABASE_URL"               /backup/retiko.dump'
+          docker run --rm --network host \
+            -v "$PWD/backup-output:/backup:ro" \
+            -e RESTORE_DATABASE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'pg_restore \
+              --exit-on-error \
+              --no-owner \
+              --no-privileges \
+              --dbname "$RESTORE_DATABASE_URL" \
+              /backup/retiko.dump'
 
-      - name: Verify restored Retiko database integrity
+      # db:verify sur la copie telle que la production l'a produite : un échec
+      # ici signale un schéma de production en retard sur main ou une
+      # incohérence de données. Il est reporté par le job production-schema ;
+      # une incohérence de données fait aussi échouer verify_migrated.
+      - name: Verify production schema and integrity on the restored copy
         id: verify
         if: steps.restore.outcome == 'success'
         continue-on-error: true
@@ -185,6 +249,40 @@ jobs:
             backup-output/fingerprint-after.json \
             backup-output/fingerprint-restored.json
 
+      # Répétition, sur la copie jetable uniquement, de ce qu'exige une reprise
+      # réelle : amener la sauvegarde au schéma de main (db:setup rejoue
+      # schema.sql et toutes les migrations), sans perte de ligne ni
+      # modification du ledger. C'est aussi la répétition des migrations en
+      # attente sur des données de production, avant de les appliquer.
+      - name: Rehearse repository migrations on the restored copy
+        id: migrate
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
+          case "$DATABASE_URL" in
+            postgres://*@127.0.0.1:5432/*) ;;
+            *) echo "::error::La répétition des migrations ne s'exécute que sur la base jetable du runner."; exit 1 ;;
+          esac
+          node scripts/db-fingerprint.mjs > backup-output/fingerprint-pre-migration.json
+          npm run db:setup
+          node scripts/db-fingerprint.mjs > backup-output/fingerprint-migrated.json
+          node scripts/db-fingerprint.mjs --compare-upgrade \
+            backup-output/fingerprint-pre-migration.json \
+            backup-output/fingerprint-migrated.json
+
+      - name: Verify migrated copy integrity
+        id: verify_migrated
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: npm run db:verify
+
       - name: Encrypt backup for artifact storage
         id: encrypt
         shell: bash
@@ -192,13 +290,21 @@ jobs:
           RESTORE_OUTCOME: ${{ steps.restore.outcome }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
           FINGERPRINT_OUTCOME: ${{ steps.fingerprint.outcome }}
+          MIGRATE_OUTCOME: ${{ steps.migrate.outcome }}
+          VERIFY_MIGRATED_OUTCOME: ${{ steps.verify_migrated.outcome }}
         run: |
           set -euo pipefail
 
           stamp=$(date -u +'%Y%m%dT%H%M%SZ')
           encrypted="backup-output/retiko-postgres-${stamp}.dump.cms"
 
-          openssl cms -encrypt             -binary             -aes256             -outform DER             -in backup-output/retiko.dump             -out "$encrypted"             ops/backup/retiko-backup-public.crt
+          openssl cms -encrypt \
+            -binary \
+            -aes256 \
+            -outform DER \
+            -in backup-output/retiko.dump \
+            -out "$encrypted" \
+            ops/backup/retiko-backup-public.crt
 
           openssl cms -cmsout -inform DER -in "$encrypted" -print >/dev/null
 
@@ -210,9 +316,13 @@ jobs:
           Retiko PostgreSQL backup
           created_at_utc=${stamp}
           postgres_major=17
+          pg_client_image=${PG_IMAGE}
+          source_sha=${GITHUB_SHA}
           restore_test=${RESTORE_OUTCOME}
           db_verify=${VERIFY_OUTCOME}
           fingerprint=${FINGERPRINT_OUTCOME}
+          migration_rehearsal=${MIGRATE_OUTCOME}
+          db_verify_after_migrations=${VERIFY_MIGRATED_OUTCOME}
           plaintext_sha256=${plain_sha}
           encrypted_sha256=${encrypted_sha}
           encrypted_size_bytes=${encrypted_size}
@@ -240,13 +350,218 @@ jobs:
           retention-days: 14
           compression-level: 0
 
+      # Le backup est rouge s'il n'est pas restaurable à l'identique, ou si la
+      # copie restaurée ne peut pas être amenée au schéma de main avec une
+      # intégrité vérifiée. Le retard de schéma de la production seule est
+      # reporté par le job production-schema, jamais ignoré.
       - name: Fail when the restore drill did not pass
-        if: steps.restore.outcome != 'success' || steps.verify.outcome != 'success' || steps.fingerprint.outcome != 'success'
+        if: steps.restore.outcome != 'success' || steps.fingerprint.outcome != 'success' || steps.migrate.outcome != 'success' || steps.verify_migrated.outcome != 'success'
         shell: bash
         env:
           RESTORE_OUTCOME: ${{ steps.restore.outcome }}
-          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
           FINGERPRINT_OUTCOME: ${{ steps.fingerprint.outcome }}
+          MIGRATE_OUTCOME: ${{ steps.migrate.outcome }}
+          VERIFY_MIGRATED_OUTCOME: ${{ steps.verify_migrated.outcome }}
         run: |
-          echo "::error::Restore drill en échec (restauration=${RESTORE_OUTCOME}, db:verify=${VERIFY_OUTCOME}, empreinte=${FINGERPRINT_OUTCOME}). Le backup chiffré a été conservé ; voir les étapes ci-dessus."
+          echo "::error::Restore drill en échec (restauration=${RESTORE_OUTCOME}, empreinte=${FINGERPRINT_OUTCOME}, migrations=${MIGRATE_OUTCOME:-non exécutées}, db:verify après migrations=${VERIFY_MIGRATED_OUTCOME:-non exécuté}). Le backup chiffré a été conservé ; voir les étapes ci-dessus."
           exit 1
+
+      # Même si une étape antérieure a échoué (chiffrement compris), aucun dump
+      # en clair ne reste sur le runner.
+      - name: Remove plaintext backup from the runner
+        if: always()
+        shell: bash
+        run: |
+          rm -f backup-output/retiko.dump
+          test ! -e backup-output/retiko.dump
+
+  # Signal distinct : la base de production elle-même (copie restaurée telle
+  # quelle) passe-t-elle db:verify ? Rouge tant que des migrations de main n'y
+  # sont pas appliquées ou qu'une incohérence y existe. Aucun accès base.
+  production-schema:
+    needs: backup-restore
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report production schema conformity
+        shell: bash
+        env:
+          SOURCE_DB_VERIFY: ${{ needs.backup-restore.outputs.source_db_verify }}
+        run: |
+          case "${SOURCE_DB_VERIFY:-}" in
+            success)
+              echo "La copie restaurée de la production passe db:verify : schéma conforme à main."
+              ;;
+            failure)
+              echo "::error title=production-schema::La production ne passe pas db:verify (migrations de main non appliquées ou incohérence). Détail dans l'étape « Verify production schema and integrity on the restored copy » du job backup-restore ; procédure dans docs/BACKUP_RESTORE.md (Appliquer les migrations en production)."
+              exit 1
+              ;;
+            *)
+              echo "::error title=production-schema::Non évalué : le job backup-restore n'a pas atteint db:verify."
+              exit 1
+              ;;
+          esac
+
+  # Répétition du restore drill sur une PR, sans aucun accès à la production :
+  # source jetable, mêmes commandes de restauration, de migration et de
+  # vérification que backup-restore (un test unitaire impose l'égalité), puis
+  # chiffrement avec une clé éphémère et restauration par scripts/restore-backup.sh.
+  restore-drill-selftest:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: retiko_restore
+          POSTGRES_PASSWORD: retiko_restore
+          POSTGRES_DB: retiko_restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retiko_restore -d retiko_restore"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      source:
+        image: postgres:17
+        env:
+          POSTGRES_USER: retiko_source
+          POSTGRES_PASSWORD: retiko_source
+          POSTGRES_DB: retiko_source
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U retiko_source -d retiko_source"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      RESTORE_DATABASE_URL: postgres://retiko_restore:retiko_restore@127.0.0.1:5432/retiko_restore
+      SELFTEST_SOURCE_URL: postgres://retiko_source:retiko_source@127.0.0.1:5433/retiko_source
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build a disposable source database and dump it
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATABASE_URL="$SELFTEST_SOURCE_URL" npm run db:setup
+          DATABASE_URL="$SELFTEST_SOURCE_URL" npm run db:seed:demo
+          mkdir -p backup-output
+          DATABASE_URL="$SELFTEST_SOURCE_URL" node scripts/db-fingerprint.mjs > backup-output/fingerprint-before.json
+          docker run --rm --network host \
+            -v "$PWD/backup-output:/backup" \
+            -e SELFTEST_SOURCE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'pg_dump "$SELFTEST_SOURCE_URL" --format=custom --compress=9 --exclude-extension=pg_session_jwt --no-owner --no-privileges --file=/backup/retiko.dump'
+          cp backup-output/fingerprint-before.json backup-output/fingerprint-after.json
+          docker run --rm -v "$PWD/backup-output:/backup:ro" "$PG_IMAGE" pg_restore --list /backup/retiko.dump >/dev/null
+
+      - name: Restore backup into isolated PostgreSQL 17
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
+
+          docker run --rm --network host \
+            -v "$PWD/backup-output:/backup:ro" \
+            -e RESTORE_DATABASE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'pg_restore \
+              --exit-on-error \
+              --no-owner \
+              --no-privileges \
+              --dbname "$RESTORE_DATABASE_URL" \
+              /backup/retiko.dump'
+
+      - name: Verify production schema and integrity on the restored copy
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: npm run db:verify
+
+      - name: Compare restored fingerprint with source
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          node scripts/db-fingerprint.mjs > backup-output/fingerprint-restored.json
+          node scripts/db-fingerprint.mjs --compare \
+            backup-output/fingerprint-before.json \
+            backup-output/fingerprint-after.json \
+            backup-output/fingerprint-restored.json
+
+      - name: Rehearse repository migrations on the restored copy
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
+          case "$DATABASE_URL" in
+            postgres://*@127.0.0.1:5432/*) ;;
+            *) echo "::error::La répétition des migrations ne s'exécute que sur la base jetable du runner."; exit 1 ;;
+          esac
+          node scripts/db-fingerprint.mjs > backup-output/fingerprint-pre-migration.json
+          npm run db:setup
+          node scripts/db-fingerprint.mjs > backup-output/fingerprint-migrated.json
+          node scripts/db-fingerprint.mjs --compare-upgrade \
+            backup-output/fingerprint-pre-migration.json \
+            backup-output/fingerprint-migrated.json
+
+      - name: Verify migrated copy integrity
+        env:
+          DATABASE_URL: ${{ env.RESTORE_DATABASE_URL }}
+        run: npm run db:verify
+
+      - name: Encrypt with an ephemeral key and restore with the manual procedure
+        shell: bash
+        run: |
+          set -euo pipefail
+          keys=$(mktemp -d)
+          trap 'rm -rf "$keys"' EXIT
+          openssl req -x509 -newkey rsa:3072 -nodes -days 1 -subj "/CN=Retiko restore drill selftest" \
+            -keyout "$keys/private.pem" -out "$keys/public.crt" 2>/dev/null
+          openssl cms -encrypt -binary -aes256 -outform DER \
+            -in backup-output/retiko.dump -out backup-output/selftest.dump.cms "$keys/public.crt"
+          rm -f backup-output/retiko.dump
+          docker run --rm --network host -e RESTORE_DATABASE_URL "$PG_IMAGE" \
+            sh -ceu 'psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -c "create database retiko_manual"'
+          RETIKO_BACKUP_PUBLIC_CERT="$keys/public.crt" bash scripts/restore-backup.sh \
+            backup-output/selftest.dump.cms "$keys/private.pem" \
+            postgres://retiko_restore:retiko_restore@127.0.0.1:5432/retiko_manual
+          DATABASE_URL=postgres://retiko_restore:retiko_restore@127.0.0.1:5432/retiko_manual \
+            node scripts/db-fingerprint.mjs > backup-output/fingerprint-manual.json
+          node scripts/db-fingerprint.mjs --compare \
+            backup-output/fingerprint-before.json \
+            backup-output/fingerprint-after.json \
+            backup-output/fingerprint-manual.json
+          test ! -e backup-output/retiko.dump
+
+      - name: Reject a corrupted archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          head -c 4096 /dev/urandom > backup-output/corrupted.dump
+          if docker run --rm -v "$PWD/backup-output:/backup:ro" "$PG_IMAGE" pg_restore --list /backup/corrupted.dump >/dev/null 2>&1; then
+            echo "::error::pg_restore --list a accepté une archive corrompue."
+            exit 1
+          fi
+          echo "Archive corrompue refusée par pg_restore --list."
