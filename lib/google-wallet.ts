@@ -269,7 +269,13 @@ export async function ensureGoogleWalletObject(card: WalletCard) {
   const classGet = await walletFetch(`/loyaltyClass/${encodeURIComponent(classId)}`);
   if (classGet.status === 404) {
     const created = await walletFetch("/loyaltyClass", { method: "POST", body: JSON.stringify(classBody(card)) });
-    if (!created.ok) throw await googleWalletProviderError("GOOGLE_CLASS_CREATE", created, [card.token]);
+    if (created.status === 409) {
+      // Another request may create this stable merchant class after our GET.
+      const existing = await walletFetch(`/loyaltyClass/${encodeURIComponent(classId)}`);
+      if (!existing.ok) throw await googleWalletProviderError("GOOGLE_CLASS_GET", existing, [card.token]);
+    } else if (!created.ok) {
+      throw await googleWalletProviderError("GOOGLE_CLASS_CREATE", created, [card.token]);
+    }
   } else if (!classGet.ok) {
     throw await googleWalletProviderError("GOOGLE_CLASS_GET", classGet, [card.token]);
   }
@@ -277,7 +283,13 @@ export async function ensureGoogleWalletObject(card: WalletCard) {
   const objectGet = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`);
   if (objectGet.status === 404) {
     const created = await walletFetch("/loyaltyObject", { method: "POST", body: JSON.stringify(objectBody(card)) });
-    if (!created.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_CREATE", created, [card.token]);
+    if (created.status === 409) {
+      // Reuse the same card object and apply the current balance and token.
+      const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card)) });
+      if (!updated.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_PATCH", updated, [card.token]);
+    } else if (!created.ok) {
+      throw await googleWalletProviderError("GOOGLE_OBJECT_CREATE", created, [card.token]);
+    }
   } else if (objectGet.ok) {
     const updated = await walletFetch(`/loyaltyObject/${encodeURIComponent(objectId)}`, { method: "PATCH", body: JSON.stringify(objectBody(card)) });
     if (!updated.ok) throw await googleWalletProviderError("GOOGLE_OBJECT_PATCH", updated, [card.token]);
