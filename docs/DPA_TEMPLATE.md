@@ -107,6 +107,9 @@ Liste initiale à compléter avant signature :
 | Apple | Notifications APNs des passes Apple Wallet (push token) | Société américaine, [garanties à documenter] | Si activé |
 
 Le détail des données transmises à chaque prestataire figure dans `REGISTRE_TRAITEMENTS.md`.
+La revue des contrats publics et des preuves à obtenir figure dans `FOURNISSEURS_RGPD.md`.
+Stripe traite les données de facturation pour la relation propre Retiko/commerçant ;
+il ne doit pas être ajouté automatiquement comme sous-traitant du programme fidélité.
 
 Un prestataire non activé ne doit pas être présenté comme sous-traitant effectif.
 
@@ -137,7 +140,13 @@ Retiko fournit au Commerce les informations raisonnablement disponibles nécessa
 
 ## 13. Restitution, suppression et fin de contrat
 
-À la fin du service, selon les instructions du Commerce et les obligations applicables, Retiko restitue, supprime ou pseudonymise les données personnelles traitées pour son compte.
+À la fin du service, les modalités et délais de restitution ou de suppression
+sont arrêtés avec le Commerce selon ses instructions et les obligations applicables.
+Le produit permet l’export et l’effacement client par client et la suspension du
+commerce, mais pas l’anonymisation définitive automatisée du commerce et du staff.
+Toute opération complémentaire nécessite une procédure manuelle contrôlée.
+La pseudonymisation reste un traitement de données personnelles et ne remplace
+pas une suppression lorsqu’elle est requise.
 
 Les éléments strictement nécessaires à la sécurité, à la preuve d’opérations ou à l’intégrité du ledger peuvent être conservés sous une forme limitée ou pseudonymisée lorsque cela est justifié et documenté.
 
