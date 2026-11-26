@@ -12,6 +12,7 @@ on:
       - "lib/backup-oidc.ts"
       - "lib/oidc-credential-broker.ts"
       - "ops/backup/**"
+      - "ops/migrations/**"
       - "db/**"
       - "scripts/db-setup.mjs"
       - "scripts/db-fingerprint.mjs"
@@ -26,6 +27,7 @@ on:
       - "lib/backup-oidc.ts"
       - "lib/oidc-credential-broker.ts"
       - "ops/backup/**"
+      - "ops/migrations/**"
       - "db/**"
       - "scripts/db-setup.mjs"
       - "scripts/db-fingerprint.mjs"
@@ -248,6 +250,33 @@ jobs:
             backup-output/fingerprint-before.json \
             backup-output/fingerprint-after.json \
             backup-output/fingerprint-restored.json
+
+      # Constat en lecture seule de l'état des migrations 024 à 033 sur la copie
+      # restaurée, donc sur le schéma de production au moment du dump, avant
+      # toute migration. Aucun accès à la production ; résultat dans le résumé.
+      - name: Report production schema state on the restored copy
+        id: schema_report
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
+          docker run --rm --network host \
+            -v "$PWD/ops/migrations:/sql:ro" \
+            -e RESTORE_DATABASE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'psql "$RESTORE_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -P pager=off -A -F " | " -f /sql/check-024-033.sql' \
+            > backup-output/schema-state.txt
+          cat backup-output/schema-state.txt
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              echo "### État des migrations 024–033 (copie restaurée de la production, lecture seule)"
+              echo '```'
+              cat backup-output/schema-state.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       # Répétition, sur la copie jetable uniquement, de ce qu'exige une reprise
       # réelle : amener la sauvegarde au schéma de main (db:setup rejoue
@@ -507,6 +536,27 @@ jobs:
             backup-output/fingerprint-before.json \
             backup-output/fingerprint-after.json \
             backup-output/fingerprint-restored.json
+
+      - name: Report production schema state on the restored copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${SOURCE_DATABASE_URL:-}"
+          docker run --rm --network host \
+            -v "$PWD/ops/migrations:/sql:ro" \
+            -e RESTORE_DATABASE_URL \
+            "$PG_IMAGE" \
+            sh -ceu 'psql "$RESTORE_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -P pager=off -A -F " | " -f /sql/check-024-033.sql' \
+            > backup-output/schema-state.txt
+          cat backup-output/schema-state.txt
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              echo "### État des migrations 024–033 (copie restaurée de la production, lecture seule)"
+              echo '```'
+              cat backup-output/schema-state.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Rehearse repository migrations on the restored copy
         shell: bash

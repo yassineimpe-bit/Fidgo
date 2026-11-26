@@ -67,6 +67,10 @@ select precondition, doit_etre_zero from (values
                         'subscriptions', 'card_recovery_tokens', 'customers', 'staff_users', 'cards', 'transactions')))
 ) as checks(precondition, doit_etre_zero);
 
+-- Taille et nombre de tables du schéma public.
+select pg_size_pretty(pg_database_size(current_database())) as taille_base,
+       (select count(*) from pg_tables where schemaname = 'public') as tables_public;
+
 -- Volumétrie des tables modifiées (verrous ACCESS EXCLUSIVE brefs, validation
 -- des contraintes CHECK par balayage complet).
 select relname as table_modifiee, n_live_tup as lignes_estimees

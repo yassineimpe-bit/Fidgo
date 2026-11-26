@@ -21,6 +21,9 @@ La production compte 22 tables, exactement l'état « `schema.sql` + migrations 
 
 Pour trancher 026, 029, 030 et 033 sans rien écrire :
 
+- **automatiquement**, après le merge de #264 : chaque run de `database-backup` sur `main` exécute ce constat sur la copie restaurée de la production, avant toute migration. Le résultat est publié dans le résumé du job `backup-restore` (« État des migrations 024–033 ») : objets présents, préconditions, taille de la copie et nombre de tables. Aucun accès supplémentaire à la production n'est nécessaire.
+- **manuellement**, sur une branche Neon ou sur la production :
+
 ```bash
 psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f ops/migrations/check-024-033.sql
 ```

@@ -83,6 +83,20 @@ describe("OIDC workflow credential and destruction boundaries", () => {
       expect(migrate.run!.indexOf("--compare-upgrade")).toBeGreaterThan(migrate.run!.indexOf("npm run db:setup"));
     });
 
+    it("reports the production schema state read-only on the restored copy, before any migration", () => {
+      const ids = steps.map((step) => step.id);
+      const report = steps.find((step) => step.id === "schema_report")!;
+      expect(ids.indexOf("schema_report")).toBeGreaterThan(ids.indexOf("restore"));
+      expect(ids.indexOf("schema_report")).toBeLessThan(ids.indexOf("migrate"));
+      expect(report.run).toContain('test -z "${SOURCE_DATABASE_URL:-}"');
+      expect(report.run).toContain('psql "$RESTORE_DATABASE_URL"');
+      expect(report.run).toContain("/sql/check-024-033.sql");
+      const sql = readFileSync("ops/migrations/check-024-033.sql", "utf8");
+      expect(sql).toMatch(/begin transaction read only;/);
+      expect(sql.trim().endsWith("rollback;")).toBe(true);
+      expect(sql).not.toMatch(/^\s*(insert|update|delete|alter|create|drop|truncate|grant)\b/im);
+    });
+
     it("fails backup-restore on restore, fingerprint, migration or integrity, and reports production drift separately", () => {
       const fail = steps.find((step) => step.name === "Fail when the restore drill did not pass") as Step & { if: string };
       for (const id of ["restore", "fingerprint", "migrate", "verify_migrated"]) {
@@ -109,6 +123,7 @@ describe("OIDC workflow credential and destruction boundaries", () => {
         "Restore backup into isolated PostgreSQL 17",
         "Verify production schema and integrity on the restored copy",
         "Compare restored fingerprint with source",
+        "Report production schema state on the restored copy",
         "Rehearse repository migrations on the restored copy",
         "Verify migrated copy integrity",
       ]) {
