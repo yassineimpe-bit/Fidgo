@@ -1,4 +1,11 @@
-# Exceptions temporaires de l’audit npm
+# Historique des exceptions de l’audit npm
+
+**26/11/2026 : aucune exception active.** Les versions corrigées de Next.js
+(15.5.29), Joi (17.13.9), node-forge (1.4.4) et Vitest (4.1.12)
+remplacent les versions vulnérables. L’avis braces historique n’est plus
+retourné par le registre lors de cette vérification. Les deux entrées ont été
+retirées, sans prolongation ; les tests exigent désormais leur rejet si elles
+réapparaissent. Le texte ci-dessous est un historique, pas une autorisation.
 
 ## GHSA-86w9-cpqp-85rv — CVE-2026-85393
 
