@@ -8,38 +8,77 @@ La base de production est hébergée sur Neon PostgreSQL 17. Le plan Neon actuel
 
 ## Politique actuelle
 
-Le workflow `.github/workflows/database-backup.yml` s'exécute chaque jour à **03:17 UTC**, après le job de rétention de données.
+Le workflow `.github/workflows/database-backup.yml` s'exécute chaque jour à **03:17 UTC** (GitHub retarde souvent les tâches planifiées : de 08:00 à 13:50 UTC observé en octobre–novembre 2026), à chaque `push` sur `main` qui touche la chaîne de backup, le schéma ou les migrations, et à la demande (`workflow_dispatch`).
 
-Il effectue dans cet ordre :
+Job `backup-restore`, dans cet ordre :
 
-1. GitHub Actions demande un jeton OIDC signé pour le workflow de backup sur `main` ;\n2. Retiko vérifie cryptographiquement le dépôt, le workflow, la branche, l'environnement et le type d'événement avant de remettre la connexion PostgreSQL au runner ;
-2. empreinte agrégée de la source (`scripts/db-fingerprint.mjs`), `pg_dump` PostgreSQL 17 au format custom, puis seconde empreinte de la source ;
+1. GitHub Actions demande un jeton OIDC signé pour le workflow de backup sur `main` ;
+2. **un seul step** échange ce jeton contre la connexion PostgreSQL (Retiko vérifie dépôt, workflow, branche, environnement et type d'événement), lit l'empreinte agrégée de la source (`scripts/db-fingerprint.mjs`), lance `pg_dump` PostgreSQL 17, relit l'empreinte, puis oublie le credential (#206) : il n'est jamais écrit dans `GITHUB_ENV` ni `GITHUB_OUTPUT` et n'existe dans aucun step suivant ;
 3. validation de l'archive avec `pg_restore --list` ;
 4. restauration intégrale dans une PostgreSQL 17 jetable du runner ;
-5. exécution de `npm run db:verify` sur la base restaurée ;
-6. comparaison de l'empreinte de la base restaurée avec celle de la source ;
-7. chiffrement de l'archive avec le certificat public Retiko ;
-8. suppression du dump en clair ;
-9. upload du backup chiffré comme artifact GitHub ;
-10. échec explicite du job si l'étape 4, 5 ou 6 a échoué ;
-11. conservation pendant **14 jours**.
+5. `npm run db:verify` sur la copie restaurée **telle quelle**, c'est-à-dire sur le schéma et les données de production au moment du dump ;
+6. comparaison de l'empreinte de la copie avec celle de la source ;
+7. **répétition des migrations** : `npm run db:setup` (schema.sql + toutes les migrations du dépôt) sur la copie jetable uniquement, puis contrôle qu'aucune table existante n'a perdu de ligne et que soldes et ledger agrégés sont identiques (`--compare-upgrade`) ;
+8. `npm run db:verify` sur la copie migrée ;
+9. chiffrement de l'archive avec le certificat public Retiko, puis suppression du dump en clair ;
+10. upload du backup chiffré comme artifact GitHub, conservé **14 jours** ;
+11. échec explicite du job si l'étape 4, 6, 7 ou 8 a échoué ;
+12. suppression du dump en clair du runner en toutes circonstances (`if: always()`).
 
-Un backup est conservé dès que le dump est lisible (`pg_restore --list`).
-Le résultat du restore drill est inscrit dans `manifest.txt` (`restore_test`,
-`db_verify`, `fingerprint` : `success` ou `failure`) et un échec rend le job
-rouge. Jusqu'au 2026-10-02, un échec de `db:verify` empêchait toute
-conservation : un écart de schéma de production (migration 032 non appliquée)
-a ainsi supprimé toute nouvelle sauvegarde à partir du 2026-09-27, alors que
-les dumps étaient lisibles et restaurables. Avant de restaurer une archive,
-lire son manifeste.
+`pg_dump` et `pg_restore` s'exécutent depuis `postgres:17.12` épinglée par digest (`PG_IMAGE`) : c'est l'image qui reçoit le credential de production. Pour la mettre à jour, vérifier le digest de l'index multi-architecture sur Docker Hub, puis modifier `PG_IMAGE` et le défaut de `scripts/restore-backup.sh` ensemble (un test l'impose).
 
-L'empreinte ne contient que des agrégats : nombre de lignes de chaque table du
-schéma `public`, somme des soldes, cartes actives, transactions par type et
-unité avec la somme des deltas, date de la dernière transaction, écarts
-ledger/solde, programmes par mode, commerces par statut. Elle est lue dans une
-transaction `repeatable read, read only`. Si la source change entre les deux
-lectures (écriture pendant le dump), la comparaison stricte est impossible : le
-job l'indique par un avertissement sans échouer.
+Un backup est conservé dès que le dump est lisible (`pg_restore --list`), même si la restauration, l'empreinte, les migrations ou l'intégrité échouent. Le résultat réel est inscrit dans `manifest.txt` :
+
+| Champ | Sens |
+|---|---|
+| `restore_test` | restauration intégrale dans PostgreSQL 17 standard |
+| `db_verify` | `db:verify` sur la copie telle que la production l'a produite |
+| `fingerprint` | copie identique à la source au moment du dump |
+| `migration_rehearsal` | migrations de `main` appliquées sur la copie sans perte |
+| `db_verify_after_migrations` | intégrité de la copie amenée au schéma de `main` |
+| `pg_client_image`, `source_sha` | image `pg_dump`/`pg_restore` et commit du workflow |
+
+Avant de restaurer une archive, lire son manifeste.
+
+## Lire les checks : `backup-restore` et `production-schema`
+
+Deux questions distinctes, deux checks :
+
+- **`backup-restore`** — *la sauvegarde permet-elle de reprendre le service ?* Vert si l'archive se restaure à l'identique et que la copie restaurée peut être amenée au schéma de `main` avec une intégrité vérifiée (tenants, ledger, soldes, gardes). Une incohérence de données en production le rend rouge, car elle subsiste après migration.
+- **`production-schema`** — *la base de production elle-même est-elle conforme à `main` ?* Il reprend le résultat de l'étape 5. Rouge tant que des migrations de `main` ne sont pas appliquées en production, ou qu'une incohérence y existe. Il n'accède à aucune base.
+
+Historique : du 2026-09-27 au 2026-11-26, `backup-restore` a été rouge chaque jour alors que les dumps étaient lisibles, restaurables et identiques à la source ; seul `db:verify` échouait, parce que les migrations postérieures à `023` ne sont pas appliquées en production : absence démontrée pour `024`, `025`, `027`, `028`, `031` et `032` (garde `customer_card_recovery_revoke_on_email_change`), probable pour `026`, `029`, `030` et `033`, qui ne créent pas de table. La production compte 22 tables, exactement l'état « migrations ≤ 023 ». Jusqu'au 2026-10-02, cet échec empêchait même la conservation : aucune sauvegarde n'a été gardée du 2026-09-27 au 2026-10-02.
+
+Sur une PR, le job `restore-drill-selftest` répète la chaîne sans aucun accès à la production : source jetable (`db:setup` + démo), mêmes commandes de restauration, d'empreinte, de migration et de vérification que `backup-restore` (un test unitaire impose l'égalité), chiffrement avec une clé éphémère, restauration par `scripts/restore-backup.sh`, refus d'une archive corrompue. `backup-restore` et `production-schema` ne s'exécutent jamais sur une PR : seul un run sur `main` les valide.
+
+## Appliquer les migrations en production
+
+Action humaine, jamais automatique. Analyse détaillée de 024 à 033, constat en lecture seule (`ops/migrations/check-024-033.sql`) et plan complet : [`docs/MIGRATIONS_024_033.md`](MIGRATIONS_024_033.md). Même procédure que pour la `023` (#134) :
+
+1. vérifier sur le dernier run `database-backup` de `main` que `backup-restore` est vert et que le manifeste indique `migration_rehearsal=success` et `db_verify_after_migrations=success` : les migrations en attente ont été répétées sur une copie des données de production de la veille ;
+2. créer une branche Neon temporaire depuis la production, y lancer `npm run db:setup` puis `npm run db:verify` ;
+3. si tout est vert, lancer `npm run db:setup` puis `npm run db:verify` sur la production, avec l'URL saisie sans écho (par exemple `read -rs DATABASE_URL && export DATABASE_URL`), jamais dans l'historique du shell, un ticket ou un log ;
+4. contrôler `/api/health` (`schema: up`) et lancer `production-smoke` ;
+5. relancer `database-backup` (`workflow_dispatch`) : `production-schema` doit passer au vert.
+
+`db:setup` rejoue `schema.sql` et toutes les migrations dans l'ordre ; elles sont rejouables. Aucune ne supprime de ligne. `032` marque comme utilisés les liens de récupération actifs en double (aucun en production au 2026-11-25 d'après `db:verify`).
+
+## Exploitation et récupération
+
+| Repère | Valeur au 2026-11-26 |
+|---|---|
+| Fréquence | 1 backup logique par jour (+ runs sur `push` et à la demande) |
+| Rétention réelle | 14 jours glissants d'artifacts GitHub (14 archives du 2026-11-12 au 2026-11-25) |
+| Historique Neon (PITR) | 6 h sur l'offre gratuite, constaté le 2026-09-17 (#41) ; non revérifié depuis |
+| RPO | ≤ 6 h pour un incident détecté dans la fenêtre Neon (si elle est toujours de 6 h) ; sinon jusqu'à ~25 h (écart maximal observé entre deux backups planifiés du 2026-10-09 au 2026-11-25 : 25,4 h, moyenne 24,1 h) |
+| RTO | non mesuré de bout en bout. Mesuré : restauration + migrations + vérification d'une archive de ~110 Ko en quelques secondes. Non mesuré : téléchargement, déchiffrement avec la clé hors ligne, création de la base cible, bascule `DATABASE_URL` sur Vercel, redéploiement |
+
+Risques connus :
+
+- **Clé privée** : le déchiffrement d'un artifact de production avec la vraie clé de récupération n'est jamais testé automatiquement (elle est hors ligne, c'est voulu). À faire par un humain, périodiquement, sur une base isolée.
+- **Dépôt public** : tout compte GitHub connecté peut télécharger les artifacts. Ils sont chiffrés (CMS AES-256) ; la confidentialité repose entièrement sur la clé privée. Le manifeste en clair ne contient que des empreintes et des résultats.
+- **Tâches planifiées** : GitHub désactive les workflows planifiés d'un dépôt public après 60 jours sans activité. Une pause de développement de plus de deux mois arrêterait les backups quotidiens sans alerte.
+- **Fenêtre de rétention** : 14 jours d'artifacts ; une corruption découverte plus tard n'est pas récupérable par ce mécanisme.
 
 ## Authentification GitHub → Retiko
 
@@ -60,7 +99,7 @@ Retiko vérifie notamment :
 
 Le workflow `data-lifecycle.yml` (rétention des données) utilise le même mécanisme avec une audience distincte, `retiko-lifecycle`, et son propre point d'échange `POST /api/internal/lifecycle-credentials` (#251) : un jeton émis pour l'un est refusé par l'autre.
 
-Le sujet OIDC accepte le format historique GitHub et le format immuable introduit pour les dépôts récents, mais les IDs sont dans tous les cas revérifiés séparément. Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner et n'est jamais enregistré comme secret GitHub.
+Le sujet OIDC accepte le format historique GitHub et le format immuable introduit pour les dépôts récents, mais les IDs sont dans tous les cas revérifiés séparément. Toute PR, autre branche, autre dépôt ou autre workflow est rejeté. Le `DATABASE_URL` retourné est immédiatement masqué dans les logs du runner, reste local au step du `pg_dump` et n'est jamais enregistré comme secret GitHub. En cas d'échec de connexion, l'empreinte n'affiche que le code d'erreur (`ECONNREFUSED`, `28P01`…), jamais l'hôte.
 
 ## Chiffrement
 
@@ -103,11 +142,12 @@ bash scripts/restore-backup.sh \
   'postgres://user:password@host:5432/database?sslmode=require'
 ```
 
-Le script déchiffre dans un répertoire temporaire, valide l'archive, restaure sans `--clean`, puis supprime automatiquement le dump clair temporaire.
+Le script déchiffre dans un répertoire temporaire, valide l'archive, restaure sans `--clean`, puis supprime automatiquement le dump clair temporaire. Il utilise la même image épinglée que le workflow (`RETIKO_PG_IMAGE` pour la remplacer) ; `RETIKO_BACKUP_PUBLIC_CERT` désigne un autre certificat (utilisé par l'auto-test de PR avec une clé éphémère).
 
-Après restauration :
+Après restauration, sur la base cible uniquement :
 
 ```bash
+DATABASE_URL='postgres://...' npm run db:setup   # schéma amené au niveau de main
 DATABASE_URL='postgres://...' npm run db:verify
 ```
 
@@ -118,7 +158,8 @@ Puis vérifier `/api/health` avec l'application raccordée à la base restaurée
 - Ne jamais restaurer directement par-dessus la production pour un test.
 - Toujours restaurer dans une base vide ou une infrastructure isolée.
 - Ne jamais uploader un `.dump` non chiffré.
-- Ne jamais écrire `DATABASE_URL` dans les logs.\n- Ne jamais élargir la politique OIDC à une PR, un fork ou un workflow différent sans revue de sécurité.
+- Ne jamais écrire `DATABASE_URL` dans les logs.
+- Ne jamais élargir la politique OIDC à une PR, un fork ou un workflow différent sans revue de sécurité.
 - Ne jamais stocker la clé privée dans le dépôt.
 - Une rotation de la clé publique nécessite de conserver les anciennes clés privées tant que les artifacts correspondants existent.
 

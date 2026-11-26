@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffFingerprints, restoreVerdict, type Fingerprint } from "../scripts/db-fingerprint.mjs";
+import { diffFingerprints, restoreVerdict, upgradeVerdict, type Fingerprint } from "../scripts/db-fingerprint.mjs";
 
 const base: Fingerprint = {
   rows: { cards: "2", transactions: "5", product_events: "3" },
@@ -36,5 +36,32 @@ describe("empreinte du restore drill", () => {
 
   it("ne signale aucune différence entre deux empreintes égales", () => {
     expect(diffFingerprints(base, clone(base))).toEqual([]);
+  });
+});
+
+describe("empreinte de la répétition des migrations", () => {
+  it("accepte des tables ajoutées quand les données existantes sont intactes", () => {
+    const migrated = clone(base);
+    migrated.rows.reward_notifications = "0";
+    migrated.rows.establishment_logos = "0";
+    expect(upgradeVerdict(base, migrated)).toEqual({
+      status: "match",
+      differences: [],
+      addedTables: ["establishment_logos", "reward_notifications"],
+    });
+  });
+
+  it("refuse une table disparue, une ligne perdue ou un solde modifié", () => {
+    const migrated = clone(base);
+    delete migrated.rows.product_events;
+    migrated.rows.transactions = "4";
+    migrated.aggregates = { cards: { balanceTotal: "6", activeCards: "2" }, ledgerBalanceMismatches: "0" };
+    const verdict = upgradeVerdict(base, migrated);
+    expect(verdict.status).toBe("mismatch");
+    expect(verdict.differences).toEqual([
+      "table product_events : 3 ligne(s) avant migration, absente après",
+      "table transactions : 5 ligne(s) avant migration, 4 après",
+      expect.stringContaining("agrégats modifiés par les migrations"),
+    ]);
   });
 });
