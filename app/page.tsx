@@ -131,15 +131,16 @@ export default async function Home() {
         <div className="shell">
           <span className="eyebrow">Prix</span>
           <h2 id="prix-title">Un abonnement, tout compris</h2>
-          <p className="muted">{BILLING_TRIAL_DAYS} jours d’essai gratuit, sans carte bancaire pour commencer. Clients, scans et cartes illimités.</p>
+          <p className="muted">{BILLING_TRIAL_DAYS} jours d’essai gratuit, sans carte bancaire pour commencer. Installation incluse. Clients, scans et cartes illimités.</p>
           <div className="landing-plans">
             {offeredPlans().map((plan) => {
               const definition = BILLING_PLANS[plan];
-              return <article key={plan} className={`card landing-plan${plan === "RETIKO_12" ? " is-featured" : ""}`}>
+              const featured = plan === "STANDARD_MONTHLY" || plan === "RETIKO_12";
+              return <article key={plan} className={`card landing-plan${featured ? " is-featured" : ""}`}>
                 <h3>{definition.label}</h3>
                 <p className="landing-price">{definition.priceLabel}</p>
                 <p className="muted">{definition.commitment}</p>
-                <Link className={`btn ${plan === "RETIKO_12" ? "btn-accent" : ""}`} href="/signup">Commencer l’essai</Link>
+                <Link className={`btn ${featured ? "btn-accent" : ""}`} href="/signup">Commencer l’essai</Link>
               </article>;
             })}
           </div>

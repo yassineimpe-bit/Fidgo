@@ -27,6 +27,10 @@ try {
     returning id,slug,name
   `;
 
+  // Tout commerce doit avoir un état de facturation (vérifié par db:verify,
+  // donc par le restore drill de database-backup) : la démo n'y échappe pas.
+  await sql`insert into subscriptions(establishment_id) values(${establishment.id}) on conflict(establishment_id) do nothing`;
+
   await sql`
     insert into loyalty_programs(establishment_id,program_name,mode,reward_threshold,reward_label,stamps_per_visit,cooldown_seconds,card_message,active)
     values(${establishment.id},'Programme démo','STAMPS',8,'1 produit offert',1,5,'Carte de démonstration Retiko',true)

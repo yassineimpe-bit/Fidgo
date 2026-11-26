@@ -32,7 +32,7 @@ Un compte staff appartient à un seul établissement. Les évolutions vers plusi
 
 Le crédit : vérifie session/rôle, idempotence, verrouille la carte `FOR UPDATE`, applique cooldown/expiration/limite quotidienne, calcule le delta serveur, écrit le ledger puis le cache de solde et l'audit log.
 
-Le cooldown par défaut est de 120 secondes. Seuls OWNER et MANAGER peuvent le dépasser ; le motif obligatoire est conservé dans la transaction et dans l'audit `CARD_ADJUSTED`.
+Le cooldown des **nouveaux** programmes est de **600 secondes (10 min)** (`DEFAULT_COOLDOWN_SECONDS` dans `lib/cooldown.ts`, appliqué à l'INSERT signup). Le défaut SQL de colonne dans `db/schema.sql` reste `120` : il ne s'applique qu'à un INSERT brut qui omet `cooldown_seconds`. Les programmes déjà créés conservent la valeur choisie (aucune migration ne la réécrit). Seuls OWNER et MANAGER peuvent dépasser le cooldown ; le motif obligatoire est conservé dans la transaction et dans l'audit `CARD_ADJUSTED`.
 
 ## Instrumentation pilote
 

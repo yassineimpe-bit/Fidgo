@@ -50,7 +50,7 @@ async function handlePost(req: Request) {
           p.mode,p.points_rule,p.reward_threshold,p.reward_label,p.stamps_per_visit,
           p.points_per_euro,p.points_per_purchase,p.daily_earn_limit,p.cooldown_seconds,p.active as program_active
         from cards c join loyalty_programs p on p.establishment_id=c.establishment_id join customers u on u.id=c.customer_id
-        where c.token=${token} and c.establishment_id=${session.establishmentId} and u.deleted_at is null for update of c
+        where c.token=${token} and c.establishment_id=${session.establishmentId} and u.deleted_at is null for update of c for share of p
       `;
       if (!card) throw new Error("CARD_NOT_FOUND");
 

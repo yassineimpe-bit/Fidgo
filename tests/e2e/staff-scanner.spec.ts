@@ -29,7 +29,8 @@ test("équipe pilote : un Owner crée un Employé scanner qui se connecte et cr�
   await page.getByLabel("Mot de passe temporaire").fill(employeePassword);
   await page.getByLabel("Rôle").selectOption("EMPLOYEE");
   await page.getByRole("button", { name: "Créer l’accès" }).click();
-  await expect(page.getByText("Accès créé.")).toBeVisible();
+  // Première création d'accès : compilation de /api/employees et hash bcrypt.
+  await expect(page.getByText("Accès créé.")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("row", { name: new RegExp(employeeEmail) })).toContainText("Employé");
 
   // Le poste Owner et le téléphone caisse sont deux sessions indépendantes :

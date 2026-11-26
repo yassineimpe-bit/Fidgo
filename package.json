@@ -21,7 +21,8 @@
     "pilot:field-report": "node scripts/pilot-field-report.mjs",
     "pilot:ledger-audit": "node scripts/pilot-ledger-audit.mjs",
     "admin:platform": "node scripts/platform-admin.mjs",
-    "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify"
+    "bootstrap:demo": "npm run db:setup && npm run db:seed:demo && npm run db:verify",
+    "security:audit": "node scripts/audit-dependencies.mjs"
   },
   "dependencies": {
     "bcryptjs": "2.4.3",
@@ -34,7 +35,7 @@
     "qrcode": "1.5.4",
     "react": "19.1.1",
     "react-dom": "19.1.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "stripe": "22.6.2"
   },
   "devDependencies": {
@@ -48,10 +49,10 @@
     "eslint": "9.39.5",
     "eslint-config-next": "15.5.24",
     "typescript": "5.7.2",
-    "vitest": "3.2.7"
+    "vitest": "4.1.11"
   },
   "overrides": {
-    "joi": "17.13.6",
+    "joi": "17.13.8",
     "postcss": "8.5.23"
   }
 }

@@ -27,7 +27,9 @@ test("pages légales : publiques, reliées entre elles et sans identité invent�
 
   // Prix et durée d'essai lus depuis le code de facturation, pas recopiés.
   await page.goto("/legal/cgv");
-  await expect(page.getByText("24,99 € HT/mois")).toBeVisible();
+  await expect(page.getByText("25 € HT/mois")).toBeVisible();
+  await expect(page.getByText("250 € HT/an")).toBeVisible();
+  await expect(page.getByText("24,99 € HT/mois")).toHaveCount(0);
   await expect(page.getByText("40 € pour frais de recouvrement")).toBeVisible();
 });
 

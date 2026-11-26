@@ -4,6 +4,15 @@ La facturation est indépendante du cœur fidélité. `STRIPE_ENABLED=false` est
 
 ## Offres
 
+Grille publique (`standard`, proposée par défaut) :
+
+| Offre | Prix commercial | Price Stripe attendu | Périodicité |
+|---|---:|---|---|
+| Retiko mensuel | 25 € HT/mois, sans engagement, résiliable | `STRIPE_PRICE_STANDARD_MONTHLY` | mensuelle |
+| Retiko annuel | 250 € HT/an, payé d’avance | `STRIPE_PRICE_STANDARD_ANNUAL` | annuelle |
+
+Anciennes offres pilotes (`pilot`), conservées pour reconnaître les abonnés qui y sont rattachés :
+
 | Offre | Prix commercial | Price Stripe attendu | Périodicité |
 |---|---:|---|---|
 | Retiko Flex | 24,99 € HT/mois, sans engagement | `STRIPE_PRICE_FLEX_MONTHLY` | mensuelle |
@@ -16,16 +25,22 @@ Deux grilles coexistent dans `lib/billing-plans.ts` :
 
 | Grille | Offres | Price Stripe attendu |
 |---|---|---|
-| `pilot` (défaut) | Retiko Flex 24,99 € HT/mois, Retiko 12 19,99 € HT/mois, Retiko annuel 210 € HT/an | `STRIPE_PRICE_FLEX_MONTHLY`, `STRIPE_PRICE_RETIKO12_MONTHLY`, `STRIPE_PRICE_ANNUAL` |
-| `standard` | Retiko mensuel 25 € HT/mois sans engagement (`STANDARD_MONTHLY`), Retiko annuel 250 € HT/an (`STANDARD_ANNUAL`) | `STRIPE_PRICE_STANDARD_MONTHLY`, `STRIPE_PRICE_STANDARD_ANNUAL` |
+| `pilot` | Retiko Flex 24,99 € HT/mois, Retiko 12 19,99 € HT/mois, Retiko annuel 210 € HT/an | `STRIPE_PRICE_FLEX_MONTHLY`, `STRIPE_PRICE_RETIKO12_MONTHLY`, `STRIPE_PRICE_ANNUAL` |
+| `standard` (défaut) | Retiko mensuel 25 € HT/mois sans engagement (`STANDARD_MONTHLY`), Retiko annuel 250 € HT/an payé d’avance (`STANDARD_ANNUAL`) | `STRIPE_PRICE_STANDARD_MONTHLY`, `STRIPE_PRICE_STANDARD_ANNUAL` |
 
-`BILLING_PRICE_GRID` (`pilot` ou `standard`) choisit les offres proposées aux **nouvelles** souscriptions, sur le site, dans les CGV et dans *Facturation*. Chaque offre a sa propre clé et son propre Price : un abonné pilote reste reconnu par le webhook et garde son prix quand la grille passe à `standard` (Stripe ne modifie jamais le Price d'un abonnement existant). Une offre qui n'appartient pas à la grille proposée est refusée par Checkout (`INVALID_PLAN`).
+`BILLING_PRICE_GRID` (`standard` par défaut, `pilot` sur choix explicite ; toute autre valeur est refusée par `env:check`) choisit les offres proposées aux **nouvelles** souscriptions, sur le site, dans les CGV et dans *Facturation*. Chaque offre a sa propre clé et son propre Price : un abonné pilote reste reconnu par le webhook et garde son prix quand la grille passe à `standard` (Stripe ne modifie jamais le Price d'un abonnement existant). Une offre qui n'appartient pas à la grille proposée est refusée par Checkout (`INVALID_PLAN`).
 
 Seuls les Prices de la grille proposée sont exigés par `env:check` et par l'état d'exécution ; ceux de l'ancienne grille doivent rester configurés tant que des abonnés y sont rattachés. Tous les Price IDs configurés doivent être distincts.
 
-Passer à la grille standard suppose la migration `029_billing_price_grids.sql` (sinon Checkout répond `503 BILLING_SCHEMA_OUTDATED`), les deux Prices créés dans Stripe, puis un redéploiement. **Décisions restant à prendre** : date de bascule, maintien ou non d'une offre avec engagement dans la grille standard, et mise à jour validée des CGV avant bascule.
+La grille standard est la grille exposée par défaut (site, CGV, *Facturation*). Tant que `STRIPE_ENABLED=false`, ce choix ne change que l'affichage. **Avant d'ouvrir le paiement** avec cette grille : migration `029_billing_price_grids.sql` appliquée (sinon Checkout répond `503 BILLING_SCHEMA_OUTDATED`), les deux Prices créés dans Stripe, CGV validées juridiquement, puis redéploiement. Un environnement qui doit encore proposer les anciens tarifs le déclare explicitement avec `BILLING_PRICE_GRID=pilot`.
 
-Les montants et la fiscalité doivent être configurés dans Stripe Dashboard. Le navigateur envoie uniquement la clé d’offre `FLEX`, `RETIKO_12` ou `ANNUAL`; le serveur choisit le Price ID correspondant. Un `priceId` fourni par le client est rejeté.
+### Offre Fondateurs (non implémentée)
+
+Offre commerciale décidée : 19 € HT/mois pendant 24 mois pour les 20 premiers commerces de Corrèze, puis 25 € HT/mois, sans engagement. Elle n'existe pas dans le code de facturation et n'est affichée nulle part : elle se conclut aujourd'hui par proposition commerciale écrite, que les CGV (§ 4) font prévaloir sur la grille publique pour le client concerné.
+
+Correctif minimal le jour où le paiement en ligne s'ouvre pour ces commerces : un coupon Stripe (réduction de 6 € HT/mois, durée 24 mois) appliqué sur le Price `STANDARD_MONTHLY` à la création de la Checkout Session, réservé aux commerces marqués éligibles côté serveur. Aucune nouvelle offre ni nouveau Price : à 24 mois, Stripe revient seul à 25 € HT/mois et l'historique reste sur `STANDARD_MONTHLY`. À ne pas coder avant la décision d'ouvrir Stripe.
+
+Les montants et la fiscalité doivent être configurés dans Stripe Dashboard. Le navigateur envoie uniquement une clé d’offre de la grille proposée (`STANDARD_MONTHLY`, `STANDARD_ANNUAL`, ou `FLEX`, `RETIKO_12`, `ANNUAL` en grille pilote) ; le serveur choisit le Price ID correspondant. Un `priceId` fourni par le client est rejeté.
 
 Checkout exige l’adresse de facturation et active la collecte de l’identifiant fiscal lorsque Stripe le propose au client. Pour un Customer Stripe déjà lié, l’adresse saisie est recopiée sur le Customer afin de garder ses données de facturation à jour. Cela prépare les données nécessaires à la facturation B2B, mais **n’active pas à lui seul le calcul automatique de TVA** : `automatic_tax` reste volontairement désactivé tant que les immatriculations fiscales et le traitement TVA de Retiko n’ont pas été validés.
 
@@ -44,12 +59,12 @@ STRIPE_ENABLED=false
 STRIPE_AUTOMATIC_TAX_ENABLED=false
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
+BILLING_PRICE_GRID=standard
+STRIPE_PRICE_STANDARD_MONTHLY=
+STRIPE_PRICE_STANDARD_ANNUAL=
 STRIPE_PRICE_FLEX_MONTHLY=
 STRIPE_PRICE_RETIKO12_MONTHLY=
 STRIPE_PRICE_ANNUAL=
-BILLING_PRICE_GRID=pilot
-STRIPE_PRICE_STANDARD_MONTHLY=
-STRIPE_PRICE_STANDARD_ANNUAL=
 ```
 
 Aucune clé publiable Stripe n’est nécessaire : Retiko utilise Checkout et Customer Portal hébergés par Stripe. Aucun secret ni Price ID n’est envoyé dans le HTML.

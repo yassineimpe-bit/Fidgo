@@ -39,6 +39,8 @@ export default defineConfig({
       STRIPE_PRICE_FLEX_MONTHLY: "price_e2e_flex",
       STRIPE_PRICE_RETIKO12_MONTHLY: "price_e2e_retiko12",
       STRIPE_PRICE_ANNUAL: "price_e2e_annual",
+      STRIPE_PRICE_STANDARD_MONTHLY: "price_e2e_standard_monthly",
+      STRIPE_PRICE_STANDARD_ANNUAL: "price_e2e_standard_annual",
     },
   },
 });

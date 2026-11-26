@@ -5,7 +5,12 @@ une qualification juridique ni une durée de conservation imposée par la loi.
 Les durées doivent être validées par le responsable de traitement avant
 activation en production.
 
-## État réel des durées (vérifié sur `main` le 27/09/2026)
+## Durées prévues et historique des vérifications
+
+**26/11/2026 :** les constats d’exécution de septembre ci-dessous sont historiques.
+Le code utilise désormais OIDC (#251) ; ne pas ajouter de secret DATABASE_URL
+durable. La mission exploitation doit confirmer les dernières exécutions et
+la rétention effective des sauvegardes. Aucun mécanisme de purge/backup modifié.
 
 Trois statuts, à ne jamais confondre dans un document public :
 
@@ -41,6 +46,28 @@ réservé au workflow `database-backup`). Aucune purge — même en dry-run — 
 donc exécutée en production. Tant que ce point n'est pas corrigé et que
 `DATA_LIFECYCLE_EXECUTE` n'est pas activé, les durées « prévues » ne doivent
 pas être présentées comme appliquées. Détail : `DATA_LIFECYCLE_AUDIT_2026-09-27.md`.
+
+**Mise à jour au 02/10/2026 :** inchangé, les 13 exécutions planifiées depuis
+la création du workflow ont échoué pour la même raison. Le workflow échoue
+désormais dès l'étape « Require production database credential », avec un
+message qui nomme l'action à faire. Le comportement du script est couvert par
+`tests/e2e/data-lifecycle-purge.spec.ts`, dans une base temporaire dédiée :
+- sélection des seules lignes au-delà de leur rétention ;
+- dry-run sans suppression ;
+- refus quand une autre purge détient le verrou ;
+- seconde exécution sans effet ;
+- ledger, cartes, soldes et clients intacts ;
+- sortie limitée à des compteurs.
+
+**Mise à jour au 06/10/2026 (#251) :** le workflow n'attend plus de secret
+`DATABASE_URL` durable. Comme `database-backup`, il obtient l'accès base par
+GitHub OIDC (audience `retiko-lifecycle`) auprès du broker
+`POST /api/internal/lifecycle-credentials`, qui n'accepte que
+`data-lifecycle.yml` sur `main` (événements `schedule` et `workflow_dispatch`,
+runner GitHub, environnement `production`). Un jeton du backup n'y est pas
+accepté, ni l'inverse. Le run planifié reste un **dry-run** tant que
+`DATA_LIFECYCLE_EXECUTE` n'est pas `true`, et un déclenchement manuel est
+désormais en dry-run par défaut (`execute=false`).
 
 ## Cartographie
 
@@ -136,11 +163,11 @@ au maximum 5 000 lignes par table et par exécution, avec verrou consultatif :
 Aucune transaction, carte ledger, client actif, staff, établissement,
 configuration de programme ou donnée de facturation n'est supprimé par ce
 script. Le workflow `.github/workflows/data-lifecycle.yml` exécute chaque jour
-un dry-run sur l'environnement GitHub `production`, à condition que son secret
-`DATABASE_URL` soit configuré — ce qui n'est pas le cas au 27/09/2026 (voir
-« État réel des durées »). La suppression planifiée ne s'exécute que si la
-variable GitHub d'environnement `DATA_LIFECYCLE_EXECUTE=true` est explicitement
-activée ; un déclenchement manuel peut également demander l'exécution. Les
+un dry-run sur l'environnement GitHub `production`, avec un accès base obtenu
+par OIDC (voir « État réel des durées », mise à jour du 06/10/2026). La
+suppression planifiée ne s'exécute que si la variable GitHub d'environnement
+`DATA_LIFECYCLE_EXECUTE=true` est explicitement activée ; un déclenchement
+manuel peut également la demander (`execute=true`, dry-run par défaut). Les
 durées restent à valider juridiquement avant activation automatique et doivent
 être réévaluées si la politique de conservation évolue.
 
@@ -148,9 +175,10 @@ durées restent à valider juridiquement avant activation automatique et doivent
 
 - Apple Wallet permet de pousser un pass marqué `voided`, mais un appareil
   hors ligne peut afficher l'ancien visuel jusqu'à sa prochaine synchronisation.
-- Les objets Google Wallet distants ne sont pas modifiés par ce chantier ; la
-  carte serveur et la ligne locale sont révoquées, mais une procédure provider
-  dédiée reste nécessaire pour forcer l'état distant.
+- La révocation Google distante est implémentée par `notifyGoogleWalletRevocation`
+  (`state=INACTIVE`) après effacement/suspension. En cas d’échec fournisseur,
+  le statut local reste révoqué et `last_error` permet le diagnostic ; aucune
+  file durable de reprise automatique n’est démontrée.
 - La fermeture conserve les données personnelles du commerce et du staff ; une
   procédure ultérieure, validée avec les durées métier/fiscales applicables,
   devra traiter leur anonymisation définitive.

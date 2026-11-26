@@ -1,13 +1,13 @@
 import { after } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { canReverse, isValidIdempotencyKey } from "@/lib/loyalty";
+import { canReverse, isValidIdempotencyKey, ledgerUnitForMode, type LoyaltyMode } from "@/lib/loyalty";
 import { safeErrorCode, withApiErrorHandling } from "@/lib/observability";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { rejectCrossOrigin } from "@/lib/security";
 import { syncWalletsForCard } from "@/lib/wallet-sync";
 
-const KNOWN_REVERSE_ERRORS = new Set(["TRANSACTION_NOT_FOUND", "ALREADY_REVERSED", "NEGATIVE_BALANCE", "CANNOT_REVERSE_REVERSAL"]);
+const KNOWN_REVERSE_ERRORS = new Set(["TRANSACTION_NOT_FOUND", "ALREADY_REVERSED", "NEGATIVE_BALANCE", "CANNOT_REVERSE_REVERSAL", "UNIT_MISMATCH"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function handlePost(req: Request) {
@@ -32,13 +32,18 @@ async function handlePost(req: Request) {
       const [existing] = await tx`select card_id,balance_after from transactions where establishment_id=${session.establishmentId} and idempotency_key=${String(idempotencyKey)} limit 1`;
       if (existing) return { cardId: String(existing.card_id), balance: Number(existing.balance_after), duplicate: true };
       const [original] = await tx`
-        select t.id,t.card_id,t.delta,t.unit,t.type,c.balance from transactions t join cards c on c.id=t.card_id
-        where t.id=${String(transactionId)} and t.establishment_id=${session.establishmentId} for update of c
+        select t.id,t.card_id,t.delta,t.unit,t.type,c.balance,p.mode
+        from transactions t join cards c on c.id=t.card_id join loyalty_programs p on p.establishment_id=t.establishment_id
+        where t.id=${String(transactionId)} and t.establishment_id=${session.establishmentId} for update of c for share of p
       `;
       if (!original) throw new Error("TRANSACTION_NOT_FOUND");
       if (original.type === "reversal") throw new Error("CANNOT_REVERSE_REVERSAL");
       const already = await tx`select 1 from transactions where reversed_transaction_id=${original.id} limit 1`;
       if (already.length) throw new Error("ALREADY_REVERSED");
+      // #197 : le solde courant est dans l'unité du mode courant. Annuler une
+      // écriture d'une autre unité appliquerait des tampons à un solde en points
+      // (ou l'inverse) : refus explicite, sans aucune mutation.
+      if (original.unit !== ledgerUnitForMode(original.mode as LoyaltyMode)) throw new Error("UNIT_MISMATCH");
       const delta = -Number(original.delta);
       const balance = Number(original.balance) + delta;
       if (balance < 0) throw new Error("NEGATIVE_BALANCE");
@@ -54,7 +59,7 @@ async function handlePost(req: Request) {
     const message = error instanceof Error ? error.message : "ERROR";
     const known = KNOWN_REVERSE_ERRORS.has(message);
     if (!known) console.error("TRANSACTION_REVERSE_FAILED", { code: safeErrorCode(error, "TRANSACTION_REVERSE_FAILED") });
-    const status = message === "TRANSACTION_NOT_FOUND" ? 404 : message === "ALREADY_REVERSED" || message === "NEGATIVE_BALANCE" || message === "CANNOT_REVERSE_REVERSAL" ? 409 : 500;
+    const status = message === "TRANSACTION_NOT_FOUND" ? 404 : message === "ALREADY_REVERSED" || message === "NEGATIVE_BALANCE" || message === "CANNOT_REVERSE_REVERSAL" || message === "UNIT_MISMATCH" ? 409 : 500;
     return Response.json({ error: known ? message : "TRANSACTION_REVERSE_FAILED" }, { status });
   }
 }

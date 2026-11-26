@@ -3,11 +3,12 @@
  * (Stripe) et le site public (section Prix), pour qu'un tarif affiché ne
  * puisse pas diverger du tarif facturé.
  *
- * Deux grilles coexistent : « pilot » (tarifs de lancement) et « standard »
- * (25 € HT/mois, 250 € HT/an). `BILLING_PRICE_GRID` choisit la grille
- * proposée aux nouveaux abonnements ; chaque offre a sa propre clé et son
- * propre Price Stripe, si bien qu'un abonné conserve l'offre et le prix
- * qu'il a souscrits quand la grille change.
+ * Deux grilles coexistent : « standard » (grille publique : 25 € HT/mois,
+ * 250 € HT/an) et « pilot » (anciens tarifs de lancement). `BILLING_PRICE_GRID`
+ * choisit la grille proposée aux nouveaux abonnements ; chaque offre a sa
+ * propre clé et son propre Price Stripe, si bien qu'un abonné conserve l'offre
+ * et le prix qu'il a souscrits quand la grille change. Les offres pilotes
+ * restent déclarées pour reconnaître ces abonnés (webhooks, historique).
  */
 export const BILLING_TRIAL_DAYS = 30;
 
@@ -45,7 +46,7 @@ export const BILLING_PLANS = {
     priceLabel: "250 € HT/an",
     billingInterval: "annual",
     priceEnv: "STRIPE_PRICE_STANDARD_ANNUAL",
-    commitment: "Facturation annuelle",
+    commitment: "Payé d’avance, facturation annuelle",
   },
 } as const;
 
@@ -58,9 +59,9 @@ export const BILLING_PRICE_GRIDS = {
 
 export type BillingPriceGrid = keyof typeof BILLING_PRICE_GRIDS;
 
-/** Grille proposée aux nouveaux abonnements ; « pilot » tant que rien n'est décidé. */
+/** Grille proposée aux nouveaux abonnements : « standard », sauf retour explicite à « pilot ». */
 export function activePriceGrid(env: Record<string, string | undefined> = process.env): BillingPriceGrid {
-  return env.BILLING_PRICE_GRID === "standard" ? "standard" : "pilot";
+  return env.BILLING_PRICE_GRID === "pilot" ? "pilot" : "standard";
 }
 
 /** Offres proposées à la souscription, dans l'ordre d'affichage. */

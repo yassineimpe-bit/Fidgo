@@ -28,9 +28,11 @@ export async function enabledTwoFactor(staffId: string): Promise<{ secretEncrypt
  * Jeton court « mot de passe vérifié, code attendu ». Signé avec une clé
  * dérivée distincte de celle des sessions : recopié dans le cookie de session,
  * il est rejeté, et il ne donne accès à rien d'autre qu'à la seconde étape.
+ * `admin` : connexion ouverte depuis /admin, l'appartenance à platform_admins
+ * est revérifiée après le second facteur.
  */
-export async function signMfaPending(staffId: string, tokenVersion: number) {
-  return new SignJWT({ tv: tokenVersion })
+export async function signMfaPending(staffId: string, tokenVersion: number, scope: { admin?: boolean } = {}) {
+  return new SignJWT(scope.admin ? { tv: tokenVersion, adm: true } : { tv: tokenVersion })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(staffId)
     .setAudience(MFA_AUDIENCE)
@@ -39,13 +41,13 @@ export async function signMfaPending(staffId: string, tokenVersion: number) {
     .sign(mfaPendingKey());
 }
 
-export async function verifyMfaPending(token: string | undefined): Promise<{ staffId: string; tokenVersion: number } | null> {
+export async function verifyMfaPending(token: string | undefined): Promise<{ staffId: string; tokenVersion: number; admin: boolean } | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, mfaPendingKey(), { audience: MFA_AUDIENCE });
     const tokenVersion = Number(payload.tv);
     if (!payload.sub || !Number.isInteger(tokenVersion)) return null;
-    return { staffId: payload.sub, tokenVersion };
+    return { staffId: payload.sub, tokenVersion, admin: payload.adm === true };
   } catch {
     return null;
   }

@@ -9,6 +9,10 @@ import { createMerchant, currentCustomerId, enrollCustomer, origin, unique } fro
  * employé.
  */
 test("isolation tenant : le commerce A ne peut agir sur aucune ressource du commerce B", async ({ browser }) => {
+  // Deux commerces créés puis une vingtaine de routes appelées : selon l'ordre
+  // des shards, le serveur de dev de la CI compile ces routes à la demande et
+  // le budget par défaut de 30 s ne suffit pas (aucune assertion n'échoue).
+  test.setTimeout(90_000);
   const contextA = await browser.newContext();
   const contextB = await browser.newContext();
   const pageA = await contextA.newPage();

@@ -2,7 +2,7 @@ import { getSession } from "@/lib/auth";
 import { DEFAULT_COOLDOWN_SECONDS, MAX_COOLDOWN_SECONDS } from "@/lib/cooldown";
 import { sql } from "@/lib/db";
 import { boundedInt, boundedNumber, boundedText } from "@/lib/input";
-import { canManageProgram } from "@/lib/loyalty";
+import { canManageProgram, ledgerUnitForMode } from "@/lib/loyalty";
 import { withApiErrorHandling } from "@/lib/observability";
 import { normalizeUnitLabel } from "@/lib/program-units";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -71,7 +71,27 @@ async function handlePatch(req: Request) {
     return Response.json({ error: "REWARD_EMAIL_UNAVAILABLE" }, { status: 503 });
   }
 
-  const program = await sql.begin(async (tx) => {
+  const result = await sql.begin(async (tx) => {
+    // Invariant (#196) : le solde des cartes est dans l'unité du mode courant,
+    // sans conversion. Changer STAMPS ↔ POINTS n'est donc permis que si aucune
+    // carte n'a de solde et qu'aucune écriture n'existe dans l'ancienne unité.
+    // Ordre de verrouillage : ce PATCH prend la ligne programme FOR UPDATE ; les
+    // routes qui écrivent dans le ledger (credit, redeem, adjust, reverse) la
+    // prennent FOR SHARE dans la même requête que la carte. Le contrôle et le
+    // changement de mode sont ainsi sérialisés avec toute mutation de carte, et
+    // ce PATCH ne verrouille aucune carte : pas de cycle de verrous possible.
+    const [current] = await tx`select id, mode from loyalty_programs where establishment_id = ${session.establishmentId} for update`;
+    if (!current) throw new Error("PROGRAM_NOT_FOUND");
+    if (current.mode !== mode) {
+      const [usage] = await tx`
+        select
+          exists(select 1 from cards where establishment_id = ${session.establishmentId} and balance > 0) as has_balance,
+          exists(select 1 from transactions where establishment_id = ${session.establishmentId} and unit <> ${ledgerUnitForMode(mode)}) as has_history
+      `;
+      if (usage.has_balance || usage.has_history) {
+        return { locked: { hasBalance: Boolean(usage.has_balance), hasHistory: Boolean(usage.has_history) } };
+      }
+    }
     const [updated] = await tx`
       update loyalty_programs set
         program_name = ${programName}, mode = ${mode}, points_rule = ${pointsRule},
@@ -98,9 +118,12 @@ async function handlePatch(req: Request) {
       await tx`update establishments set onboarding_step=3, updated_at=now() where id=${session.establishmentId} and onboarding_step=2`;
     }
     await tx`insert into audit_logs (establishment_id, staff_user_id, action, entity_type, entity_id) values (${session.establishmentId}, ${session.staffId}, 'PROGRAM_UPDATE', 'loyalty_program', ${updated.id})`;
-    return updated;
+    return { program: updated };
   });
-  return Response.json(program, { headers: { "cache-control": "no-store" } });
+  if ("locked" in result) {
+    return Response.json({ error: "PROGRAM_MODE_LOCKED", ...result.locked }, { status: 409, headers: { "cache-control": "no-store" } });
+  }
+  return Response.json(result.program, { headers: { "cache-control": "no-store" } });
 }
 
 export const PATCH = withApiErrorHandling("PROGRAM_PATCH", handlePatch);

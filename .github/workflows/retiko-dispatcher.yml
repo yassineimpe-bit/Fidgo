@@ -1,0 +1,133 @@
+name: retiko-dispatcher
+
+on:
+  issues:
+    types: [labeled]
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      bootstrap_labels:
+        description: Créer les labels V1 manquants sans modifier les labels existants
+        type: boolean
+        default: false
+
+permissions: {}
+
+# Un seul claim, agent et reconcile à la fois, y compris entre les jobs.
+concurrency:
+  group: retiko-claude-dispatcher
+  cancel-in-progress: false
+
+jobs:
+  claim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      status: ${{ steps.claim.outputs.status }}
+      issue: ${{ steps.claim.outputs.issue }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Initialiser les labels V1
+        if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_labels
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/retiko-dispatcher.mjs bootstrap
+      - name: Réclamer au plus une issue
+        id: claim
+        if: github.event_name != 'workflow_dispatch' || !inputs.bootstrap_labels
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/retiko-dispatcher.mjs claim
+
+  claude:
+    needs: claim
+    if: needs.claim.outputs.status == 'claimed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # Uniquement la branche de travail ; main est protégée sans bypass App.
+      issues: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Vérifier que le token agent ne peut pas pousser sur main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/retiko-dispatcher.mjs verify-protection
+      - name: Confier l'issue à Claude Code
+        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Tu travailles sur Retiko.
+
+            Repository : yassineimpe-bit/Fidgo.
+            Issue assignée : #${{ needs.claim.outputs.issue }}.
+            Source fonctionnelle : issue #88. État court : issue #224.
+            Travaille uniquement sur l'issue assignée.
+
+            Avant toute modification : fetch main ; lis l'issue complète, #224 et
+            #88 lorsque nécessaire ; recherche une PR ou branche existante pour
+            cette issue ; ne duplique pas un travail ; vérifie que l'issue reste
+            actionnable. Crée depuis main actuel une branche
+            retiko/issue-${{ needs.claim.outputs.issue }}-claude. Respecte strictement
+            le scope. Ajoute ou adapte les tests pertinents. Exécute typecheck,
+            lint, tests, build et les E2E pertinents. Ouvre une PR reviewable dont
+            le body référence explicitement l'issue et contient exactement :
+            <!-- retiko-dispatch:issue=${{ needs.claim.outputs.issue }} -->
+
+            Ne merge jamais et ne pousse jamais sur main. Ne modifie ni #88 ni
+            #224, aucun secret, aucune production, migration production, base de
+            données réelle, Stripe live, Apple/Google/Vercel production. Ne
+            supprime aucune donnée, ne valide aucun test physique, ne coche
+            aucune validation physique dans #88, ne prends aucune décision
+            juridique ou commerciale et ne fais aucun hors-scope opportuniste.
+            Si une décision humaine est nécessaire, ne l'invente pas : arrête le
+            travail concerné et signale clairement le blocage. Le résultat attendu
+            est une PR reviewable liée à l'issue d'origine.
+            Ne modifie jamais .github/, un fichier .env, un secret, une clé,
+            un certificat privé ou un dump/backup. Ces chemins sont refusés par
+            le reconcile indépendant. Les protections main sont obligatoires.
+
+  reconcile:
+    needs: [claim, claude]
+    if: always() && needs.claim.outputs.status == 'claimed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      # Nouveau runner et scripts main fiables : aucun fichier du job agent.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Réconcilier la PR après contrôle de sa provenance et de ses fichiers
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RETIKO_ISSUE: ${{ needs.claim.outputs.issue }}
+          RETIKO_FAILED: "true"
+          RETIKO_REASON: "Exécution agent échouée, credential absent ou aucune PR portant le marker attendu."
+        run: node scripts/retiko-dispatcher.mjs reconcile

@@ -50,7 +50,7 @@ async function handlePost(req: Request, { params }: { params: Promise<{ id: stri
         where u.id = ${customerId}
           and c.establishment_id = ${session.establishmentId}
           and u.deleted_at is null and c.active = true
-        for update of c
+        for update of c for share of p
       `;
       if (!card) throw new Error("CARD_NOT_FOUND");
 

@@ -72,8 +72,13 @@ e-mails transactionnels) : **à confirmer** comme contact public.
    Voir `PROSPECTION_HORS_ETABLISSEMENT.md`. **À valider juridiquement.**
 2. Taux des pénalités de retard et clause de juridiction.
 3. Limitation de responsabilité (aucune n'est rédigée ; pas d'exclusion générale).
-4. Offre « Retiko 12 » : conditions de sortie anticipée et mécanisme de
-   résiliation dans le portail Stripe (voir `BILLING.md`).
+4. Grille affichée dans les CGV : grille publique `standard` (25 € HT/mois
+   sans engagement, 250 € HT/an payé d'avance) depuis la version 2026-09-27.
+   Régime de TVA de l'éditeur toujours « à compléter » dans les CGV (§ 4) ;
+   l'offre Fondateurs (19 € HT/mois pendant 24 mois) n'y figure pas et passe
+   par proposition commerciale écrite (voir `BILLING.md`). L'ancienne offre
+   « Retiko 12 » (grille `pilot`) n'est plus proposée : ses conditions de
+   sortie anticipée ne restent à trancher que si elle est réactivée.
 5. Préavis de suspension pour impayé et de modification de prix.
 6. Bases légales proposées dans le registre (toutes « à valider »).
 7. Durées : clients inactifs, commerce clos, staff désactivé, preuves

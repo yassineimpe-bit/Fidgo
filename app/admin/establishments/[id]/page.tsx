@@ -6,6 +6,11 @@ import { activityActionLabel } from "@/lib/activity-log";
 import { sql } from "@/lib/db";
 import { staffRoleLabel, type StaffRole } from "@/lib/loyalty";
 import { isUuid, requirePlatformAdmin } from "@/lib/platform-admin";
+import { AdminBar, AdminMetric } from "@/components/admin-metrics";
+import {
+  WATCH_REASON_LABELS, describeWatchReason, establishmentUsage, formatCalendarDate, formatMs, formatPercent,
+  ratePercent, scanErrorRate, watchReasons,
+} from "@/lib/platform-metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -27,18 +32,38 @@ export default async function AdminEstablishmentPage({ params }: { params: Promi
   `;
   if (!establishment) notFound();
 
-  const [stats] = await sql`
+  // Mêmes agrégats que la liste et la vue d'ensemble, restreints à ce commerce (index establishment_id).
+  const [usage] = await sql`${establishmentUsage(sql`e.id=${id}`)}`;
+  const [cardStats] = await sql`
     select
-      (select count(*)::int from customers where establishment_id=${id} and deleted_at is null) as customers,
       (select count(*)::int from cards where establishment_id=${id} and active) as active_cards,
-      (select count(*)::int from transactions where establishment_id=${id} and type='earn' and created_at >= now() - interval '7 days') as scans_7d,
-      (select count(*)::int from transactions where establishment_id=${id} and type='earn' and created_at >= now() - interval '30 days') as scans_30d,
-      (select count(*)::int from transactions where establishment_id=${id} and type='redeem' and created_at >= now() - interval '30 days') as rewards_30d,
-      (select max(created_at) from transactions where establishment_id=${id}) as last_activity,
-      (select count(*)::int from product_events where establishment_id=${id} and event_type='SCAN_FAILED' and created_at >= now() - interval '7 days') as scan_failed_7d,
-      (select count(*)::int from product_events where establishment_id=${id} and event_type='CAMERA_FAILED' and created_at >= now() - interval '7 days') as camera_failed_7d,
-      (select count(*)::int from wallet_passes where establishment_id=${id} and status='error') as wallet_errors
+      (select max(created_at) from transactions where establishment_id=${id}) as last_activity
   `;
+  const daily = await sql`
+    select d::date as day, coalesce(t.earn,0)::int as earn, coalesce(t.active_customers,0)::int as active_customers,
+      coalesce(t.rewards,0)::int as rewards
+    from generate_series(
+      (now() at time zone 'Europe/Paris')::date - 29,
+      (now() at time zone 'Europe/Paris')::date,
+      interval '1 day'
+    ) d
+    left join (
+      select (created_at at time zone 'Europe/Paris')::date as day,
+        count(*) filter (where type='earn')::int as earn,
+        count(distinct card_id) filter (where type='earn')::int as active_customers,
+        count(*) filter (where type='redeem')::int as rewards
+      from transactions
+      where establishment_id=${id} and created_at >= now() - interval '31 days'
+      group by 1
+    ) t on t.day = d::date
+    order by d desc
+  `;
+  const maxDaily = Math.max(1, ...daily.map((row) => Number(row.earn)));
+  const now = new Date();
+  const stats = { ...usage, ...cardStats };
+  const num = (key: string) => Number(stats[key] ?? 0);
+  const reasons = watchReasons(usage);
+
   const staff = await sql`
     select s.id, s.email, s.role, s.active, s.created_at, (pa.staff_user_id is not null) as platform_admin
     from staff_users s left join platform_admins pa on pa.staff_user_id=s.id
@@ -80,10 +105,43 @@ export default async function AdminEstablishmentPage({ params }: { params: Promi
       <section className="grid grid-4" style={{marginBottom:18}}>
         {([
           [stats.customers, "clients"], [stats.active_cards, "cartes actives"],
-          [stats.scans_7d, "scans 7 j"], [stats.scans_30d, "scans 30 j"],
+          [stats.earn_7d, "scans 7 j"], [stats.earn_30d, "scans 30 j"],
           [stats.rewards_30d, "récompenses 30 j"], [stats.scan_failed_7d, "scans échoués 7 j"],
           [stats.camera_failed_7d, "échecs caméra 7 j"], [stats.wallet_errors, "passes Wallet en erreur"],
-        ] as const).map(([value, label]) => <div key={label} className="card metric"><strong>{Number(value)}</strong><span>{label}</span></div>)}
+        ] as const).map(([value, label]) => <div key={label} className="card metric"><strong>{Number(value ?? 0)}</strong><span>{label}</span></div>)}
+      </section>
+
+      <section className="card admin-cockpit" aria-labelledby="usage-title" style={{marginBottom:18}}>
+        <h3 id="usage-title">Usage Retiko</h3>
+        <p className="muted" style={{fontSize:13}}>Agrégats uniquement. Passage = passage crédité (<code>earn</code>) ; client actif = au moins un passage crédité sur 30 j ; client revenu = passages sur au moins 2 jours distincts ; scanner sur 7 j.</p>
+        {reasons.length > 0 && <ul className="admin-watch-list" style={{marginBottom:12}}><li><ul>
+          {reasons.map((reason) => <li key={reason}><span className="badge warning">{WATCH_REASON_LABELS[reason]}</span> <span>{describeWatchReason(reason, usage, now)}</span></li>)}
+        </ul></li></ul>}
+        <div className="grid grid-4" style={{marginBottom:12}}>
+          <AdminMetric value={formatDate(establishment.created_at)} label="inscription"/>
+          <AdminMetric value={usage.first_earn_at ? formatDate(usage.first_earn_at) : "—"} label="premier passage crédité" hint={usage.first_earn_at ? undefined : "jamais démarré"}/>
+          <AdminMetric value={usage.last_earn_at ? formatDate(usage.last_earn_at) : "—"} label="dernier passage crédité" hint={`${num("earn_total")} au total`}/>
+          <AdminMetric value={`${num("earn_7d")} / ${num("earn_30d")}`} label="passages 7 j / 30 j" hint={`${num("earn_days_7d")} jour${num("earn_days_7d") > 1 ? "s" : ""} actif${num("earn_days_7d") > 1 ? "s" : ""} sur 7 j`}/>
+          <AdminMetric value={num("active_customers_30d")} label="clients actifs 30 j" hint={`${num("new_customers_30d")} nouveaux`}/>
+          <AdminMetric value={num("returning_customers_30d")} label="clients revenus 30 j" hint={`taux de retour ${formatPercent(ratePercent(num("returning_customers_30d"), num("active_customers_30d")))}`}/>
+          <AdminMetric value={num("rewards_30d")} label="récompenses utilisées 30 j" hint={`${num("rewards_available")} disponibles aujourd’hui`}/>
+          <AdminMetric value={`${num("wallet_apple_active")} / ${num("wallet_google_active")}`} label="passes actives Apple / Google"/>
+          <AdminMetric value={num("scan_failed_7d")} label="erreurs scanner 7 j" hint={`${num("scan_success_7d")} scans réussis`}/>
+          <AdminMetric value={formatPercent(scanErrorRate(num("scan_success_7d"), num("scan_failed_7d")))} label="taux d’erreur scanner 7 j"/>
+          <AdminMetric value={formatMs(usage.scan_p95_7d)} label="p95 scanner 7 j" hint="QR détecté → fiche client"/>
+        </div>
+        <details>
+          <summary>Activité quotidienne · 30 jours</summary>
+          {num("earn_30d") === 0 && <p className="muted">Aucun passage crédité sur 30 jours.</p>}
+          <div className="table-wrap"><table>
+            <thead><tr><th>Jour</th><th>Passages</th><th>Clients actifs</th><th>Récompenses</th><th aria-hidden="true"></th></tr></thead>
+            <tbody>{daily.map((row) => <tr key={String(row.day)}>
+              <td>{formatCalendarDate(row.day, { weekday: "short", day: "2-digit", month: "2-digit" })}</td>
+              <td>{Number(row.earn)}</td><td>{Number(row.active_customers)}</td><td>{Number(row.rewards)}</td>
+              <td style={{width:"35%"}}><AdminBar value={Number(row.earn)} max={maxDaily}/></td>
+            </tr>)}</tbody>
+          </table></div>
+        </details>
       </section>
 
       <div className="grid grid-2" style={{marginBottom:18}}>

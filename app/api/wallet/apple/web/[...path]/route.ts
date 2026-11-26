@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { sql } from "@/lib/db";
 import { applePassTypeIdentifier, buildApplePass, buildRevokedApplePass } from "@/lib/apple-wallet";
+import { parsePassesUpdatedSince, validAppleDeviceLibraryIdentifier, validApplePushToken } from "@/lib/apple-wallet-web";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { walletCardById, walletCardForRevocationById } from "@/lib/wallet-data";
 
@@ -71,11 +72,12 @@ export async function POST(request: Request, context: Context) {
 
   const parsed = registrationPath(path);
   if (!parsed) return new Response(null, { status: 404 });
+  if (!validAppleDeviceLibraryIdentifier(parsed.device)) return new Response(null, { status: 400 });
   const walletPass = await authorizedWalletPass(parsed.serial, parsed.passType, request);
   if (!walletPass || walletPass.status !== "active") return new Response(null, { status: 401 });
   const body = await request.json().catch(() => ({})) as { pushToken?: unknown };
   const pushToken = typeof body.pushToken === "string" ? body.pushToken.trim() : "";
-  if (!pushToken || pushToken.length > 512) return new Response(null, { status: 400 });
+  if (!validApplePushToken(pushToken)) return new Response(null, { status: 400 });
 
   const [existing] = await sql`select id from apple_wallet_registrations where wallet_pass_id=${walletPass.id} and device_library_identifier=${parsed.device} limit 1`;
   await sql`
@@ -97,6 +99,7 @@ export async function DELETE(request: Request, context: Context) {
   const { path } = await context.params;
   const parsed = registrationPath(path);
   if (!parsed) return new Response(null, { status: 404 });
+  if (!validAppleDeviceLibraryIdentifier(parsed.device)) return new Response(null, { status: 400 });
   const walletPass = await authorizedWalletPass(parsed.serial, parsed.passType, request);
   if (!walletPass) return new Response(null, { status: 401 });
   await sql`delete from apple_wallet_registrations where wallet_pass_id=${walletPass.id} and device_library_identifier=${parsed.device}`;
@@ -133,22 +136,27 @@ export async function GET(request: Request, context: Context) {
     const device = path[2];
     const passType = path[4];
     if (passType !== applePassTypeIdentifier()) return new Response(null, { status: 404 });
-    const sinceRaw = new URL(request.url).searchParams.get("passesUpdatedSince");
-    const since = sinceRaw && Number.isFinite(Number(sinceRaw)) ? Number(sinceRaw) : null;
+    if (!validAppleDeviceLibraryIdentifier(device)) return new Response(null, { status: 400 });
+    const parsedSince = parsePassesUpdatedSince(new URL(request.url).searchParams.get("passesUpdatedSince"));
+    if (!parsedSince.valid) return new Response(null, { status: 400 });
+    const since = parsedSince.value;
     const rows = since === null
       ? await sql`
-          select wp.serial_number,extract(epoch from c.updated_at)::bigint as update_tag
+          select wp.serial_number,extract(epoch from greatest(c.updated_at,wp.updated_at))::bigint as update_tag
           from apple_wallet_registrations r
           join wallet_passes wp on wp.id=r.wallet_pass_id
           join cards c on c.id=wp.card_id
-          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status in ('active','revoked')
+          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType}
+            and wp.establishment_id=c.establishment_id and wp.status in ('active','revoked')
         `
       : await sql`
-          select wp.serial_number,extract(epoch from c.updated_at)::bigint as update_tag
+          select wp.serial_number,extract(epoch from greatest(c.updated_at,wp.updated_at))::bigint as update_tag
           from apple_wallet_registrations r
           join wallet_passes wp on wp.id=r.wallet_pass_id
           join cards c on c.id=wp.card_id
-          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType} and wp.status in ('active','revoked') and c.updated_at > to_timestamp(${since})
+          where r.device_library_identifier=${device} and wp.provider='APPLE' and wp.external_id=${passType}
+            and wp.establishment_id=c.establishment_id and wp.status in ('active','revoked')
+            and greatest(c.updated_at,wp.updated_at) > to_timestamp(${since})
         `;
     if (!rows.length) return new Response(null, { status: 204 });
     const serialNumbers = rows.map((row) => String(row.serial_number));

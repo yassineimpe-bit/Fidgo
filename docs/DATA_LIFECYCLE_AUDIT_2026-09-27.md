@@ -1,4 +1,9 @@
-# Audit Data Lifecycle Retiko
+# Audit Data Lifecycle Retiko — historique du 27 septembre
+
+> **Revue du 26/11/2026 : actions d’accès DB obsolètes.** Depuis #251, accès
+> par broker OIDC dédié et déclenchement manuel en dry-run par défaut. Ne pas
+> suivre l’ancienne consigne d’ajouter DATABASE_URL. Les résultats ci-dessous
+> sont ceux du 27/09, pas l’état actuel de production. Voir DATA_LIFECYCLE.md.
 
 MAIN AUDITÉ = `72d2ba5697228ea70cf5a32ecbf6d6234d98c596`  
 DATE = 2026-09-27 21:56 CEST

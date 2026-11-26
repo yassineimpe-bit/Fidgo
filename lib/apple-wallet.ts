@@ -77,6 +77,7 @@ async function renderApplePass(card: WalletCard, authToken: string, revoked: boo
     },
   );
 
+  if (!revoked && card.expiresAt) pass.setExpirationDate(new Date(card.expiresAt));
   pass.type = "storeCard";
   if (revoked) {
     pass.primaryFields.push({ key: "status", label: "CARTE", value: "Désactivée" });
@@ -141,21 +142,83 @@ export async function buildRevokedApplePass(card: WalletCard, authenticationToke
   return renderApplePass(card, authenticationToken, true);
 }
 
+class AppleApnsError extends Error {
+  constructor(readonly status: number, readonly reason: string | null) {
+    super(`APPLE_APNS_${status}`);
+    this.name = "AppleApnsError";
+  }
+}
+
+function appleApnsReason(chunks: Buffer[]) {
+  try {
+    const reason = JSON.parse(Buffer.concat(chunks).toString("utf8"))?.reason;
+    return typeof reason === "string" && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(reason) ? reason : null;
+  } catch {
+    return null;
+  }
+}
+
+function permanentlyInvalidRegistration(error: unknown) {
+  return error instanceof AppleApnsError && (
+    error.status === 410
+    || error.reason === "BadDeviceToken"
+    || error.reason === "DeviceTokenNotForTopic"
+    || error.reason === "Unregistered"
+  );
+}
+
 async function sendPassPush(pushToken: string) {
   const cfg = config();
   return new Promise<void>((resolve, reject) => {
     const client = connect("https://api.push.apple.com", { cert: cfg.signerCert, key: cfg.signerKey, passphrase: cfg.signerKeyPassphrase });
-    client.once("error", reject);
+    let settled = false;
+    const finish = (error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      client.close();
+      if (error) reject(error); else resolve();
+    };
+    client.once("error", finish);
     const request = client.request({ ":method": "POST", ":path": `/3/device/${pushToken}`, "apns-topic": cfg.passTypeIdentifier });
     let status = 0;
+    let responseBytes = 0;
+    const responseChunks: Buffer[] = [];
     request.on("response", (headers) => { status = Number(headers[":status"] || 0); });
-    request.on("data", () => {});
+    request.once("error", finish);
+    request.on("data", (chunk: Buffer | string) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      if (responseBytes >= 1024) return;
+      responseChunks.push(buffer.subarray(0, 1024 - responseBytes));
+      responseBytes += buffer.length;
+    });
     request.on("end", () => {
-      client.close();
-      if (status === 200) resolve(); else reject(new Error(`APPLE_APNS_${status}`));
+      if (status === 200) finish();
+      else finish(new AppleApnsError(status, appleApnsReason(responseChunks)));
     });
     request.end("{}");
   });
+}
+
+async function pushAppleRegistrations(walletPassId: string) {
+  const registrations = await sql`
+    select id,push_token from apple_wallet_registrations
+    where wallet_pass_id=${walletPassId}
+  `;
+  const failures: string[] = [];
+  await Promise.all(registrations.map(async (row) => {
+    try {
+      await sendPassPush(String(row.push_token));
+    } catch (error) {
+      failures.push(safeErrorCode(error, "APPLE_APNS_FAILED"));
+      if (permanentlyInvalidRegistration(error)) {
+        await sql`
+          delete from apple_wallet_registrations
+          where id=${row.id} and wallet_pass_id=${walletPassId}
+        `;
+      }
+    }
+  }));
+  return failures;
 }
 
 export async function notifyAppleWalletRevocation(cardId: string) {
@@ -166,21 +229,11 @@ export async function notifyAppleWalletRevocation(cardId: string) {
     limit 1
   `;
   if (!walletPass) return;
-  const registrations = await sql`
-    select push_token from apple_wallet_registrations
-    where wallet_pass_id=${walletPass.id}
-  `;
-  const failures: string[] = [];
-  await Promise.all(registrations.map(async (row) => {
-    try {
-      await sendPassPush(String(row.push_token));
-    } catch (error) {
-      failures.push(safeErrorCode(error, "APPLE_APNS_FAILED"));
-    }
-  }));
+  await sql`update wallet_passes set last_synced_at=now(),updated_at=now() where id=${walletPass.id}`;
+  const failures = await pushAppleRegistrations(String(walletPass.id));
   await sql`
     update wallet_passes
-    set last_synced_at=now(),last_error=${failures.length ? failures.join(" | ").slice(0, 1000) : null},updated_at=now()
+    set last_error=${failures.length ? failures.join(" | ").slice(0, 1000) : null}
     where id=${walletPass.id}
   `;
 }
@@ -189,14 +242,9 @@ export async function notifyAppleWallet(cardId: string) {
   if (!appleWalletEnabled()) return;
   const [walletPass] = await sql`select id from wallet_passes where card_id=${cardId} and provider='APPLE' and status='active' limit 1`;
   if (!walletPass) return;
-  await sql`update wallet_passes set last_synced_at=now(),updated_at=now() where id=${walletPass.id}`;
-  const registrations = await sql`select push_token from apple_wallet_registrations where wallet_pass_id=${walletPass.id}`;
-  const failures: string[] = [];
-  await Promise.all(registrations.map(async (row) => {
-    try { await sendPassPush(String(row.push_token)); }
-    catch (error) { failures.push(safeErrorCode(error, "APPLE_APNS_FAILED")); }
-  }));
-  if (failures.length) await sql`update wallet_passes set last_error=${failures.join(" | ").slice(0, 1000)},updated_at=now() where id=${walletPass.id}`;
+  await sql`update wallet_passes set last_synced_at=now(),last_error=null,updated_at=now() where id=${walletPass.id}`;
+  const failures = await pushAppleRegistrations(String(walletPass.id));
+  if (failures.length) await sql`update wallet_passes set last_error=${failures.join(" | ").slice(0, 1000)} where id=${walletPass.id}`;
 }
 
 export function applePassTypeIdentifier() {
