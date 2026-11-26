@@ -13,14 +13,20 @@ export type PlatformAdmin = { staffId: string; email: string; establishmentId: s
 export async function getPlatformAdmin(): Promise<PlatformAdmin | null> {
   try {
     const session = await getSession();
-    if (!session) return null;
-    const [row] = await sql`
-      select 1 from platform_admins where staff_user_id=${session.staffId} limit 1
-    `;
-    if (!row) return null;
+    if (!session || !(await isPlatformAdmin(session.staffId))) return null;
     return { staffId: session.staffId, email: session.email, establishmentId: session.establishmentId };
   } catch {
     return null;
+  }
+}
+
+/** Présence dans platform_admins. Échoue fermé : toute erreur vaut « pas admin ». */
+export async function isPlatformAdmin(staffId: string): Promise<boolean> {
+  try {
+    const [row] = await sql`select 1 from platform_admins where staff_user_id=${staffId} limit 1`;
+    return Boolean(row);
+  } catch {
+    return false;
   }
 }
 

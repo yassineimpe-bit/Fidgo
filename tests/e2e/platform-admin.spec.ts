@@ -66,6 +66,18 @@ async function expectAdminUsableOnPhones(page: Page, allPaths: string[], detailP
   }
 }
 
+/** /admin sans droit : connexion super-admin (#256), aucune donnée admin. */
+async function expectAdminLoginOnly(page: Page) {
+  expect((await page.goto("/admin"))?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Connexion administrateur" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navigation super-admin" })).toHaveCount(0);
+}
+
+async function expectAdminCockpit(page: Page) {
+  expect((await page.goto("/admin"))?.status()).toBe(200);
+  await expect(page.getByRole("navigation", { name: "Navigation super-admin" })).toBeVisible();
+}
+
 function suspension(page: Page, establishmentId: string, data: Record<string, unknown>, headers: Record<string, string> = { origin }) {
   return page.request.post(`/api/admin/establishments/${establishmentId}/suspension`, { headers, data });
 }
@@ -73,7 +85,8 @@ function suspension(page: Page, establishmentId: string, data: Record<string, un
 test("super-admin : invisible et inutilisable pour un commerçant ordinaire", async ({ page }) => {
   await createMerchant(page, "not-admin");
   const me = await ownerOf(page);
-  for (const path of ["/admin", "/admin/establishments", "/admin/users", "/admin/subscriptions", "/admin/audit", `/admin/establishments/${me.establishmentId}`]) {
+  await expectAdminLoginOnly(page);
+  for (const path of ["/admin/establishments", "/admin/users", "/admin/subscriptions", "/admin/audit", `/admin/establishments/${me.establishmentId}`]) {
     const response = await page.goto(path);
     expect(response?.status(), path).toBe(404);
   }
@@ -211,20 +224,20 @@ test("super-admin : recherche, suspension réversible, audit append-only et rév
 
     // Retrait des droits : effet immédiat, sans attendre l'expiration de la session.
     await sql`delete from platform_admins where staff_user_id=${admin.staffId}`;
-    expect((await page.goto("/admin"))?.status()).toBe(404);
+    await expectAdminLoginOnly(page);
 
     // Session : un changement de mot de passe (token_version) tue la session privilégiée.
     await sql`insert into platform_admins(staff_user_id, note) values(${admin.staffId}, 'e2e')`;
-    expect((await page.goto("/admin"))?.status()).toBe(200);
+    await expectAdminCockpit(page);
     await sql`update staff_users set token_version=token_version+1 where id=${admin.staffId}`;
-    expect((await page.goto("/admin"))?.status()).toBe(404);
+    await expectAdminLoginOnly(page);
     const relogin = await page.request.post("/api/auth/login", { headers: { origin, "x-real-ip": testClientIp() }, data: { email: admin.email, password: PASSWORD } });
     expect(relogin.ok()).toBeTruthy();
-    expect((await page.goto("/admin"))?.status()).toBe(200);
+    await expectAdminCockpit(page);
 
     // Compte super-admin désactivé : plus d'accès, même avec une session encore signée.
     await sql`update staff_users set active=false where id=${admin.staffId}`;
-    expect((await page.goto("/admin"))?.status()).toBe(404);
+    await expectAdminLoginOnly(page);
     expect((await suspension(page, target.establishmentId, { action: "suspend", reason: "Tentative après désactivation", confirmationSlug: target.slug })).status()).toBe(404);
     expect((await page.request.post("/api/auth/login", { headers: { origin, "x-real-ip": testClientIp() }, data: { email: admin.email, password: PASSWORD } })).status()).toBe(401);
   } finally {

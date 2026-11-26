@@ -8,6 +8,7 @@ import { isEmail } from "@/lib/input";
 import { safeErrorCode } from "@/lib/observability";
 import { createPhaseTimer } from "@/lib/phase-timer";
 import { enabledTwoFactor, mfaPendingCookie, signMfaPending } from "@/lib/two-factor";
+import { isPlatformAdmin, recordPlatformAudit } from "@/lib/platform-admin";
 
 /**
  * Hash factice (mot de passe aleatoire, meme cout que la production) compare
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
+  // Connexion ouverte depuis /admin : réservée aux comptes de platform_admins.
+  const adminLogin = body.scope === "admin";
   timer.lap("parseMs");
 
   const byIp = await rateLimit(request, "login", 10, 15 * 60);
@@ -70,11 +73,18 @@ export async function POST(request: Request) {
     `;
     const user = users[0];
     timer.lap("dbLookupMs");
+    // Vérifié avant bcrypt, que le mot de passe soit bon ou non : même coût
+    // pour un admin et un non-admin.
+    const adminAllowed = adminLogin && user ? await isPlatformAdmin(String(user.id)) : false;
     const hash = user?.active ? String(user.password_hash) : DUMMY_HASH;
     const passwordOk = await bcrypt.compare(password, hash);
     timer.lap("bcryptMs");
 
-    if (!user || !user.active || !passwordOk) {
+    // Connexion admin d'un compte hors platform_admins : traitée exactement
+    // comme un mauvais mot de passe (même réponse, même compteur), aucun
+    // signal permettant d'énumérer les super-admins. Un mot de passe correct
+    // sur /login remet ce compteur à zéro : pas de blocage du commerçant.
+    if (!user || !user.active || !passwordOk || (adminLogin && !adminAllowed)) {
       // Seul l'echec consomme un jeton.
       const { allowed } = await consumeRateLimit(accountKey, ACCOUNT_ATTEMPT_LIMIT, ACCOUNT_WINDOW_SECONDS);
       timer.lap("accountLimitMs");
@@ -120,7 +130,7 @@ export async function POST(request: Request) {
     // Second facteur actif : aucune session tant que le code n'est pas
     // vérifié par /api/auth/login/verify. Révélé seulement après le mot de passe.
     if (await enabledTwoFactor(String(user.id))) {
-      const pending = await signMfaPending(String(user.id), Number(user.token_version));
+      const pending = await signMfaPending(String(user.id), Number(user.token_version), { admin: adminLogin });
       const response = NextResponse.json({ twoFactorRequired: true }, { headers: { "cache-control": "no-store" } });
       response.cookies.set(mfaPendingCookie(pending));
       timer.done("two_factor_required");
@@ -135,6 +145,16 @@ export async function POST(request: Request) {
       tokenVersion: Number(user.token_version),
     });
     timer.lap("sessionSignMs");
+    if (adminLogin) {
+      await recordPlatformAudit(
+        { staffId: String(user.id), email: String(user.email), establishmentId: String(user.establishment_id) },
+        { action: "ADMIN_LOGIN", metadata: { method: "password" } },
+      );
+      const response = NextResponse.json({ ok: true, destination: "/admin" }, { headers: { "cache-control": "no-store" } });
+      response.cookies.set(sessionCookie(token));
+      timer.done("admin_success");
+      return response;
+    }
     // Même règle que le dashboard : un OWNER dont la configuration guidée est
     // en cours y retourne directement (NULL = commerce historique, terminé).
     const onboardingPending = String(user.role) === "OWNER"

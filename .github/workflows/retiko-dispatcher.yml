@@ -12,31 +12,32 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write       # Claude crée sa branche et y pousse ses modifications.
-  issues: write         # Le dispatcher fait évoluer state:* et signale un blocage.
-  pull-requests: write  # Claude ouvre la PR reviewable associée à l'issue.
+permissions: {}
 
-# Couvre le claim ET toute l'exécution Claude : un seul worker V1 peut donc
-# passer une issue à state:running. Les événements suivants attendent leur tour.
+# Un seul claim, agent et reconcile à la fois, y compris entre les jobs.
 concurrency:
   group: retiko-claude-dispatcher
   cancel-in-progress: false
 
 jobs:
-  dispatch:
+  claim:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      status: ${{ steps.claim.outputs.status }}
+      issue: ${{ steps.claim.outputs.issue }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: main
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - name: Initialiser les labels V1 (option manuelle et idempotente)
+      - name: Initialiser les labels V1
         if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_labels
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -47,18 +48,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/retiko-dispatcher.mjs claim
-      - name: Bloquer si le credential Claude manque
-        if: steps.claim.outputs.status == 'claimed' && env.CLAUDE_CODE_OAUTH_TOKEN == ''
+
+  claude:
+    needs: claim
+    if: needs.claim.outputs.status == 'claimed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # Uniquement la branche de travail ; main est protégée sans bypass App.
+      issues: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Vérifier que le token agent ne peut pas pousser sur main
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RETIKO_ISSUE: ${{ steps.claim.outputs.issue }}
-          RETIKO_FAILED: "true"
-          RETIKO_REASON: "credential Claude absent ; configuration humaine requise."
-        run: node scripts/retiko-dispatcher.mjs reconcile
+        run: node scripts/retiko-dispatcher.mjs verify-protection
       - name: Confier l'issue à Claude Code
-        id: claude
-        if: steps.claim.outputs.status == 'claimed' && env.CLAUDE_CODE_OAUTH_TOKEN != ''
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
@@ -66,7 +79,7 @@ jobs:
             Tu travailles sur Retiko.
 
             Repository : yassineimpe-bit/Fidgo.
-            Issue assignée : #${{ steps.claim.outputs.issue }}.
+            Issue assignée : #${{ needs.claim.outputs.issue }}.
             Source fonctionnelle : issue #88. État court : issue #224.
             Travaille uniquement sur l'issue assignée.
 
@@ -74,11 +87,11 @@ jobs:
             #88 lorsque nécessaire ; recherche une PR ou branche existante pour
             cette issue ; ne duplique pas un travail ; vérifie que l'issue reste
             actionnable. Crée depuis main actuel une branche
-            retiko/issue-${{ steps.claim.outputs.issue }}-claude. Respecte strictement
+            retiko/issue-${{ needs.claim.outputs.issue }}-claude. Respecte strictement
             le scope. Ajoute ou adapte les tests pertinents. Exécute typecheck,
             lint, tests, build et les E2E pertinents. Ouvre une PR reviewable dont
             le body référence explicitement l'issue et contient exactement :
-            <!-- retiko-dispatch:issue=${{ steps.claim.outputs.issue }} -->
+            <!-- retiko-dispatch:issue=${{ needs.claim.outputs.issue }} -->
 
             Ne merge jamais et ne pousse jamais sur main. Ne modifie ni #88 ni
             #224, aucun secret, aucune production, migration production, base de
@@ -89,19 +102,32 @@ jobs:
             Si une décision humaine est nécessaire, ne l'invente pas : arrête le
             travail concerné et signale clairement le blocage. Le résultat attendu
             est une PR reviewable liée à l'issue d'origine.
-      - name: Passer l'issue en review si sa PR existe
-        if: always() && steps.claim.outputs.status == 'claimed' && steps.claude.outcome == 'success'
+            Ne modifie jamais .github/, un fichier .env, un secret, une clé,
+            un certificat privé ou un dump/backup. Ces chemins sont refusés par
+            le reconcile indépendant. Les protections main sont obligatoires.
+
+  reconcile:
+    needs: [claim, claude]
+    if: always() && needs.claim.outputs.status == 'claimed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      # Nouveau runner et scripts main fiables : aucun fichier du job agent.
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Réconcilier la PR après contrôle de sa provenance et de ses fichiers
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          RETIKO_ISSUE: ${{ steps.claim.outputs.issue }}
+          RETIKO_ISSUE: ${{ needs.claim.outputs.issue }}
           RETIKO_FAILED: "true"
-          RETIKO_REASON: "Claude a terminé sans créer de PR portant le marker attendu."
-        run: node scripts/retiko-dispatcher.mjs reconcile
-      - name: Bloquer après un échec Claude
-        if: always() && steps.claim.outputs.status == 'claimed' && steps.claude.outcome == 'failure'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RETIKO_ISSUE: ${{ steps.claim.outputs.issue }}
-          RETIKO_FAILED: "true"
-          RETIKO_REASON: "exécution Claude échouée avant la création d'une PR correspondante."
+          RETIKO_REASON: "Exécution agent échouée, credential absent ou aucune PR portant le marker attendu."
         run: node scripts/retiko-dispatcher.mjs reconcile

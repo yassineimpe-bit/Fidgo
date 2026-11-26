@@ -92,15 +92,15 @@ export function CustomerTable({ initial, canManage, searchActive = false }: { in
   }
 
   return <section className="card">
-    <div className="table-wrap"><table>
-      <thead><tr><th>Client</th><th>Contact</th><th>Carte</th><th>Solde</th><th>Marketing</th>{canManage && <th>Actions</th>}</tr></thead>
-      <tbody>{rows.map((customer) => <tr key={customer.id}>
-        <td><Link href={`/dashboard/clients/${customer.id}`}><strong>{customer.first_name || "Sans prénom"}</strong></Link></td>
-        <td>{customer.email || customer.phone || "Non fourni"}</td>
-        <td>{customer.short_code || "—"}</td>
-        <td>{customer.balance ?? 0}</td>
-        <td>{customer.marketing_consent ? "Oui" : "Non"}</td>
-        {canManage && <td><div className="actions" style={{margin:0}}>
+    <div className="table-wrap table-cards"><table role="table">
+      <thead role="rowgroup"><tr role="row"><th role="columnheader">Client</th><th role="columnheader">Contact</th><th role="columnheader">Carte</th><th role="columnheader">Solde</th><th role="columnheader">Marketing</th>{canManage && <th role="columnheader">Actions</th>}</tr></thead>
+      <tbody role="rowgroup">{rows.map((customer) => <tr role="row" key={customer.id}>
+        <td role="cell" className="cell-title"><Link href={`/dashboard/clients/${customer.id}`}><strong>{customer.first_name || "Sans prénom"}</strong></Link></td>
+        <td role="cell" data-label="Contact">{customer.email || customer.phone || "Non fourni"}</td>
+        <td role="cell" data-label="Carte">{customer.short_code || "—"}</td>
+        <td role="cell" data-label="Solde">{customer.balance ?? 0}</td>
+        <td role="cell" data-label="Marketing">{customer.marketing_consent ? "Oui" : "Non"}</td>
+        {canManage && <td role="cell" className="cell-actions"><div className="actions" style={{margin:0}}>
           <button className="btn" disabled={busy === customer.id || !customer.active} onClick={() => adjust(customer)}>Ajuster</button>
           <a className="btn" href={`/api/customers/${customer.id}/export`}>Exporter</a>
           <button className="btn btn-danger" disabled={busy === customer.id} onClick={() => erase(customer)}>Effacer</button>

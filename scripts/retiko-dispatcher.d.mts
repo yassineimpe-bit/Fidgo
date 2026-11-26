@@ -11,3 +11,6 @@ export function transition(api: any, issue: any, from: string, to: string): Prom
 export function claimNext(api: any): Promise<any>;
 export function reconcileIssue(api: any, issue: any, options?: { failed?: boolean; reason?: string }): Promise<any>;
 export function createApi(options: { token: string; repository: string; fetchImpl?: typeof fetch }): any;
+
+export function forbiddenDispatcherPath(path: unknown): boolean;
+export function verifyMainProtection(api: any): Promise<boolean>;

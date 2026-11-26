@@ -184,6 +184,30 @@ h3 { letter-spacing: -.025em; }
 .table-wrap { overflow-x: auto; border-radius: 8px; }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { padding: 14px 12px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; vertical-align: middle; }
+/* body { overflow-wrap: anywhere } ramène la largeur minimale d'une cellule à
+   un caractère : un tableau en width:100% se comprimait (textes lettre par
+   lettre, boutons verticaux) au lieu de défiler dans .table-wrap. break-word
+   ne coupe qu'un mot qui déborde réellement. */
+.table-wrap th, .table-wrap td { overflow-wrap: break-word; }
+.table-wrap td .btn { white-space: nowrap; }
+/* Téléphone : chaque ligne d'un tableau .table-cards devient une carte
+   libellé / valeur. Les rôles ARIA posés dans le JSX gardent la sémantique de
+   tableau malgré le display:block (que WebKit peut ignorer) ; le libellé visuel
+   est exclu du nom accessible (alt text vide), l'en-tête reste annoncé. */
+@media (max-width: 640px) {
+  .table-cards { position: relative; }
+  .table-cards table, .table-cards tbody, .table-cards tr, .table-cards td { display: block; }
+  .table-cards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .table-cards tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .table-cards tr:last-child { border-bottom: 0; }
+  .table-cards tbody tr:hover { background: transparent; }
+  .table-cards td { display: grid; grid-template-columns: minmax(84px, 36%) minmax(0, 1fr); gap: 12px; padding: 3px 0; border: 0; font-size: 15px; }
+  .table-cards td::before { content: attr(data-label); content: attr(data-label) / ""; color: var(--muted); font-size: 13px; font-weight: 650; line-height: 1.6; }
+  .table-cards td.cell-title { display: block; padding-bottom: 6px; font-size: 16px; font-weight: 750; }
+  .table-cards td.cell-actions { display: block; padding-top: 10px; }
+  .table-cards td.cell-title::before, .table-cards td.cell-actions::before { content: none; }
+  .table-cards td.cell-actions:empty { display: none; }
+}
 th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
 tbody tr { transition: background-color .14s ease; }
 tbody tr:hover { background: var(--surface-muted); }
@@ -308,7 +332,7 @@ button.scanner-pill, a.scanner-pill { pointer-events:auto; cursor:pointer; }
   .admin-sidebar-links { display:flex; gap:6px; overflow-x:auto; padding:6px 0 2px; scrollbar-width:none; }
   .admin-sidebar-links::-webkit-scrollbar { display:none; }
   .admin-sidebar-links .badge { flex:0 0 auto; background:#242424; color:#d8d6d1; }
-  .app-nav-mobile-primary { display: inline-flex; margin-left: auto; min-height: 44px; align-items:center; padding:0 12px; border-radius:8px; background:var(--retiko-coral); color:#fff; font-weight:750; font-size:13px; }
+  .app-nav-mobile-primary { display: inline-flex; flex: 0 0 auto; white-space: nowrap; margin-left: auto; min-height: 44px; align-items:center; padding:0 12px; border-radius:8px; background:var(--retiko-coral); color:#fff; font-weight:750; font-size:13px; }
   .nav-menu { display: inline-flex; }
   .app-sidebar + .shell, .admin-sidebar + .shell { width: min(1120px, calc(100% - 32px)); margin-left:auto; margin-right:auto; }
   .hero-grid,.grid-2,.grid-3,.grid-4 { grid-template-columns: minmax(0, 1fr); }

@@ -84,6 +84,7 @@ test("secrets client : pages, API et bundles ne publient aucune valeur serveur",
 
   const protectedEndpoints = [
     await page.request.post("/api/internal/backup-credentials"),
+    await page.request.post("/api/internal/lifecycle-credentials"),
     await page.request.get("/api/cron/purge"),
     await page.request.post("/api/billing/webhook", { data: "{}" }),
   ];

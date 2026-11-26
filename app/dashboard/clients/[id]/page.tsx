@@ -150,15 +150,15 @@ export default async function CustomerDetailPage({
         />}
         {transactions.length === 0
           ? <div className="empty-state"><strong>Aucune transaction.</strong><p>Le premier passage apparaîtra ici.</p></div>
-          : <div className="table-wrap"><table>
-              <thead><tr><th>Date</th><th>Type</th><th>Variation</th><th>Solde après</th><th>Employé</th></tr></thead>
-              <tbody>{transactions.map((row) => <tr key={String(row.id)}>
-                <td>{new Date(String(row.created_at)).toLocaleString("fr-FR")}</td>
-                <td>{transactionTypeLabel(String(row.type))}{row.reversed ? " · annulée" : ""}
-                  {row.adjust_reason && <div className="muted" style={{fontSize:13}}>Motif : {String(row.adjust_reason)}</div>}</td>
-                <td>{Number(row.delta) > 0 ? "+" : ""}{Number(row.delta)}</td>
-                <td>{Number(row.balance_after)}</td>
-                <td>{row.staff_email ? String(row.staff_email) : "système"}</td>
+          : <div className="table-wrap table-cards"><table role="table">
+              <thead role="rowgroup"><tr role="row"><th role="columnheader">Date</th><th role="columnheader">Type</th><th role="columnheader">Variation</th><th role="columnheader">Solde après</th><th role="columnheader">Employé</th></tr></thead>
+              <tbody role="rowgroup">{transactions.map((row) => <tr role="row" key={String(row.id)}>
+                <td role="cell" className="cell-title">{new Date(String(row.created_at)).toLocaleString("fr-FR")}</td>
+                <td role="cell" data-label="Type"><div>{transactionTypeLabel(String(row.type))}{row.reversed ? " · annulée" : ""}
+                  {row.adjust_reason && <div className="muted" style={{fontSize:13}}>Motif : {String(row.adjust_reason)}</div>}</div></td>
+                <td role="cell" data-label="Variation">{Number(row.delta) > 0 ? "+" : ""}{Number(row.delta)}</td>
+                <td role="cell" data-label="Solde après">{Number(row.balance_after)}</td>
+                <td role="cell" data-label="Employé">{row.staff_email ? String(row.staff_email) : "système"}</td>
               </tr>)}</tbody>
             </table></div>}
       </section>

@@ -105,7 +105,11 @@ async function expectNoPrivateData(page: Page, label: string) {
 test("cockpit super-admin : nouvelles surfaces invisibles pour un commerçant ordinaire", async ({ page }) => {
   await createMerchant(page, "cockpit-not-admin");
   const me = await ownerOf(page);
-  for (const path of ["/admin", "/admin/establishments?watch=1", "/admin/establishments?activity=never&subscription=trial&sort=scans_30d", `/admin/establishments/${me.establishmentId}`]) {
+  // /admin : connexion super-admin (#256), aucune donnée ; sous-pages en 404.
+  expect((await page.goto("/admin"))?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Connexion administrateur" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Navigation super-admin" })).toHaveCount(0);
+  for (const path of ["/admin/establishments?watch=1", "/admin/establishments?activity=never&subscription=trial&sort=scans_30d", `/admin/establishments/${me.establishmentId}`]) {
     expect((await page.goto(path))?.status(), path).toBe(404);
   }
 });

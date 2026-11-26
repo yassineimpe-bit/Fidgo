@@ -6,6 +6,7 @@ import { withApiErrorHandling } from "@/lib/observability";
 import { consumeRateLimit, rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { requireSameOrigin } from "@/lib/security";
 import { MFA_PENDING_COOKIE, clearedMfaPendingCookie, consumeSecondFactor, enabledTwoFactor, verifyMfaPending } from "@/lib/two-factor";
+import { isPlatformAdmin, recordPlatformAudit } from "@/lib/platform-admin";
 
 const PRIVATE_HEADERS = { "cache-control": "no-store" };
 /** Essais de code par compte et par quart d'heure : 5 × 3 codes valides sur 10^6. */
@@ -51,6 +52,14 @@ async function handlePost(request: Request) {
   const method = await consumeSecondFactor(pending.staffId, factor, code ? { code } : { recoveryCode });
   if (!method) return NextResponse.json({ error: "INVALID_2FA_CODE" }, { status: 401, headers: PRIVATE_HEADERS });
 
+  // Connexion admin : le contrôle fait à l'étape mot de passe ne suffit pas,
+  // l'accès a pu être retiré entre-temps. Réponse générique, aucune session.
+  if (pending.admin && !(await isPlatformAdmin(pending.staffId))) {
+    const response = NextResponse.json({ error: "INVALID_CREDENTIALS" }, { status: 401, headers: PRIVATE_HEADERS });
+    response.cookies.set(clearedMfaPendingCookie());
+    return response;
+  }
+
   await resetRateLimit(`login-2fa:${pending.staffId}`);
   await sql`
     insert into audit_logs(establishment_id, staff_user_id, action, entity_type, entity_id, metadata)
@@ -63,8 +72,17 @@ async function handlePost(request: Request) {
     email: String(user.email),
     tokenVersion: Number(user.token_version),
   });
+  if (pending.admin) {
+    await recordPlatformAudit(
+      { staffId: String(user.id), email: String(user.email), establishmentId: String(user.establishment_id) },
+      { action: "ADMIN_LOGIN", metadata: { method } },
+    );
+  }
   const onboardingPending = String(user.role) === "OWNER" && user.onboarding_step !== null && Number(user.onboarding_step) < 5;
-  const response = NextResponse.json({ ok: true, role: user.role, onboardingPending }, { headers: PRIVATE_HEADERS });
+  const response = NextResponse.json(
+    pending.admin ? { ok: true, destination: "/admin" } : { ok: true, role: user.role, onboardingPending },
+    { headers: PRIVATE_HEADERS },
+  );
   response.cookies.set(sessionCookie(token));
   response.cookies.set(clearedMfaPendingCookie());
   return response;

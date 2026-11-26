@@ -41,8 +41,16 @@ test("visuel de carte : import, fond image, bannière d'inscription, remplacemen
     await page.goto(cardUrl);
     await expect(page.locator(".loyalty-card")).toHaveCSS("background-image", new RegExp(`url\\("${origin}${visualUrl}"\\)`));
     await expect(page.locator(".loyalty-card")).toHaveCSS("color", "rgb(255, 255, 255)");
-    await page.goto(`/j/${slug}`);
-    await expect(page.locator(`img.join-visual[src="${visualUrl}"]`)).toBeVisible();
+    // Un client déjà inscrit est redirigé vers sa carte par JoinForm.
+    // Vérifier la bannière dans un navigateur anonyme, sans token localStorage.
+    const joinContext = await browser.newContext();
+    try {
+      const joinPage = await joinContext.newPage();
+      await joinPage.goto(`${origin}/j/${slug}`);
+      await expect(joinPage.locator(`img.join-visual[src="${visualUrl}"]`)).toBeVisible();
+    } finally {
+      await joinContext.close();
+    }
 
     // Remplacement : l'ancien fichier disparaît.
     const replaced = await page.request.post("/api/restaurant/card-image", {
