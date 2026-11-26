@@ -75,7 +75,7 @@ dans une page publique et figure dans `missingLegalFields()`.
 ## Décisions juridiques ou métier encore ouvertes
 
 1. **Petits professionnels** (≤ 5 salariés, contrat hors de l'activité
-   principale, conclu à distance ou hors établissement) : application du droit
+   principale, conclu hors établissement) : application du droit
    de la consommation (rétractation, information précontractuelle, résiliation).
    Voir `PROSPECTION_HORS_ETABLISSEMENT.md`. **À valider juridiquement.**
 2. Taux des pénalités de retard et clause de juridiction.
@@ -109,3 +109,36 @@ dans une page publique et figure dans `missingLegalFields()`.
 - `RGPD_PROCEDURES.md` — droits, violations, fin de relation ;
 - `DPA_TEMPLATE.md` — annexe de sous-traitance ;
 - `retiko_references_officielles_legal_rgpd.md` — sources officielles utilisées.
+
+
+## Reprise du 26 novembre 2026
+
+- PR #243 actualisée sur `main` 6904b3c, sans changement propre aux backups,
+  aux brokers OIDC ou aux purges. Cause quality initiale : node-forge HIGH
+  GHSA-86w9-cpqp-85rv ; les exceptions temporaires de main avaient expiré.
+- Identité recoupée le 26/11/2026 avec la synthèse INPI définitive de création
+  validée du 01/10/2026, fournie par l’exploitant (pages 1, 4 et 5) : EI Yassine
+  Roussiere, RETIKO, SIREN 130906787, SIRET 13090678700010, APE 6201Z, adresse
+  et téléphone conformes à la PR. Aucun justificatif privé n’est ajouté au dépôt.
+- Page 7 : option « Franchise en base TVA », bénéfices « Micro BIC » et
+  versement libératoire demandé. La page 5 indique « Libérale non réglementée » :
+  faire confirmer au SIE la catégorie fiscale effective et l’option retenue,
+  sans déduire le régime du seul APE. La synthèse confirme une formalité et
+  ses options, pas l’absence d’option/dépassement ultérieur au 26/11/2026.
+- Restent à fournir : mémento fiscal ou réponse du SIE, confirmation des
+  contacts publics, du contact RGPD et de la désignation éventuelle d’un DPO.
+- Coordonnées Vercel recoupées avec sa page officielle
+  https://vercel.com/legal/dmca-policy le 26/11/2026. Région `fra1` :
+  configuration du dépôt, sans garantie de localisation de tous les traitements.
+- CGV : franchise présentée comme déclarée, à confirmer ; L.221-3 limité aux
+  contrats hors établissement, sans l’étendre à toute vente en ligne.
+  Version d’acceptation passée au 2026-11-26. Aucun parcours de réacceptation
+  des comptes existants : information et décision juridique requises avant diffusion.
+- Le besoin d’un secret GitHub DATABASE_URL ci-dessus est **historique et
+  obsolète** depuis #251 : le broker OIDC est déjà implémenté. Aucun secret
+  durable ajouté. Exécution effective de la purge à faire confirmer par la
+  mission exploitation ; aucune activation ou modification ici.
+- Vercel : CRON_SECRET et variables Wallet présents (valeurs non lues) ;
+  aucune variable Stripe. `/api/health` : billing désactivé ; Wallet Apple et
+  Google configurés. Cela ne prouve ni publication Issuer ni test physique.
+- Audit fiscal et checklist de validation : `FISCALITE_FACTURATION.md`.

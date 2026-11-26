@@ -27,7 +27,7 @@ test("pages légales : publiques, reliées entre elles et identité officielle a
   await expect(page.getByText("130 906 787", { exact: true })).toBeVisible();
   await expect(page.getByText("130 906 787 00010", { exact: true })).toBeVisible();
   await expect(page.getByText("6201Z", { exact: true })).toBeVisible();
-  await expect(page.getByText(/TVA non applicable, article 293 B du CGI/)).toBeVisible();
+  await expect(page.getByText(/Franchise en base de TVA déclarée.*situation fiscale à confirmer/)).toBeVisible();
   await expect(page.getByText("[À COMPLÉTER]")).toHaveCount(0);
 
   // Prix et durée d'essai lus depuis le code de facturation, pas recopiés.

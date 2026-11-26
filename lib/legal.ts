@@ -12,7 +12,7 @@ export const TO_COMPLETE = "[À COMPLÉTER]";
  * de ces deux documents impose une nouvelle version : l'acceptation enregistrée
  * désigne exactement la version affichée au moment de l'inscription.
  */
-export const LEGAL_VERSION = "2026-09-27";
+export const LEGAL_VERSION = "2026-11-26";
 
 export const LEGAL_LINKS = {
   cgu: "/legal/cgu",
@@ -37,7 +37,7 @@ export const LEGAL_ENTITY = {
   siret: { label: "SIRET", value: "130 906 787 00010" },
   apeCode: { label: "Code APE", value: "6201Z" },
   registration: { label: "Immatriculation", value: "Registre national des entreprises (RNE) — 01/10/2026" },
-  vatNumber: { label: "TVA", value: "TVA non applicable, article 293 B du CGI (franchise en base)" },
+  vatNumber: { label: "TVA", value: "Franchise en base de TVA déclarée par l’exploitant — situation fiscale à confirmer avant facturation (article 293 B du CGI)" },
   headOffice: { label: "Adresse de l'entreprise", value: "27 rue du Mas Rouge, 19200 Ussel, France" },
   publicationDirector: { label: "Directeur de la publication", value: "Yassine Roussiere" },
   legalRepresentative: { label: "Exploitant", value: "Yassine Roussiere" },
