@@ -26,21 +26,21 @@ describe("targeted npm audit gate", () => {
     expect(evaluateAuditReport(report, { now: beforeReview }).ok).toBe(true);
   });
 
-  it("accepts only the named node-forge HIGH advisory before review expiry", () => {
-    expect(evaluateAuditReport(nodeForgeChain(), { now: beforeReview })).toMatchObject({ ok: true, failures: [] });
+  it("rejects the retired node-forge exception even before its former expiry", () => {
+    expect(evaluateAuditReport(nodeForgeChain(), { now: beforeReview })).toMatchObject({ ok: false });
   });
 
-  it("accepts only the named braces HIGH advisory through every lint parent", () => {
+  it("rejects the retired braces exception through every lint parent", () => {
     expect(evaluateAuditReport(auditReport(bracesChain), { now: beforeReview })).toMatchObject({
-      ok: true, failures: [],
-      allowed: [{ id: "GHSA-vfj7-8cjw-p6xm", cve: "CVE-2026-93687", reviewThrough: "2026-10-16" }],
+      ok: false,
+      allowed: [],
     });
   });
 
-  it("accepts both exact advisories and rejects an additional HIGH", () => {
+  it("rejects both retired advisories and an additional HIGH", () => {
     const report = nodeForgeChain(bracesChain);
-    expect(evaluateAuditReport(report, { now: beforeReview })).toMatchObject({ ok: true, failures: [] });
-    expect(evaluateAuditReport(report, { now: beforeReview }).allowed).toHaveLength(2);
+    expect(evaluateAuditReport(report, { now: beforeReview })).toMatchObject({ ok: false });
+    expect(evaluateAuditReport(report, { now: beforeReview }).allowed).toHaveLength(0);
     report.vulnerabilities.other = { severity: "high", via: [advisory("GHSA-aaaa-bbbb-cccc", "high", "other")] };
     expect(evaluateAuditReport(report, { now: beforeReview }).ok).toBe(false);
   });
@@ -60,12 +60,12 @@ describe("targeted npm audit gate", () => {
     expect(evaluateAuditReport(auditReport({ braces: { severity: "critical", via: [advisory("GHSA-vfj7-8cjw-p6xm", "critical", "braces")] } }), { now: beforeReview }).ok).toBe(false);
   });
 
-  it("expires braces alone and both exceptions immediately after the review day", () => {
+  it("continues rejecting retired exceptions after their former review day", () => {
     const now = new Date("2026-10-17T00:00:00Z");
     for (const report of [auditReport(bracesChain), nodeForgeChain(bracesChain)]) {
       const result = evaluateAuditReport(report, { now });
       expect(result.ok).toBe(false);
-      expect(result.failures).toContain("GHSA-vfj7-8cjw-p6xm exception expired after 2026-10-16");
+      expect(result.failures).toContain("GHSA-vfj7-8cjw-p6xm is not allowlisted");
     }
   });
 
@@ -94,7 +94,7 @@ describe("targeted npm audit gate", () => {
   });
 
   it("ignores MODERATE advisories without creating another exception", () => {
-    const report = nodeForgeChain({ moderate: { severity: "moderate", via: [advisory("GHSA-mode-rate-test", "moderate", "moderate")] } });
+    const report = auditReport({ moderate: { severity: "moderate", via: [advisory("GHSA-mode-rate-test", "moderate", "moderate")] } });
     expect(evaluateAuditReport(report, { now: beforeReview }).ok).toBe(true);
   });
 });
