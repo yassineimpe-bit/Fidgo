@@ -5,7 +5,12 @@ une qualification juridique ni une durée de conservation imposée par la loi.
 Les durées doivent être validées par le responsable de traitement avant
 activation en production.
 
-## État réel des durées (vérifié sur `main` le 25/09/2026)
+## Durées prévues et historique des vérifications
+
+**26/11/2026 :** les constats d’exécution de septembre ci-dessous sont historiques.
+Le code utilise désormais OIDC (#251) ; ne pas ajouter de secret DATABASE_URL
+durable. La mission exploitation doit confirmer les dernières exécutions et
+la rétention effective des sauvegardes. Aucun mécanisme de purge/backup modifié.
 
 Trois statuts, à ne jamais confondre dans un document public :
 
@@ -18,8 +23,8 @@ Trois statuts, à ne jamais confondre dans un document public :
 |---|---|---|---|
 | Session staff (cookie `loyalty_staff`) | 12 h | appliquée | `maxAge` du cookie + `token_version` |
 | Liens vérification e-mail / reset / récupération | 24 h / 30 min / 15 min, usage unique | appliquée | expiration et `used_at` en base |
-| Liens utilisés ou expirés (4 tables de tokens) | suppression à J+30 | prévue, non active | purge data lifecycle |
-| `rate_limits` | 2 jours | prévue (cron Vercel quotidien, exécution non vérifiée) | `/api/cron/purge` si `CRON_SECRET` configuré en production |
+| Liens utilisés ou expirés (3 tables de tokens) | suppression à J+30 | prévue, non active | purge data lifecycle |
+| `rate_limits` | 2 jours | prévue (cron Vercel quotidien, exécution non vérifiée ici) | `/api/cron/purge` si `CRON_SECRET` configuré en production |
 | `product_events` | 180 jours | prévue, non active | purge data lifecycle |
 | `audit_logs` | 730 jours | prévue, non active | purge data lifecycle |
 | Inscriptions Apple de passes révoqués | 30 jours | prévue, non active | purge data lifecycle |
@@ -33,14 +38,14 @@ Trois statuts, à ne jamais confondre dans un document public :
 | `subscriptions`, `stripe_webhook_events` | illimitée | à décider (obligations comptables) | aucune purge |
 | Journaux Vercel | selon le plan | à documenter | hors base |
 
-**Constat au 25/09/2026 :** le workflow `data-lifecycle` échoue chaque nuit
-(runs du 24 et du 25/09) avec `DATABASE_URL est requis` : le secret
-`DATABASE_URL` n'est pas configuré dans l'environnement GitHub `production`
-(les sauvegardes, elles, obtiennent l'accès par le broker OIDC réservé au
-workflow `database-backup`). Aucune purge — même en dry-run — n'est donc
-exécutée en production. Tant que ce point n'est pas corrigé et que
+**Constat au 27/09/2026 :** le workflow `data-lifecycle` échoue chaque nuit
+(runs #1 à #8, dernier : 27/09 02:47 UTC) avec `DATABASE_URL est requis` : le
+secret `DATABASE_URL` n'est pas configuré dans l'environnement GitHub
+`production` (les sauvegardes, elles, obtiennent l'accès par le broker OIDC
+réservé au workflow `database-backup`). Aucune purge — même en dry-run — n'est
+donc exécutée en production. Tant que ce point n'est pas corrigé et que
 `DATA_LIFECYCLE_EXECUTE` n'est pas activé, les durées « prévues » ne doivent
-pas être présentées comme appliquées.
+pas être présentées comme appliquées. Détail : `DATA_LIFECYCLE_AUDIT_2026-09-27.md`.
 
 **Mise à jour au 02/10/2026 :** inchangé, les 13 exécutions planifiées depuis
 la création du workflow ont échoué pour la même raison. Le workflow échoue
@@ -170,9 +175,10 @@ durées restent à valider juridiquement avant activation automatique et doivent
 
 - Apple Wallet permet de pousser un pass marqué `voided`, mais un appareil
   hors ligne peut afficher l'ancien visuel jusqu'à sa prochaine synchronisation.
-- Les objets Google Wallet distants ne sont pas modifiés par ce chantier ; la
-  carte serveur et la ligne locale sont révoquées, mais une procédure provider
-  dédiée reste nécessaire pour forcer l'état distant.
+- La révocation Google distante est implémentée par `notifyGoogleWalletRevocation`
+  (`state=INACTIVE`) après effacement/suspension. En cas d’échec fournisseur,
+  le statut local reste révoqué et `last_error` permet le diagnostic ; aucune
+  file durable de reprise automatique n’est démontrée.
 - La fermeture conserve les données personnelles du commerce et du staff ; une
   procédure ultérieure, validée avec les durées métier/fiscales applicables,
   devra traiter leur anonymisation définitive.

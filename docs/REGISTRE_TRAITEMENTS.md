@@ -122,8 +122,8 @@ Retiko tient deux registres :
 | GitHub (Actions) | Sauvegardes, restauration de contrôle, monitoring, CI | Dump complet **en clair sur le runner pendant le job** ; artefacts chiffrés 14 j | Actif | Société américaine — **garanties à documenter** |
 | Resend | E-mails transactionnels et campagnes des commerces | E-mail du destinataire, nom (et adresse, si renseignée) du commerce, lien à usage unique ou lien de désabonnement, contenu rédigé par le commerce pour les campagnes | Actif (vérification e-mail obligatoire depuis #127) | Domaine d'envoi `retiko.fr`, région `eu-west-1` déclarée par l'exploitant — **garanties à documenter** |
 | Stripe | Paiement des abonnements | E-mail et adresse de facturation, identifiants Stripe | Si activé (désactivé en production) | **À documenter** |
-| Google | Google Wallet | Prénom (20 car.), nom du commerce, solde, QR | Si activé | Société américaine — **garanties à documenter** |
-| Apple | Notifications APNs des passes | Push token de l'appareil, identifiant du pass | Si activé | Société américaine — **garanties à documenter** |
+| Google | Google Wallet | Prénom (20 car.), nom du commerce, solde, QR | Configuration présente au 26/11/2026 ; publication/test physique à confirmer | Société américaine — **garanties à documenter** |
+| Apple | Notifications APNs des passes | Push token de l'appareil, identifiant du pass | Configuration présente au 26/11/2026 ; publication/test physique à confirmer | Société américaine — **garanties à documenter** |
 
 ---
 
@@ -146,10 +146,33 @@ Ces mesures sont vérifiées dans le code et la CI ; leur effectivité en produc
 | # | Écart | Nature |
 |---|---|---|
 | E1 | Aucune durée pour les **clients inactifs** | Décision de durée, puis mécanisme d'anonymisation |
-| E2 | Purge data lifecycle **non exécutée en production** (secret `DATABASE_URL` absent de l'environnement GitHub `production`, `DATA_LIFECYCLE_EXECUTE` non activé) | Correctif d'exploitation + validation des durées |
+| E2 | Purge data lifecycle **non exécutée en production** (constat historique de septembre ; accès OIDC implémenté depuis #251, exécution actuelle à confirmer) | Correctif d'exploitation + validation des durées |
 | E3 | Commerce clos et staff désactivé conservés sans anonymisation définitive | Durée à fixer (contraintes comptables incluses) |
 | E4 | Transferts hors UE (Vercel, GitHub, Resend, Stripe, Google, Apple) : garanties non documentées | Documentation contractuelle |
 | E5 | Identité juridique, contact données personnelles, DPO | À compléter |
 | E6 | Rétention des journaux Vercel non documentée | À documenter |
 | E7 | ~~Pas d'outil de rectification des coordonnées client ni de retrait isolé du consentement marketing client~~ | **Résolu** : outillé sur la fiche client ; reste la limitation (manuelle) et la modification de l'e-mail de connexion commerçant |
 | E8 | Durée de conservation des preuves d'acceptation, de `platform_admin_audit` et des données de facturation | À décider |
+
+
+## Revue des rôles et contrats au 26 novembre 2026
+
+- Comptes professionnels, prospection Retiko, support, sécurité propre et
+  facturation : Retiko responsable de traitement. Comptes des employés :
+  distinguer gestion du service SaaS et traçabilité des opérations effectuée
+  sur instruction du commerce. Ne pas attribuer un rôle unique à toute la table.
+- Clients fidélité, règles du programme, historique et campagnes du commerce :
+  commerce responsable, Retiko sous-traitant. Consentement par finalité, sans
+  transfert automatique du consentement du commerce à la prospection Retiko.
+- Wallet : Retiko transmet prénom, solde, QR et lien de carte (credentials
+  fonctionnels). Google et Apple ont aussi leurs finalités propres côté
+  utilisateur ; ne pas les qualifier automatiquement de simples sous-traitants.
+- Stripe : rôle de sous-traitant ou responsable selon le traitement défini
+  dans son DPA, notamment obligations propres de paiement/conformité.
+- Sauvegardes : le rôle suit les finalités des données copiées ; analyse de
+  rétention et accès à coordonner avec la mission exploitation, sans changement
+  de son mécanisme.
+
+Les versions contractuelles publiques sont répertoriées dans
+`FOURNISSEURS_RGPD.md`. Leur existence n’atteste pas leur acceptation par
+Retiko, ni la région effective, ni la validité de chaque transfert.

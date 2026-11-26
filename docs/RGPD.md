@@ -16,8 +16,8 @@
 
 La cartographie technique détaillée, les effets exacts de l'effacement et
 l'état réel de chaque durée (appliquée / prévue non active / à décider)
-figurent dans `DATA_LIFECYCLE.md`. Au 25/09/2026, aucune purge automatique
-n'est exécutée en production.
+figurent dans `DATA_LIFECYCLE.md`. Le constat de non-exécution au 27/09/2026 est historique ;
+l’accès OIDC est implémenté depuis #251, l’exécution effective reste à vérifier. Preuves : `DATA_LIFECYCLE_AUDIT_2026-09-27.md`.
 
 ## Répartition des rôles pour le programme fidélité
 
@@ -65,4 +65,7 @@ La procédure détaillée figure dans `RGPD_PROCEDURES.md`.
 
 La liste à jour des informations à fournir et des décisions ouvertes est tenue dans `LEGAL_STATUS.md`.
 
-Les campagnes marketing restent désactivées tant que consentement, désinscription et plafonds anti-spam ne sont pas implémentés de bout en bout.
+Les campagnes des commerces, le consentement, la désinscription et les plafonds
+anti-spam sont implémentés (`CAMPAIGNS.md`). Leur usage réel dépend de la
+configuration et du consentement de chaque destinataire ; ne pas les présenter
+comme inexistants.
